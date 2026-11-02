@@ -24,6 +24,7 @@ const Input = z
       "account",
     ]),
     id: z.string().uuid().optional(),
+    annualRevenue: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional(),
     revision: z.number().int().positive().optional(),
     pgId: z.string().uuid().optional(),
     days: z.union([z.literal(3), z.literal(5), z.literal(10)]).optional(),
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
         return json({ ok: true });
       }
       if (input.op === "recommend")
-        return json(await service.recommend(input.id, proof));
+        return json(await service.recommend(input.id, proof, { revision: input.revision, annualRevenue: input.annualRevenue }));
       if (input.op === "reserve") {
         if (!input.revision || !input.pgId || !input.days) return json({}, 400);
         if (process.env.GUEST_RFP_AUTO_SEND_ENABLED !== "true")

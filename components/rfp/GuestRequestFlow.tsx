@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/primitives/Button";
@@ -13,7 +13,8 @@ import {
 } from "@/lib/guest-rfp/requests-client";
 import { GuestRequestCompletion } from "./GuestRequestCompletion";
 import type { GuestQuoteController } from '@/lib/guest-rfp/quote-controller';
-import { GuestQuoteSavings } from './GuestQuoteSavings';
+import { GuestMatchingReview } from './GuestMatchingReview';
+import { saveGuestProgress } from '@/lib/guest-rfp/server-client';
 import { GUEST_REQUEST_KEY } from "@/lib/guest-rfp/draft";
 export { GUEST_REQUEST_KEY } from "@/lib/guest-rfp/draft";
 type Account = {
@@ -27,7 +28,13 @@ export function GuestRequestFlow({
   initialWorkspaceId = "",
   onCancel,
   quote,
+  autoRequestEnabled = true,
+  onEdit,
+  onCanceled,
 }: {
+  onCanceled?: () => void;
+  autoRequestEnabled?: boolean;
+  onEdit?: (question: string) => void;
   quote?: GuestQuoteController;
   id: string;
   revision: number;
@@ -35,25 +42,22 @@ export function GuestRequestFlow({
   onCancel: () => void;
 }) {
   const router = useRouter();
-  const [candidates, setCandidates] = useState<
-    { id: string; name: string }[] | null
-  >(null);
-  const [summary, setSummary] = useState<{
-    title: string;
-    websiteUrl: string;
-    mainProducts: string;
-  } | null>(null);
-  const [pgId, setPgId] = useState("");
-  const [days, setDays] = useState(5);
+  const refreshGeneration = useRef(0);
+  const prepared = useRef<Promise<unknown> | null>(null);
+  const [ready, setReady] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
   const [request, setRequest] = useState<GuestRequestStatus | null>(null);
   const [reserved, setReserved] = useState(false);
   const [signupStep, setSignupStep] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
+    // Viewing recommendations saves answers only; originals and signup binding wait for confirmation.
+    if (quote && !prepared.current && localStorage.getItem(GUEST_REQUEST_KEY) !== id)
+      prepared.current = saveGuestProgress(quote.session.draft, quote.session.save).catch(error => { prepared.current = null; throw error; });
+    await prepared.current;
     const rememberedWorkspace = localStorage.getItem(
       `${GUEST_REQUEST_KEY}:${id}:workspace`,
     );
@@ -80,22 +84,13 @@ export function GuestRequestFlow({
         workspaceId: target,
       });
     }
+    if (generation !== refreshGeneration.current) return;
     setRequest(state);
     setReserved(
       !!state && ["unbound", "waiting", "submitted"].includes(state.status),
     );
-    if (
-      !state ||
-      ["canceled", "expired", "needs_action"].includes(state.status)
-    ) {
-      const result = await guestRequest<{
-        summary: { title: string; websiteUrl: string; mainProducts: string };
-        candidates: { id: string; name: string }[];
-      }>({ op: "recommend", id, ...(workspaceId ? { workspaceId } : {}) });
-      setCandidates(result.candidates);
-      setSummary(result.summary);
-    }
-  }, [id, workspaceId]);
+    setReady(true);
+  }, [id, workspaceId, quote]);
   useEffect(() => {
     let active = true;
     const update = () => {
@@ -182,92 +177,16 @@ export function GuestRequestFlow({
           )}
         </>
       ) : !reserved ? (
-        <>
-          <h2 className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]">
-            견적을 받을 PG사를 선택해요
-          </h2>
-          {summary && (
-            <dl className="space-y-2 break-words">
-              <dt>요청 내용</dt>
-              <dd>{summary.title}</dd>
-              <dt>홈페이지</dt>
-              <dd>{summary.websiteUrl}</dd>
-              <dt>주요 상품</dt>
-              <dd>{summary.mainProducts}</dd>
-            </dl>
-          )}
-          {request && ["expired", "needs_action"].includes(request.status) && (
-            <p role="status">
-              요청 내용을 다시 확인해요. 답변은 그대로 보관하고 있어요.
-            </p>
-          )}
-          {candidates === null ? (
-            <p>PG사를 불러오는 중이에요…</p>
-          ) : candidates.length === 0 ? (
-            <p>지금은 요청할 수 있는 PG사가 없어요. 잠시 후 다시 확인해요.</p>
-          ) : (
-            <fieldset className="space-y-3">
-              <legend className="sr-only">PG사</legend>
-              {candidates.map((pg) => (
-                <label
-                  key={pg.id}
-                  className="flex min-h-11 items-center gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] p-3"
-                >
-                  <input
-                    type="radio"
-                    name="guest-pg"
-                    disabled={calculating || busy}
-                    checked={pgId === pg.id}
-                    onChange={() => setPgId(pg.id)}
-                  />
-                  {pg.name}
-                </label>
-              ))}
-            </fieldset>
-          )}
-          {quote && <GuestQuoteSavings quote={quote} selectedPgId={pgId} onBusyChange={setCalculating} />}
-          <label className="block">
-            응답 기간
-            <select
-              className="ml-3 min-h-11"
-              value={days}
-              onChange={(event) => setDays(Number(event.target.value))}
-            >
-              {[3, 5, 10].map((day) => (
-                <option key={day} value={day}>
-                  {day}영업일
-                </option>
-              ))}
-            </select>
-          </label>
-          <p>실제 발송일 다음 날부터 계산해요. 응답 마감은 오후 6시예요.</p>
-          <p>이메일 인증과 입점 승인이 끝나면 선택한 PG사에 자동으로 보내요.</p>
-          <p className="text-[length:var(--md-typescale-body-small-size)] text-[var(--md-sys-color-on-surface-variant)]">
-            계정에 연결한 날부터 30일 동안 유효해요. 보내기 전에는 취소할 수
-            있어요.
-          </p>
-          <Button
-            disabled={!pgId || busy || calculating}
-            fullWidth
-            onClick={() =>
-              void run(async () => {
-                await guestRequest({
-                  op: "reserve",
-                  id,
-                  revision: quote?.session.draft.serverRevision ?? revision,
-                  pgId,
-                  days,
-                  ...(workspaceId ? { workspaceId } : {}),
-                });
-                localStorage.setItem(GUEST_REQUEST_KEY, id);
-                setReserved(true);
-                await refresh();
-              })
-            }
-          >
-            선택한 PG사에 자동 요청하기
-          </Button>
-        </>
+        ready ? <GuestMatchingReview id={id} revision={revision} workspaceId={workspaceId} quote={quote}
+          autoRequestEnabled={autoRequestEnabled} onBack={onCancel} onEdit={onEdit}
+          onConfirm={async (selection) => {
+            ++refreshGeneration.current;
+            await guestRequest({ op: 'reserve', id, ...selection, ...(workspaceId ? { workspaceId } : {}) });
+            localStorage.setItem(GUEST_REQUEST_KEY, id);
+            setReserved(true);
+            await refresh();
+          }} /> : <><p role="status">추천을 준비하고 있어요…</p><Button variant="outlined" onClick={onCancel}>이전</Button></>
+
       ) : account?.signedIn ? (
         <>
           <h2 className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]">
@@ -322,7 +241,7 @@ export function GuestRequestFlow({
           </Link>
         </>
       )}
-      <Button
+      {reserved && <Button
         variant="text"
         disabled={busy}
         onClick={() =>
@@ -334,12 +253,12 @@ export function GuestRequestFlow({
                 ...(workspaceId ? { workspaceId } : {}),
               });
             localStorage.removeItem(GUEST_REQUEST_KEY);
-            onCancel();
+            (onCanceled ?? onCancel)();
           })
         }
       >
         {reserved ? "자동 요청을 취소하고 수정해요" : "답변을 수정해요"}
-      </Button>
+      </Button>}
     </section>
   );
 }

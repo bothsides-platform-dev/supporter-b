@@ -30,7 +30,9 @@ export function RfpMatchingLoading({
   business,
   industryName,
   children,
+  guest = false,
 }: {
+  guest?: boolean;
   phase: number;
   business?: boolean;
   industryName: string;
@@ -55,13 +57,13 @@ export function RfpMatchingLoading({
         )}
       </h2>
       <p className="break-words leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
-        사업자 정보 등록 여부와 선택한 {industryName}의 상담 조건을 확인하고 있어요.
+        {guest ? '입력한 사업 정보와 업종별 상담 조건을 확인하고 있어요.' : <>사업자 정보 등록 여부와 선택한 {industryName}의 상담 조건을 확인하고 있어요.</>}
       </p>
       <p className="mt-4 leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
         아직 상담 요청을 보내지 않았어요. 추천 결과를 보고 PG사 한 곳을 고를 수 있어요.
       </p>
       <ol className="mt-8 sm:mt-10" aria-live="polite" aria-atomic="true">
-        {STEPS.map((label, index) => {
+        {(guest ? ['입력한 사업 정보 확인', ...STEPS.slice(1)] : STEPS).map((label, index) => {
           const missing = index === 0 && business === false && phase > 0;
           const done = index < phase && !missing;
           const active = index === phase;

@@ -75,12 +75,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
   teardownServerTestEnv();
 });
-it("publishes only candidate identifiers, names and order to the draft proof holder", async () => {
+it("publishes recommendation and own summary without internal rate tables", async () => {
   const service = await requests.getGuestRequestService();
   await expect(service.recommend(id, "wrong")).rejects.toThrow(
     "GUEST_DRAFT_UNAVAILABLE",
   );
-  expect(await service.recommend(id, "secret")).toEqual({
+  expect(await service.recommend(id, "secret")).toMatchObject({
     summary: {
       title: "판매 견적",
       websiteUrl: "https://example.com",
@@ -89,6 +89,12 @@ it("publishes only candidate identifiers, names and order to the draft proof hol
     available: true,
     candidates: [{ id: pgId, name: "Alpha Payments", order: 0 }],
   });
+  const result = await service.recommend(id, 'secret');
+  expect(result).toMatchObject({ revision: 1, tierBasis: 'unknown', annualRevenue: null, files: [], attachmentCount: 0 });
+  expect(Object.keys(result.recommendation.candidates[0]).sort()).toEqual(['feeNote', 'feeRate', 'merchantTier', 'name', 'pgWorkspaceId', 'reason']);
+  expect(JSON.stringify(result)).not.toContain('feesByTier');
+  expect(await service.status(id, { secret: 'secret' })).toBeNull();
+
 });
 it("freezes confirmed answers until cancellation and refuses a different PG", async () => {
   const service = await requests.getGuestRequestService();
@@ -473,4 +479,61 @@ it('normalizes a scheme-less website just like the member request action', async
   await db.update(users).set({ emailVerified: true }).where(eq(users.id, actor.userId));
   await service.dispatch(id);
   expect((await db.select().from(rfps))[0].websiteUrl).toBe('https://shop.example.com');
+});
+
+async function pricedPolicy() {
+  const { guestRfpDrafts, pgMatchingPolicies } = await import('@/lib/db/schema');
+  const [draft] = await db.select().from(guestRfpDrafts);
+  await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pgId, reason: '의류 상담', feeNote: '카드 결제, 부가세 별도', feesByTier: { sole: 0, sme1: 1.1, sme2: 1.2, sme3: 1.3, general: null } }] } }).where(eq(pgMatchingPolicies.groupId, draft.answers.data.industryGroupId!));
+  return draft;
+}
+it.each([[300000000, 'sole', 0], [500000000, 'sme1', 1.1], [1000000000, 'sme2', 1.2], [3000000000, 'sme3', 1.3], [3000000001, 'general', null]] as const)
+  ('quotes the selected revenue %i as provisional %s, including zero and unset fees', async (annualRevenue, merchantTier, feeRate) => {
+    await pricedPolicy();
+    const service = await requests.getGuestRequestService();
+    const result = await service.recommend(id, 'secret', { revision: 1, annualRevenue });
+    expect(result).toMatchObject({ revision: 2, annualRevenue, tierBasis: 'provisional', recommendation: { candidates: [{ merchantTier, feeRate }] } });
+    expect(await service.recommend(id, 'secret')).toMatchObject({ annualRevenue, revision: 2 });
+    await expect(service.reserve({ id, revision: 1, pgId, days: 5 }, 'secret')).rejects.toThrow('GUEST_DRAFT_CHANGED');
+    await service.reserve({ id, revision: 2, pgId, days: 5 }, 'secret');
+    await expect(service.recommend(id, 'secret', { revision: 2, annualRevenue: null })).rejects.toThrow('GUEST_REQUEST_FROZEN');
+  });
+it('prefers confirmed member grade and restores revenue only for the owning workspace', async () => {
+  await pricedPolicy();
+  const { bizProfiles, workspaces, guestRfpDrafts } = await import('@/lib/db/schema');
+  const { seedBizProfile } = await import('@/lib/server/repositories/drizzle/__tests__/_seed');
+  const profile = await seedBizProfile(db);
+  await db.update(bizProfiles).set({ grade: 'sme2' }).where(eq(bizProfiles.id, profile.id));
+  await db.update(workspaces).set({ bizProfileId: profile.id }).where(eq(workspaces.id, actor.workspaceId));
+  const service = await requests.getGuestRequestService();
+  await service.recommend(id, 'secret', { revision: 1, annualRevenue: 300000000 });
+  await db.update(guestRfpDrafts).set(actor).where(eq(guestRfpDrafts.id, id));
+  expect(await service.recommend(id, { actor })).toMatchObject({ annualRevenue: 300000000, tierBasis: 'confirmed', recommendation: { candidates: [{ merchantTier: 'sme2', feeRate: 1.2 }] } });
+  await expect(service.recommend(id, 'secret')).rejects.toThrow('GUEST_DRAFT_UNAVAILABLE');
+  await expect(service.recommend(id, { actor: { ...actor, workspaceId: randomUUID() } })).rejects.toThrow('GUEST_DRAFT_UNAVAILABLE');
+});
+it('validates revenue and revision without modifying stored answers', async () => {
+  const service = await requests.getGuestRequestService();
+  for (const annualRevenue of [-1, 1.5, Infinity]) await expect(service.recommend(id, 'secret', { revision: 1, annualRevenue })).rejects.toThrow();
+  await expect(service.recommend(id, 'secret', { revision: 9, annualRevenue: 1 })).rejects.toThrow('GUEST_DRAFT_CHANGED');
+  await expect(service.recommend(id, 'secret', { annualRevenue: 1 })).rejects.toThrow('INVALID_INPUT');
+  expect(await service.recommend(id, 'secret')).toMatchObject({ revision: 1, annualRevenue: null });
+});
+it('excludes current renewal PGs and never bypasses a blocked industry', async () => {
+  const draft = await pricedPolicy();
+  const { guestRfpDrafts, pgMatchingPolicies } = await import('@/lib/db/schema');
+  await db.update(guestRfpDrafts).set({ answers: { ...draft.answers, data: { ...draft.answers.data, contractType: 'renewal', currentPgs: [{ pgWorkspaceId: pgId, name: 'Alpha Payments' }] } } }).where(eq(guestRfpDrafts.id, id));
+  const service = await requests.getGuestRequestService();
+  expect((await service.recommend(id, 'secret')).recommendation.candidates).toEqual([]);
+  await db.update(pgMatchingPolicies).set({ policy: { risk: 'black', candidates: [] } }).where(eq(pgMatchingPolicies.groupId, draft.answers.data.industryGroupId!));
+  expect((await service.recommend(id, 'secret')).recommendation).toMatchObject({ risk: 'black', candidates: [] });
+});
+it('returns only selected attachment metadata and refuses reservation while originals are missing', async () => {
+  const { guestRfpDrafts, guestRfpFiles } = await import('@/lib/db/schema');
+  const selected = randomUUID();
+  await db.update(guestRfpDrafts).set({ fileIds: [selected] }).where(eq(guestRfpDrafts.id, id));
+  await db.insert(guestRfpFiles).values([selected, randomUUID()].map(clientId => ({ id: randomUUID(), clientId, draftId: id, name: '소개.pdf', size: 8, mime: 'application/pdf', status: 'pending' as const })));
+  const service = await requests.getGuestRequestService();
+  expect((await service.recommend(id, 'secret')).files).toEqual([{ id: selected, name: '소개.pdf', size: 8 }]);
+  await expect(service.reserve({ id, revision: 1, pgId, days: 5 }, 'secret')).rejects.toThrow('GUEST_FILES_NOT_READY');
 });

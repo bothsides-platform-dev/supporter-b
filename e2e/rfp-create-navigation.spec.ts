@@ -85,7 +85,7 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
   await expect(actions.getByRole('button', { name: '다음' })).toBeInViewport({ ratio: 1 });
 });
 
-test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이동 버튼이 남는다', async ({ page }) => {
+test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이동 버튼이 남는다', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const pg = (await db.select().from(workspaces)).find(workspace => workspace.name === '서포터 B 페이')!;
   const groupId = randomUUID();
@@ -130,6 +130,11 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
     await expect(actions.getByRole('button', { name: '상담 요청하기' })).toBeDisabled();
     await expect(page.getByRole('radio', { name: new RegExp(pg.name) })).toBeVisible({ timeout: 20_000 });
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: testInfo.outputPath(`member-review-${width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     // 핵심 요약만으로는 1280×720에 다 들어가므로, 전체 답변을 펼쳐 긴 내용을 만든다.
     await page.getByText('요청 내용 전체 보기').click();
     const content = page.locator('[data-coachmark="tutorial-wizard-content"]');

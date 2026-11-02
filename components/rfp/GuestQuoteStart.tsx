@@ -3,15 +3,12 @@ import { GuestRequestFlow, GUEST_REQUEST_KEY } from "./GuestRequestFlow";
 import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import Link from "next/link";
-import { saveGuestForSignup } from "@/lib/guest-rfp/server-client";
 import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createStore, type StoreApi } from 'zustand';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
 import { draftData } from '@/lib/guest-rfp/draft';
-import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
-import { industryDisplay } from '@/lib/rfp/industry-display';
 import { Button } from "@/components/primitives/Button";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
 import type { PublicIndustry } from "@/lib/types/pg-recommendation";
@@ -27,7 +24,6 @@ import { contentQuestions } from "./content-questions";
 import { useGuestDraft } from "./useGuestDraft";
 import { GuestQuoteController, suggestionQuestions } from '@/lib/guest-rfp/quote-controller';
 import { GuestQuoteIntake } from './GuestQuoteIntake';
-import { GuestQuoteSavings } from './GuestQuoteSavings';
 import { GuestAttachments } from "./GuestAttachments";
 const subscribeEmpty = () => () => {};
 const emptySnapshot = () => null;
@@ -63,8 +59,6 @@ export function GuestQuoteStart({
   const setDone = (value: boolean) => quote?.update({ stage: value ? 'complete' : 'questions' });
   const [editStore, setEditStore] = useState<StoreApi<RfpDraftStore> | null>(null);
   const [editError, setEditError] = useState('');
-  const summaryHeading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { if (done && !editStore) summaryHeading.current?.focus(); }, [done, editStore]);
   const [attachmentError, setAttachmentError] = useState('');
   const [missingFiles, setMissingFiles] = useState<string[]>([]);
   const [fileStatus, setFileStatus] = useState<'empty' | 'checking' | 'saved' | 'error'>('empty');
@@ -179,21 +173,8 @@ export function GuestQuoteStart({
       setBusy(false);
     }
   };
-  const signup = async () => {
-    if (!session || busy || completing.current) return;
-    trackFunnel('funnel_cta_click', { funnel_id: 'acquisition', step_id: 'choose_signup', entry_path: 'guest' });
-    completing.current = true; setBusy(true); setError('');
-    try {
-      session.save();
-      await saveGuestForSignup(session.draft, session.save);
-      if (autoRequestEnabled) setAutoStarted(true);
-      else router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '저장을 완료하지 못했어요. 다시 시도해요.');
-    } finally { completing.current = false; setBusy(false); }
-  };
   return (
-    <div className={styles.layout}>
+    <div className={`${styles.layout} ${done || autoStarted || recovery ? styles.reviewLayout : ''}`}>
       <div className={styles.sidebar}>
         <div className={styles.introduction}>
           <h1>우리 사업에 맞는 PG 견적을 받아요</h1>
@@ -205,9 +186,9 @@ export function GuestQuoteStart({
           <p>초안을 불러오는 중이에요…</p>
         ) : recovery && recovery.id !== session.draft.id && !autoStarted &&
           (session.draft.owner || !session.draft.data.websiteUrl.trim()) ? (
-          <GuestRequestFlow id={recovery.id} revision={recovery.revision} initialWorkspaceId={recovery.workspaceId} onCancel={() => router.push(RESUME_PATH)} />
+          <GuestRequestFlow key={recovery.id} id={recovery.id} revision={recovery.revision} initialWorkspaceId={recovery.workspaceId} onCancel={() => router.push(RESUME_PATH)} />
         ) : autoStarted ? (
-          <GuestRequestFlow quote={quote ?? undefined} id={session.draft.id} revision={session.draft.serverRevision ?? 1} onCancel={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(true); }} />
+          <GuestRequestFlow key={session.draft.id} quote={quote ?? undefined} id={session.draft.id} revision={session.draft.serverRevision ?? 1} onCancel={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(false); }} />
         ) : session.draft.owner ? (
           <div>
             <p>
@@ -230,44 +211,9 @@ export function GuestQuoteStart({
             </div>}
           </RfpDraftProvider>
         ) : done ? (
-          <div className="space-y-8">
-            {quote && <GuestQuoteSavings quote={quote} headingRef={summaryHeading} />}
-            <section aria-labelledby="guest-signup-heading" className="space-y-4 text-[length:var(--md-typescale-body-large-size)]">
-              <div className="space-y-2">
-                <h3 id="guest-signup-heading" className="font-semibold">입력한 정보로 맞춤 PG 견적을 받아요</h3>
-                <p className="text-[var(--md-sys-color-on-surface-variant)]">{autoRequestEnabled ? '견적을 받을 PG사를 직접 선택해요.' : '가입 후 사업자 정보를 확인하고 견적을 요청해요.'}</p>
-              </div>
-              <Button fullWidth className="min-h-12 text-[length:var(--md-typescale-body-large-size)]" disabled={busy} aria-describedby={error ? 'guest-signup-error' : undefined} onClick={() => void signup()}>
-                {busy ? '저장 중…' : '이 정보로 맞춤 견적 받기'}
-              </Button>
-              {error && <p id="guest-signup-error" role="alert" className="text-[var(--md-sys-color-error)]">{error}</p>}
-            </section>
-            <section className="border-t border-[var(--md-sys-color-outline-variant)] pt-6" aria-labelledby="guest-summary-heading">
-              <div className="flex items-center justify-between gap-3">
-                <h3 id="guest-summary-heading" className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]">
-                  입력한 사업 정보
-                </h3>
-                <Button className="min-h-11 shrink-0" variant="text" disabled={busy} onClick={() => setDone(false)}>
-                  전체 수정
-                </Button>
-              </div>
-              <dl className={styles.summary}>
-                {[
-                  { id: 'website', label: '홈페이지', value: session.store.getState().websiteUrl },
-                  { id: 'industry', label: '업종', value: session.store.getState().industryMode === 'custom'
-                    ? session.store.getState().customIndustryName
-                    : (() => { const group = industryGroups.find(g => g.id === session.store.getState().industryGroupId); return group ? industryDisplay(group).displayName : '업종을 다시 선택해요'; })() },
-                  ...(session.store.getState().contractType === 'renewal' ? [{ id: 'current-pgs', label: '현재 이용 중인 PG사', value: session.store.getState().currentPgs.map(pg => pg.name).join(', ') }] : []),
-                  { id: 'contract', label: '계약 유형', value: CONTRACT_TYPE_LABELS[session.store.getState().contractType ?? 'new'] },
-                ].map(item => <div key={item.id} className={styles.summaryRow}>
-                  <dt>{item.label}</dt><dd>{item.value}</dd>
-                  <dd className={styles.summaryAction}>
-                  <Button className="min-h-11" variant="text" aria-label={`${item.label} 수정`} disabled={busy} onClick={() => edit(item.id)}>수정</Button>
-                  </dd>
-                </div>)}
-              </dl>
-            </section>
-          </div>
+          <GuestRequestFlow key={session.draft.id} quote={quote ?? undefined} id={session.draft.id} revision={session.draft.serverRevision ?? 1}
+            autoRequestEnabled={autoRequestEnabled} onEdit={edit} onCancel={() => setDone(false)}
+            onCanceled={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(false); }} />
         ) : quote && context?.stage !== 'questions' ? (
           <GuestQuoteIntake quote={quote} industryGroups={industryGroups}
             onConfirmed={() => trackQuestionProgress('next', 'website', 'write', session.store.getState().contractType, session.store.getState().websiteUrl)} />
