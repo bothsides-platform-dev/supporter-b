@@ -122,13 +122,9 @@ export function BusinessDeadlinePicker({ label, labelAddon, value, onChange, cal
   return <DeadlineGroup label={label} labelAddon={labelAddon}>
     {!firstDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
     {firstDate && <>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="영업일 기간">
-        {[3, 5, 10].map(days => {
-          let available = false;
-          try { available = selectable(kstDateOf(new Date(businessDeadline(validationNow, days, cal)))); } catch { /* Calendar not covered. */ }
-          return <button type="button" key={days} disabled={!available} aria-pressed={activeChoice.mode === 'period' && activeChoice.days === days} onClick={() => updatePeriod(days)} className="min-h-9 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 text-[14px] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] aria-pressed:border-[var(--md-sys-color-primary)] aria-pressed:text-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">{days}영업일</button>;
-        })}
-      </div>
+      <BusinessPeriodButtons value={activeChoice.mode === 'period' ? activeChoice.days : null} onChange={updatePeriod} available={days => {
+        try { return selectable(kstDateOf(new Date(businessDeadline(validationNow, days, cal)))); } catch { return false; }
+      }} />
       <Popover.Root open={open} onOpenChange={openCalendar}>
         <Popover.Trigger type="button" disabled={!firstSelectableDate} aria-label={`${label} 날짜 선택. ${readable || '날짜 미선택'} 오후 6시 마감`} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 text-left text-[14px] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">
           <span>{readable ? <><span className="md-numeric">{readable}</span>, 오후 6시 마감</> : '날짜를 선택하면 오후 6시에 마감해요'}</span>
@@ -151,4 +147,10 @@ export function BusinessDeadlinePicker({ label, labelAddon, value, onChange, cal
       <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">요청일을 제외하고 최소 3영업일, 최대 30일 안에서 선택해요.</p>
     </>}
   </DeadlineGroup>;
+}
+
+export function BusinessPeriodButtons({ value, onChange, available = () => true }: { value: number | null; onChange: (days: number) => void; available?: (days: number) => boolean }) {
+  return <div className="flex flex-wrap gap-2" role="group" aria-label="영업일 기간">
+    {[3, 5, 10].map(days => <button type="button" key={days} disabled={!available(days)} aria-pressed={value === days} onClick={() => onChange(days)} className="min-h-9 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 text-[14px] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] aria-pressed:border-[var(--md-sys-color-primary)] aria-pressed:text-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">{days}영업일</button>)}
+  </div>;
 }

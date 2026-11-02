@@ -3,11 +3,12 @@ import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import type { ReviewPane } from './RfpStep4Review';
 import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
+import { MatchingReviewLayout } from './MatchingReviewLayout';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
@@ -33,7 +34,8 @@ function CandidateName({ name }: { name: string }) {
   );
 }
 
-export function MatchingCandidates({ recommendation, selected, onSelect }: {
+export function MatchingCandidates({ recommendation, selected, onSelect, estimated = false }: {
+  estimated?: boolean;
   recommendation: Recommendation;
   selected: string;
   onSelect: (id: string) => void;
@@ -64,7 +66,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
                 </span>
                 <span className="block text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{pg.reason}</span>
                 {pg.merchantTier && pg.feeRate != null
-                  ? <span className="block pt-2 text-[14px]">{MERCHANT_TIER_LABELS[pg.merchantTier]} 판가 수수료 <span className="md-numeric font-semibold">{pg.feeRate}%</span></span>
+                  ? <span className="block pt-2 text-[14px]">{MERCHANT_TIER_LABELS[pg.merchantTier]} {estimated ? '예상 수수료' : '판가 수수료'} <span className="md-numeric font-semibold">{pg.feeRate}%</span></span>
                   : <span className="block pt-2 text-[14px]">수수료는 견적에서 안내해요</span>}
                 {pg.feeNote && <span className="block text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{pg.feeNote}</span>}
               </span>
@@ -99,8 +101,6 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   const selected = useRfpDraft(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
-  const paneRefs = useRef<Partial<Record<ReviewPane, HTMLElement | null>>>({});
-  const previousPane = useRef(pane);
   const visibleResult = !demo && !state.error && !!state.result && elapsed >= MIN_MATCHING_LOADING_MS;
   const contractType = useRfpDraft(s => s.contractType);
   useFunnelView('request', visibleResult && pane !== 'review' ? 'recommendation' : null, { contract_type: contractType ?? 'unknown' });
@@ -108,14 +108,6 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   useEffect(() => {
     if (!demo && state.error) trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'recommendation', error_code: state.error });
   }, [demo, state.error]);
-  useEffect(() => {
-    // 화면을 바꾼 뒤에만 새 화면의 처음으로 이동하고 초점을 옮긴다(첫 표시에서는 초점을 빼앗지 않는다).
-    if (!pane || previousPane.current === pane) { previousPane.current = pane; return; }
-    previousPane.current = pane;
-    const target = paneRefs.current[pane];
-    target?.scrollIntoView?.({ block: 'start' });
-    target?.focus({ preventScroll: true });
-  }, [pane]);
   useEffect(() => {
     let canceled = false;
     draftApi.getState().setField('allowedPgWorkspaceIds', []);
@@ -153,14 +145,11 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }
   const recommendation = state.result;
   return (
-    <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-      <section ref={el => { paneRefs.current.pg = el; }} tabIndex={-1} hidden={pane === 'review'} aria-label="맞춤 PG 추천" className="outline-none">
-        <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
-          const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
-          if (pg) draftApi.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
-        }} />
-      </section>
-      <div ref={el => { paneRefs.current.review = el; }} tabIndex={-1} hidden={pane === 'pg'} className="outline-none">{children}</div>
-    </div>
+    <MatchingReviewLayout pane={pane} recommendation={
+      <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
+        const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
+        if (pg) draftApi.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
+      }} />
+    }>{children}</MatchingReviewLayout>
   );
 }

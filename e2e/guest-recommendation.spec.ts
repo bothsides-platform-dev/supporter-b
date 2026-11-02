@@ -2,17 +2,16 @@ import { test, expect } from 'playwright/test';
 import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { workspaces, pgRecommendationGroups, pgMatchingPolicies, pgAgreementRates } from '@/lib/db/schema';
+import { workspaces, pgRecommendationGroups, pgMatchingPolicies } from '@/lib/db/schema';
 import { createGuestDraft, GUEST_DRAFT_KEY } from '@/lib/guest-rfp/draft';
 
-for (const contractType of ['new', 'renewal'] as const) test(contractType + ': server rates, keyboard, mobile, reduced motion and restored inputs', async ({ page, context }) => {
+for (const contractType of ['new', 'renewal'] as const) test(contractType + ': server rates, keyboard, mobile, reduced motion and restored inputs', async ({ page, context }, testInfo) => {
   test.setTimeout(150000);
   await context.setExtraHTTPHeaders({ 'x-forwarded-for': contractType === 'new' ? '198.18.2.1' : '198.18.2.2' });
   const group = randomUUID(), pgs = [randomUUID(), randomUUID()];
   await db.insert(workspaces).values(pgs.map((id, index) => ({ id, name: '계산검증 PG ' + index, type: 'pg' as const, status: 'active' as const })));
   await db.insert(pgRecommendationGroups).values({ id: group, name: '계산검증 의류 ' + group });
   await db.insert(pgMatchingPolicies).values({ groupId: group, policy: { risk: 'white', candidates: pgs.map((pgWorkspaceId, index) => ({ pgWorkspaceId, reason: '의류 상담', feeNote: '부가세 별도, 심사 후 확정', feesByTier: { sole: 1 + index, sme1: null, sme2: null, sme3: null, general: null } })) } });
-  await db.insert(pgAgreementRates).values(pgs.map(pgWsId => ({ pgWsId, rates: [{ key: 'card:sole', rate: .03 }] })));
   try {
     const draft = createGuestDraft();
     Object.assign(draft.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '계산 확인', mainProducts: '의류', deliveryServicePeriod: 'D+3', industryGroupId: group, contractType,
@@ -22,35 +21,48 @@ for (const contractType of ['new', 'renewal'] as const) test(contractType + ': s
     await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/quote-start');
+    await page.addStyleTag({ content: 'nextjs-portal { display: none; }' });
     await page.getByRole('button', { name: '작성 마치기' }).click();
     const revenue = page.getByLabel(contractType === 'new' ? '예상 연매출 구간' : '연매출 구간', { exact: true });
-    const volume = page.getByLabel(contractType === 'new' ? '예상 연간 카드 거래액' : '연간 카드 거래액', { exact: true });
-    await expect(volume).toHaveValue('');
+    await expect(revenue).toBeVisible({ timeout: 20000 });
     await expect(page.getByRole('slider')).toHaveCount(0);
+    await expect(page.getByLabel(/연간 카드 거래액/)).toHaveCount(0);
+    let calculatorCalls = 0;
+    page.on('request', request => { if (request.url().includes('/api/guest-rfp/savings')) calculatorCalls++; });
     await revenue.selectOption('300000000');
-    await volume.fill('120000000');
-    if (contractType === 'renewal') await page.getByLabel('현재 수수료 부가세 기준').selectOption('included');
-    await page.getByRole('button', { name: '예상 절감액 확인하기' }).focus();
-    await page.keyboard.press('Enter');
-    const amount = contractType === 'new' ? '2,400,000원' : '1,200,000원';
-    await expect(page.getByRole('status').filter({ hasText: '연간' })).toContainText(amount, { timeout: 30000 });
-    await expect(page.getByText('계산검증 PG 0', { exact: true }).last()).toBeVisible();
-    for (const [width, zoom] of [[320, 1], [390, 1], [1280, 1], [640, 2]]) {
+    await expect(page.getByText('1%', { exact: true })).toBeVisible();
+    const pg = page.getByRole('radio', { name: /계산검증 PG 0/ });
+    await pg.focus(); await page.keyboard.press('Space');
+    for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
+      const next = page.getByRole('button', { name: '다음', exact: true });
+      if (width < 1024) {
+        await expect(next).toBeEnabled(); await next.click();
+        await expect(page.getByRole('heading', { name: '응답 기간' })).toBeVisible();
+        await page.getByRole('button', { name: '이전', exact: true }).click();
+        await expect(pg).toBeChecked();
+      } else {
+        const left = await page.getByRole('region', { name: '맞춤 PG 추천', exact: true }).boundingBox();
+        const right = await page.getByRole('heading', { name: '응답 기간' }).boundingBox();
+        expect(right!.x).toBeGreaterThan(left!.x + left!.width);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click({ trial: true });
+      await page.screenshot({ path: testInfo.outputPath(`guest-${contractType}-${width}.png`), fullPage: true });
     }
-    await page.evaluate(() => { document.documentElement.style.zoom = '1'; });
-    await page.getByLabel('비교 PG', { exact: true }).selectOption(pgs[1]);
-    await expect(page.getByRole('status').filter({ hasText: contractType === 'new' ? '1,200,000원' : '절감 효과가 확인되지 않았어요' })).toBeVisible();
+    await page.setViewportSize({ width: 640, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
+    await page.getByRole('button', { name: '다음', exact: true }).click();
+    await page.getByText('요청 내용 전체 보기').click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole('button', { name: process.env.GUEST_RFP_AUTO_SEND_ENABLED === 'true' ? '선택한 PG사에 자동 요청하기' : '가입하고 이어갈게요' }).click({ trial: true });
     await page.reload();
-    await expect(volume).toHaveValue('120,000,000');
-    await expect(revenue).toHaveValue('300000000');
-    await expect(page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeEnabled();
+    await page.addStyleTag({ content: 'nextjs-portal { display: none; }' });
+    await expect(revenue).toHaveValue('300000000', { timeout: 20000 });
+    await expect(pg).not.toBeChecked();
+    expect(calculatorCalls).toBe(0);
+
   } finally {
     await db.delete(pgRecommendationGroups).where(eq(pgRecommendationGroups.id, group));
-    await db.delete(pgAgreementRates).where(inArray(pgAgreementRates.pgWsId, pgs));
     await db.delete(workspaces).where(inArray(workspaces.id, pgs));
   }
 });

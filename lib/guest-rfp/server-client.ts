@@ -95,7 +95,7 @@ export async function saveGuestForSignup(draft: GuestDraft, persist: () => void)
       });
     } catch {
       throw new Error(
-        `${file.name} 저장을 완료하지 못했어요. ‘이 정보로 맞춤 견적 받기’를 눌러 다시 시도하거나 전체 수정에서 파일을 제거해요.`,
+        `${file.name} 저장을 완료하지 못했어요. 최종 요청 버튼을 눌러 다시 시도하거나 답변 수정에서 파일을 제거해요.`,
       );
     }
   }

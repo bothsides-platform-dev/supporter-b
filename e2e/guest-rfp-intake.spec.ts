@@ -112,7 +112,9 @@ async function completeAndLogin(page: Page) {
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  if (await page.getByRole('button', { name: '다음', exact: true }).isVisible()) await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
   await page.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }).click();
   await page.waitForURL(/\/login\?next=%2Frfp-create%3Fresume%3Dguest/);
   await page.locator('input[name="email"]').fill('yeonseong.dev@gmail.com');
@@ -325,7 +327,9 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  if (await page.getByRole('button', { name: '다음', exact: true }).isVisible()) await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
   await page.getByLabel('이메일', { exact: true }).fill(email);
   await page.getByLabel('비밀번호', { exact: true }).fill('Password123!');
   await page.getByLabel('비밀번호 확인', { exact: true }).fill('Password123!');
@@ -482,7 +486,9 @@ test('PG login cannot import a buyer draft', async ({ page }) => {
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  if (await page.getByRole('button', { name: '다음', exact: true }).isVisible()) await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
   await page.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }).click();
   await page.waitForURL(/\/login\?next=%2Frfp-create%3Fresume%3Dguest/);
   await page.locator('input[name="email"]').fill('ws-toss-admin@example.com');
