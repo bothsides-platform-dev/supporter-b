@@ -1,5 +1,6 @@
 import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
 export type MatchingBidRepo = Pick<PgMatchingRepo, 'find' | 'reviews' | 'updateReview'>;
+import { getPgRecommendationService, type PgRecommendationService } from './pg-recommendation';
 import { randomUUID } from 'node:crypto';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import {
@@ -44,6 +45,7 @@ class PgMatchingService {
     private readonly db: Tx,
     private readonly deps: {
       matching: PgMatchingRepo;
+      recommendation: PgRecommendationService;
       rfp: RfpRepo;
       workspace: WorkspaceRepo;
       allowedPg: RfpAllowedPgRepo;
@@ -64,19 +66,18 @@ class PgMatchingService {
     const request = await repo.find(rfpId);
     if (!request) return null;
     const reviews = await repo.reviews(rfpId);
+    const recommended = await this.deps.recommendation.recommend({
+      kind: 'request',
+      request: { groupId: request.groupId, isCustomIndustry: request.isCustomIndustry, industryName: request.industryName, currentPgs: request.currentPgs },
+      excludePgIds: reviews.map((r) => r.pgWorkspaceId),
+      buyerWorkspaceId: workspaceId,
+      includeTestPg,
+    });
     return {
       industryName: request.industryName,
       currentPgs: request.currentPgs,
       reviews,
-      recommendation: await repo.recommendation(
-        request.groupId,
-        reviews.map((r) => r.pgWorkspaceId),
-        undefined,
-        includeTestPg,
-        request.isCustomIndustry ? request.industryName : undefined,
-        workspaceId,
-        request.currentPgs,
-      ),
+      recommendation: recommended.recommendation,
     };
   }
 
@@ -211,15 +212,13 @@ class PgMatchingService {
         if (bids.some((bid) => bid.pgWsId === previous.pgWorkspaceId && bid.status === 'submitted'))
           return { ok: false, error: 'MATCHING_BID_ARRIVED' };
       }
-      const recommendation = await repo.recommendation(
-        request.groupId,
-        reviews.map((r) => r.pgWorkspaceId),
-        tx,
+      const { recommendation } = await this.deps.recommendation.recommend({
+        kind: 'request',
+        request: { groupId: request.groupId, isCustomIndustry: request.isCustomIndustry, industryName: request.industryName, currentPgs: request.currentPgs },
+        excludePgIds: reviews.map((r) => r.pgWorkspaceId),
+        buyerWorkspaceId: actor.workspaceId,
         includeTestPg,
-        request.isCustomIndustry ? request.industryName : undefined,
-        actor.workspaceId,
-        request.currentPgs,
-      );
+      }, tx);
       const candidate = recommendation.candidates.find((c) => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
       if (buyerEnd) await repo.updateReview(previous.id, 'buyer_ended', '구매사가 마감 후 상담을 종료했어요.', tx);
@@ -364,9 +363,10 @@ export const { get: getPgMatchingService } = defineAsyncSingleton(
   'pg_matching_service',
   'service',
   async () => {
-    const [db, matching, rfp, workspace, allowedPg, invitation, audit, bid] = await Promise.all([
+    const [db, matching, recommendation, rfp, workspace, allowedPg, invitation, audit, bid] = await Promise.all([
       getDb(),
       getPgMatchingRepo(),
+      getPgRecommendationService(),
       getRfpRepo(),
       getWorkspaceRepo(),
       getRfpAllowedPgRepo(),
@@ -376,6 +376,7 @@ export const { get: getPgMatchingService } = defineAsyncSingleton(
     ]);
     return new PgMatchingService(db, {
       matching,
+      recommendation,
       rfp,
       workspace,
       allowedPg,

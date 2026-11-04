@@ -7,6 +7,9 @@ import { productInfoSchema } from '@/lib/rfp/product-info';
 import type { ParsedCreateRfpInput } from '@/lib/rfp/intake/schema';
 import { toNewRfpInsert } from '@/lib/rfp/intake/to-insert';
 import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
+import type { Recommendation } from '@/lib/rfp/pg-matching';
+import type { ResolvedIndustry } from '@/lib/rfp/pg-recommendation-rules';
+import { getPgRecommendationService, type PgRecommendationService } from './pg-recommendation';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -75,6 +78,7 @@ export class RfpService {
     private readonly rfpAllowedPgRepo: RfpAllowedPgRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly matchingRepo: PgMatchingRepo,
+    private readonly recommender: PgRecommendationService,
   ) {}
 
   async extendDeadline(
@@ -1128,16 +1132,25 @@ export class RfpService {
     try {
       const create = async (tx: Tx) => {
       const guestRow = input.guestDraft ? await guestDraftService!.validateSubmission(input.guestDraft, actor, input.requestKey, input.rfpAttachmentIds ?? [], tx, transaction?.guestRequestId === input.guestDraft.id) : undefined;
-      let recommendation;
+      let recommendation: Recommendation | undefined;
       let currentPgs: CurrentPg[] = [];
       let requestPayloadHash = '';
-      let industry;
+      let industry: ResolvedIndustry | undefined;
       if (send) {
         await matching.lockBuyer(actor.workspaceId, tx);
         const existing = await matching.findByKey(actor.workspaceId, input.requestKey!, tx);
-        const resolved = await matching.resolveCurrentPgs(input.currentPgs, tx, existing?.currentPgs);
-        if (!resolved.ok) return resolved;
-        currentPgs = resolved.currentPgs;
+        // PG 추천은 읽기만 하므로 멱등 판정보다 먼저 한 번 계산한다 — 해석된 현재 PG 가
+        // 멱등 해시의 입력이고, 재시도는 저장분(existing)의 신원을 유지해야 한다.
+        const recommended = await this.recommender.recommend({
+          kind: 'selection',
+          industry: { industryGroupId: input.industryGroupId, customIndustryName: input.customIndustryName },
+          currentPgs: input.currentPgs ?? [],
+          retainCurrentPgs: existing?.currentPgs,
+          buyerWorkspaceId: actor.workspaceId,
+          includeTestPg,
+        }, tx);
+        if (!recommended.ok) return recommended;
+        currentPgs = recommended.currentPgs;
         const currentPgKeys = [...new Set(currentPgs.map(p => p.pgWorkspaceId ? `id:${p.pgWorkspaceId}` : `name:${currentPgNameKey(p.name)}`))].sort();
         requestPayloadHash = createHash('sha256').update(canonicalMatchingInput({ ...input, currentPgs: currentPgKeys, ...(input.customIndustryName !== undefined ? { customIndustryName: industryNameKey(input.customIndustryName) } : {}) })).digest('hex');
         if (existing) return existing.requestPayloadHash === requestPayloadHash
@@ -1146,8 +1159,8 @@ export class RfpService {
         if (guestRow?.completedAt) return { ok: false as const, error: 'GUEST_DRAFT_UNAVAILABLE' };
         const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
         if (deadlineError) return { ok: false as const, error: deadlineError };
-        industry = await matching.resolveIndustry(input, tx);
-        recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName, actor.workspaceId, currentPgs);
+        industry = recommended.industry;
+        recommendation = recommended.recommendation;
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
         }
@@ -1389,6 +1402,7 @@ export const {
     allowedPgRepo,
     attachmentRepo,
     matchingRepo,
+    recommender,
   ] = await Promise.all([
     getDb(),
     getRfpRepo(),
@@ -1403,6 +1417,7 @@ export const {
     getRfpAllowedPgRepo(),
     getAttachmentRepo(),
     getPgMatchingRepo(),
+    getPgRecommendationService(),
   ]);
   return new RfpService(
     db,
@@ -1418,5 +1433,6 @@ export const {
     allowedPgRepo,
     attachmentRepo,
     matchingRepo,
+    recommender,
   );
 });

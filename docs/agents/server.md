@@ -9,6 +9,8 @@ lib/server/
 ├─ actions/          # 얇은 진입점: 세션 검증 + 입력 파싱 후 서비스에 위임
 ├─ services/         # 비즈니스 로직 캡슐화 (전체 코드베이스 적용 완료)
 │  ├─ rfp.ts         # RfpService: award / cancel / close
+│  ├─ pg-recommendation.ts # PgRecommendationService: PG 추천 — 업종·현재 PG·등급 해석 + 후보 산출(규칙은 lib/rfp/pg-recommendation-rules.ts 의 pure 함수, ADR 0005)
+│  ├─ pg-matching.ts # PgMatchingService: 맞춤 PG 상담 심사 전이(review / next / endAndNext) — 추천은 위 module 을 소비
 │  ├─ bid.ts         # BidService: submit / withdraw
 │  ├─ chat.ts        # ChatService: sendMessage / conversation lookup
 │  ├─ workspace.ts   # WorkspaceService: create / invite / member management

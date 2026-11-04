@@ -17,6 +17,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { auditLogs, bids, notifications, outboxEntries, rfpInvitations, rfpRequoteRequests, rfps, users } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
+import { getPgRecommendationService } from '../pg-recommendation';
 import { subscribe } from '@/lib/server/notifications/bus';
 import type { Notification } from '@/lib/types/notification';
 
@@ -30,7 +31,7 @@ async function buildService(): Promise<RfpService> {
       getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
       getRfpAllowedPgRepo(), getAttachmentRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo());
+  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo(), await getPgRecommendationService());
 }
 
 beforeEach(async () => {

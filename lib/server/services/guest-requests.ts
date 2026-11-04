@@ -5,9 +5,9 @@ import {
   getDb,
   getGuestRequestRepo,
   getGuestDraftRepo,
-  getPgMatchingRepo,
   getBusinessCalendarRepo,
 } from "@/lib/server/repositories/factory";
+import { getPgRecommendationService } from "./pg-recommendation";
 import type { Tx } from "@/lib/server/repositories/types";
 import type { Actor } from "./types";
 import { assertPublicDraft } from "./guest-drafts";
@@ -57,11 +57,11 @@ function submission(
   });
 }
 export async function getGuestRequestService() {
-  const [db, repo, drafts, matching] = await Promise.all([
+  const [db, repo, drafts, recommender] = await Promise.all([
     getDb(),
     getGuestRequestRepo(),
     getGuestDraftRepo(),
-    getPgMatchingRepo(),
+    getPgRecommendationService(),
   ]);
   async function access(id: string, proof: Access, tx: Tx) {
     const draft = await drafts.lock(id, tx);
@@ -79,27 +79,19 @@ export async function getGuestRequestService() {
   }
   async function recommendation(draft: GuestDraftRow, tx: Tx) {
     const answers = draft.answers.data;
-    const industry = await matching.resolveIndustry(
-      answers.industryMode === "custom"
+    const annualRevenue = draft.answers.quoteContext?.savings?.annualRevenue;
+    const recommended = await recommender.recommend({
+      kind: "selection",
+      industry: answers.industryMode === "custom"
         ? { customIndustryName: answers.customIndustryName! }
         : { industryGroupId: answers.industryGroupId! },
-      tx,
-    );
-    const current = await matching.resolveCurrentPgs(
-      answers.contractType === "renewal" ? answers.currentPgs : [],
-      tx,
-    );
-    if (!current.ok) throw new Error(current.error);
-    return matching.recommendation(
-      industry.groupId,
-      [],
-      tx,
-      false,
-      industry.customName,
-      draft.workspaceId ?? undefined,
-      current.currentPgs,
-      draft.answers.quoteContext?.savings?.annualRevenue === undefined ? undefined : provisionalTier(draft.answers.quoteContext.savings.annualRevenue),
-    );
+      currentPgs: answers.contractType === "renewal" ? answers.currentPgs ?? [] : [],
+      buyerWorkspaceId: draft.workspaceId ?? undefined,
+      provisionalTier: annualRevenue === undefined ? undefined : provisionalTier(annualRevenue),
+      includeTestPg: false,
+    }, tx);
+    if (!recommended.ok) throw new Error(recommended.error);
+    return recommended;
   }
   return {
     async recommend(id: string, proof: string | Access, options: { revision?: number; annualRevenue?: number | null } = {}) {
@@ -120,14 +112,14 @@ export async function getGuestRequestService() {
           draft.revision += 1;
           await drafts.update(id, { answers: draft.answers, revision: draft.revision, updatedAt: new Date(), ...(!draft.userId ? { expiresAt: new Date(Date.now() + 86400000) } : {}) }, tx);
         }
-        const result = await recommendation(draft, tx);
-        const confirmedTier = draft.workspaceId ? await matching.buyerTier(draft.workspaceId, tx) : null;
+        const recommended = await recommendation(draft, tx);
+        const result = recommended.recommendation;
         const annualRevenue = draft.answers.quoteContext?.savings?.annualRevenue;
         const files = (await drafts.files(id, tx)).filter(file => draft.fileIds.includes(file.clientId));
         return {
           revision: draft.revision,
           recommendation: result,
-          tierBasis: confirmedTier ? 'confirmed' as const : annualRevenue !== undefined ? 'provisional' as const : 'unknown' as const,
+          tierBasis: recommended.tierBasis,
           annualRevenue: annualRevenue ?? null,
           answers: selectGuestAnswers(draft.answers.data),
           attachmentCount: draft.fileIds.length,
@@ -172,7 +164,7 @@ export async function getGuestRequestService() {
             throw new Error("GUEST_REQUEST_FROZEN");
           return;
         }
-        const candidate = (await recommendation(draft, tx)).candidates.find(
+        const candidate = (await recommendation(draft, tx)).recommendation.candidates.find(
           (c) => c.pgWorkspaceId === input.pgId,
         );
         if (!candidate) throw new Error("MATCHING_UNAVAILABLE");
