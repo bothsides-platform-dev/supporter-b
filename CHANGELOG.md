@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.3.3] - 2026-11-04
+
+### Changed
+
+- PG 추천 산출을 한 모듈로 모았어요. 업종·현재 이용 PG·등급 해석과 추천 규칙을 모든 경로가 같은 방식으로 쓰고, 로그인 전 맞춤 절감액 계산도 현재 이용 PG를 같은 기준으로 확인해요. 화면과 동작은 그대로예요.
+
 ## [0.46.3.2] - 2026-11-04
 
 ### Changed

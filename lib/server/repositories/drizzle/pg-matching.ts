@@ -1,42 +1,52 @@
-import { currentPgNameKey, currentPgsSchema, type CurrentPg } from '@/lib/rfp/current-pgs';
+import type { CurrentPg } from '@/lib/rfp/current-pgs';
 import type { MerchantTier } from '@/lib/types/bid';
-import { industryNameKey, type IndustrySelection } from '@/lib/rfp/industry-selection';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { pgMatchingDefaults, pgMatchingPolicies, pgRecommendationGroups, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, bizProfiles } from '@/lib/db/schema';
-import { eligibleMatchingCandidates, storedMatchingPolicySchema, type MatchingPolicy, type PgReview, type Recommendation } from '@/lib/rfp/pg-matching';
-import { isTestPgName } from '@/lib/features/test-pg';
+import type { Recommendation, PgReview } from '@/lib/rfp/pg-matching';
+import type { IndustryGroupRow, PgDirectoryEntry } from '@/lib/rfp/pg-recommendation-rules';
 import type { Tx } from '../types';
 
+/**
+ * 맞춤 PG 상담의 영속(상담 요청·심사)과 원시 읽기만 맡는다. 추천 산출(업종·현재 PG·등급 해석,
+ * 정책 평가)은 `lib/server/services/pg-recommendation.ts` 와 `lib/rfp/pg-recommendation-rules.ts`
+ * 가 소유한다(ADR 0005). 여기에 규칙을 다시 넣지 않는다.
+ */
 export class DrizzlePgMatchingRepository {
   constructor(private readonly db: Tx) {}
 
-  async resolveCurrentPgs(input: unknown, tx: Tx = this.db, saved: CurrentPg[] = []): Promise<{ ok: true; currentPgs: CurrentPg[] } | { ok: false; error: string }> {
-    const parsed = currentPgsSchema.safeParse(input);
-    if (!parsed.success) return { ok: false, error: 'INVALID_CURRENT_PGS' };
-    if (parsed.data.length === 0) return { ok: true, currentPgs: [] };
-    const pgs = await tx.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).where(eq(workspaces.type, 'pg')).orderBy(asc(workspaces.id));
-    const resolved = new Map<string, CurrentPg>();
-    for (const item of parsed.data) {
-      // A retry retains its original identity even if the directory has changed.
-      const prior = saved.find(p => item.pgWorkspaceId ? p.pgWorkspaceId === item.pgWorkspaceId : currentPgNameKey(p.name) === currentPgNameKey(item.name));
-      if (prior) { resolved.set(prior.pgWorkspaceId ?? currentPgNameKey(prior.name), prior); continue; }
-      const pg = item.pgWorkspaceId ? pgs.find(p => p.id === item.pgWorkspaceId) : pgs.find(p => currentPgNameKey(p.name) === currentPgNameKey(item.name));
-      if (item.pgWorkspaceId && !pg) return { ok: false, error: 'INVALID_CURRENT_PGS' };
-      const value = pg ? { pgWorkspaceId: pg.id, name: pg.name } : { pgWorkspaceId: null, name: item.name.replace(/\s+/g, ' ') };
-      resolved.set(value.pgWorkspaceId ?? currentPgNameKey(value.name), value);
-    }
-    return { ok: true, currentPgs: [...resolved.values()] };
-  }
+  // ── 원시 읽기 (추천 산출 입력) ─────────────────────────────────────────
 
-  async resolveIndustry(input: IndustrySelection, tx: Tx = this.db) {
-    if (input.industryGroupId) return { groupId: input.industryGroupId, isCustomIndustry: false, customName: undefined };
-    const groups = await tx.select({ id: pgRecommendationGroups.id, name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
+  /** 업종 그룹 전부(id 오름차순) — 정책 행이 없으면 policy=null. 직접 입력 이름 대응용. */
+  async industryGroups(tx: Tx = this.db): Promise<IndustryGroupRow[]> {
+    return tx.select({ id: pgRecommendationGroups.id, name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
       .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))
       .orderBy(asc(pgRecommendationGroups.id));
-    const matches = groups.filter(group => industryNameKey(group.name) === industryNameKey(input.customIndustryName!));
-    // Legacy names are only unique byte-for-byte; normalization can reveal duplicates.
-    const match = matches.find(group => (group.policy as { risk?: string } | null)?.risk === 'black') ?? matches[0];
-    return { groupId: match?.id ?? null, isCustomIndustry: !match, customName: match ? undefined : input.customIndustryName };
+  }
+
+  /** 그룹 이름과 정책 원문. 그룹이 없으면 undefined, 정책 행이 없으면 policy=null. */
+  async groupPolicy(groupId: string, tx: Tx = this.db): Promise<{ name: string; policy: unknown } | undefined> {
+    const [row] = await tx.select({ name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
+      .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))
+      .where(eq(pgRecommendationGroups.id, groupId));
+    return row;
+  }
+
+  /** 기본 PG 정책 원문. 미설정이면 undefined. */
+  async defaultPolicy(tx: Tx = this.db): Promise<unknown> {
+    const [row] = await tx.select({ policy: pgMatchingDefaults.policy }).from(pgMatchingDefaults).where(eq(pgMatchingDefaults.id, 'default'));
+    return row?.policy;
+  }
+
+  /** 모든 PG 워크스페이스(상태 불문, id 오름차순) — 현재 이용 PG 이름·ID 대응용. */
+  async pgDirectory(tx: Tx = this.db): Promise<PgDirectoryEntry[]> {
+    return tx.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).where(eq(workspaces.type, 'pg')).orderBy(asc(workspaces.id));
+  }
+
+  /** 주어진 id 중 활성 PG 워크스페이스만 — 추천 후보 가시성 판정용. */
+  async activePgWorkspaces(ids: readonly string[], tx: Tx = this.db): Promise<PgDirectoryEntry[]> {
+    if (ids.length === 0) return [];
+    return tx.select({ id: workspaces.id, name: workspaces.name })
+      .from(workspaces).where(and(inArray(workspaces.id, [...ids]), eq(workspaces.type, 'pg'), eq(workspaces.status, 'active')));
   }
 
   async buyerTier(buyerWorkspaceId: string, tx: Tx = this.db): Promise<MerchantTier | null> {
@@ -46,45 +56,7 @@ export class DrizzlePgMatchingRepository {
     return buyer?.grade ?? null;
   }
 
-  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string, buyerWorkspaceId?: string, currentPgs: CurrentPg[] = [], provisionalTier?: MerchantTier): Promise<Recommendation> {
-    const merchantTier = (buyerWorkspaceId ? await this.buyerTier(buyerWorkspaceId, tx) : null) ?? provisionalTier ?? null;
-    if (!groupId) return customName ? this.defaultRecommendation(customName, previous, tx, includeTest, merchantTier, currentPgs) : { risk: 'unconfigured', industryName: '', candidates: [] };
-    const [row] = await tx.select({ name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
-      .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))
-      .where(eq(pgRecommendationGroups.id, groupId));
-    if (!row) return { risk: 'unconfigured', industryName: '', candidates: [] };
-    const parsed = storedMatchingPolicySchema.safeParse(row.policy);
-    // An explicit block must never be bypassed, including malformed legacy policies.
-    if ((row.policy as { risk?: string } | null)?.risk === 'black') return { risk: 'black', industryName: row.name, candidates: [] };
-    const policy: MatchingPolicy = parsed.success ? parsed.data : { risk: 'unconfigured', candidates: [] };
-    const candidates = await this.visibleCandidates(policy, previous, tx, includeTest, merchantTier, currentPgs);
-    if (candidates.length) return { risk: policy.risk, industryName: row.name, candidates };
-    const fallback = await this.defaultRecommendation(row.name, previous, tx, includeTest, merchantTier, currentPgs);
-    return fallback.candidates.length ? fallback : { risk: policy.risk, industryName: row.name, candidates: [] };
-  }
-
-  private async defaultRecommendation(industryName: string, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null, currentPgs: CurrentPg[]): Promise<Recommendation> {
-    const [defaults] = await tx.select({ policy: pgMatchingDefaults.policy }).from(pgMatchingDefaults).where(eq(pgMatchingDefaults.id, 'default'));
-    const fallback = storedMatchingPolicySchema.safeParse(defaults?.policy);
-    const candidates = fallback.success && fallback.data.risk === 'gray'
-      ? await this.visibleCandidates(fallback.data, previous, tx, includeTest, merchantTier, currentPgs) : [];
-    return { risk: 'gray', industryName, source: 'default', candidates };
-  }
-
-  private async visibleCandidates(policy: MatchingPolicy, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null, currentPgs: CurrentPg[]): Promise<Recommendation['candidates']> {
-    const ids = policy.candidates.map(c => c.pgWorkspaceId);
-    const pgs: { id: string; name: string }[] = ids.length === 0 ? [] : await tx.select({ id: workspaces.id, name: workspaces.name })
-      .from(workspaces).where(and(inArray(workspaces.id, ids), eq(workspaces.type, 'pg'), eq(workspaces.status, 'active')));
-    const excludedIds = new Set(currentPgs.map(p => p.pgWorkspaceId));
-    const excludedNames = new Set(currentPgs.map(p => currentPgNameKey(p.name)));
-    const visible = pgs.filter(p => (includeTest || !isTestPgName(p.name)) && !excludedIds.has(p.id) && !excludedNames.has(currentPgNameKey(p.name)));
-    const names = new Map(visible.map(p => [p.id, p.name]));
-    return eligibleMatchingCandidates(policy, visible.map(p => p.id), previous)
-      .map(c => ({
-        pgWorkspaceId: c.pgWorkspaceId, name: names.get(c.pgWorkspaceId)!, reason: c.reason,
-        merchantTier, feeRate: merchantTier === null ? null : c.feesByTier[merchantTier], feeNote: c.feeNote,
-      }));
-  }
+  // ── 상담 요청·심사 영속 ──────────────────────────────────────────────
 
   async find(rfpId: string, tx: Tx = this.db) {
     const [row] = await tx.select().from(rfpMatchingRequests).where(eq(rfpMatchingRequests.rfpId, rfpId));

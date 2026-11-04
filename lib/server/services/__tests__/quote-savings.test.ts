@@ -42,3 +42,15 @@ it('소유권·revision·후보 경계를 지키고 Black 업종은 우회하지
   expect(await service.calculate({ id, revision: 1, annualRevenue: 1, annualCardVolume: 1 }, 'proof'))
     .toMatchObject({ candidates: [], result: { status: 'unavailable' } });
 });
+it('갱신 계약의 현재 PG 는 다른 경로와 같은 해석으로 제외하고, 낡은 PG id 는 입력 부족으로 안내한다', async () => {
+  const service = await getQuoteSavingsService();
+  const drafts = await getGuestDraftService();
+  const renewal = randomUUID();
+  await drafts.savePublic({ id: renewal, revision: 0, answers: { industryGroupId: group, contractType: 'renewal', currentPgs: [{ pgWorkspaceId: pgId, name: '옛 이름' }] }, files: [] }, 'proof');
+  expect((await service.calculate({ id: renewal, revision: 1, annualRevenue: 200000000, annualCardVolume: 120000000 }, 'proof')).candidates)
+    .toEqual([{ id: otherId, name: 'Beta' }]);
+  const stale = randomUUID();
+  await drafts.savePublic({ id: stale, revision: 0, answers: { industryGroupId: group, contractType: 'renewal', currentPgs: [{ pgWorkspaceId: randomUUID(), name: '사라진 PG' }] }, files: [] }, 'proof');
+  expect(await service.calculate({ id: stale, revision: 1, annualRevenue: 200000000, annualCardVolume: 120000000 }, 'proof'))
+    .toEqual({ candidates: [], result: { status: 'unavailable', reason: 'inputs' } });
+});
