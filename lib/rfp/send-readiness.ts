@@ -8,7 +8,7 @@
 //
 // 입력은 작성 중 초안(문자열 필드)과 서버 스키마 출력(선택 필드)이 모두 구조적으로
 // 만족하도록 느슨하게 둔다 — 비어 있는 문자열과 undefined 는 같은 "미입력"이다.
-import { industrySelectionSchema, isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
+import { customIndustryNameSchema, isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import { productInfoSchema } from '@/lib/rfp/product-info';
 import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { isValidWebsiteUrlLight } from '@/lib/validation/website-url';
@@ -125,12 +125,14 @@ const RULES: readonly Rule[] = [
 
 function isIndustrySelected(input: SendReadinessInput, groups: readonly { id: string }[] | undefined): boolean {
   if (groups) return isIndustrySelectionValid(input, groups);
-  // 등록 업종 목록을 모르는 호출자(서버 스키마)는 기존 ID/직접 입력 이름의 배타성만 본다.
-  // 등록 여부는 서비스의 resolveIndustry 가 판정한다.
-  return industrySelectionSchema.safeParse({
-    industryGroupId: input.industryGroupId || undefined,
-    customIndustryName: input.customIndustryName || undefined,
-  }).success;
+  // 등록 업종 목록을 모르는 호출자(서버 스키마·픽스처)는 ID 의 등록 여부와 형식을 보지 않는다 —
+  // 형식은 스키마 필드가, 등록 여부는 서비스의 resolveIndustry 가 판정한다.
+  const hasId = (input.industryGroupId ?? '').trim() !== '';
+  const hasName = customIndustryNameSchema.safeParse(input.customIndustryName).success;
+  if (input.industryMode === 'custom') return hasName;
+  if (input.industryMode === 'registered') return hasId;
+  // 초안 모드가 없는 서버 입력은 기존 ID/직접 입력 이름 중 정확히 하나여야 한다.
+  return hasId !== hasName;
 }
 
 /**

@@ -108,12 +108,20 @@ describe('sendReadinessIssues', () => {
     expect(rules({ ...ready, industryMode: 'custom', customIndustryName: '   ' }, [])).toEqual(['industry']);
   });
 
-  it('업종 목록이 없으면(서버 스키마) 등록 ID 와 직접 입력의 배타성만 본다', () => {
+  it('업종 목록이 없으면(서버 스키마) 등록 ID 와 직접 입력의 배타성만 보고 ID 형식은 묻지 않는다', () => {
     expect(rules({ ...ready, industryMode: undefined })).toEqual([]);
+    expect(rules({ ...ready, industryMode: undefined, industryGroupId: 'tutorial-shopping' })).toEqual([]);
     expect(rules({ ...ready, industryMode: undefined, industryGroupId: undefined, customIndustryName: '방문 돌봄' })).toEqual([]);
     expect(rules({ ...ready, industryMode: undefined, industryGroupId: undefined, customIndustryName: undefined })).toEqual(['industry']);
     expect(rules({ ...ready, industryMode: undefined, customIndustryName: '방문 돌봄' })).toEqual(['industry']);
-    expect(rules({ ...ready, industryMode: undefined, industryGroupId: '' })).toEqual(['industry']);
+    expect(rules({ ...ready, industryMode: undefined, industryGroupId: '  ' })).toEqual(['industry']);
+  });
+
+  it('업종 목록이 없어도 초안 모드가 있으면 그 모드의 값만 본다', () => {
+    expect(rules({ ...ready, industryMode: 'registered', customIndustryName: '남은 직접 입력' })).toEqual([]);
+    expect(rules({ ...ready, industryMode: 'registered', industryGroupId: '' })).toEqual(['industry']);
+    expect(rules({ ...ready, industryMode: 'custom', customIndustryName: '방문 돌봄' })).toEqual([]);
+    expect(rules({ ...ready, industryMode: 'custom', customIndustryName: '' })).toEqual(['industry']);
   });
 
   it('마지막 단계는 마감일과 PG 선택을 본다', () => {
