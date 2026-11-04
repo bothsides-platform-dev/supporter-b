@@ -11,7 +11,7 @@ import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getBusinessCalendarRepo
 import { businessDeadline } from '@/lib/rfp/business-deadline';
 import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 import type { PgliteDB } from '@/lib/db/client-pglite';
-import type { CreateRfpServiceInput } from '../rfp';
+import type { ParsedCreateRfpInput } from '@/lib/rfp/intake/schema';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
 import { recommendPgAction, requestNextPgAction, endAndRequestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -29,7 +29,7 @@ vi.mock('next/cache', async importOriginal => ({ ...await importOriginal<object>
 let db: PgliteDB;
 let buyer: { userId: string; workspaceId: string };
 let pg: { userId: string; workspaceId: string };
-let input: CreateRfpServiceInput;
+let input: ParsedCreateRfpInput;
 let groupId: string;
 beforeEach(async () => {
   testPgCookie.value = undefined;

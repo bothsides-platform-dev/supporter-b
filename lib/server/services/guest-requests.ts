@@ -13,7 +13,7 @@ import type { Actor } from "./types";
 import { assertPublicDraft } from "./guest-drafts";
 import type { GuestDraftRow } from "@/lib/server/repositories/drizzle/guest-draft";
 import { selectGuestAnswers, type GuestAnswers } from "@/lib/guest-rfp/answers";
-import { createRfpInputSchema } from "@/lib/rfp/create-input";
+import { createRfpInputSchema } from "@/lib/rfp/intake/schema";
 import { normalizeWebsiteUrl } from "@/lib/validation/website-url";
 import { businessDeadline } from "@/lib/rfp/business-deadline";
 import { kstDateOf } from "@/lib/utils/deadline";
