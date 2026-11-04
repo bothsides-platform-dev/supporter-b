@@ -1,93 +1,29 @@
-import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 // components/rfp/wizard-validation.ts
 //
-// 신규 견적 요청 wizard의 단일 검증 소스. 각 step은 자기 입력값만 보고
-// 독립적으로 complete 여부를 판정한다(순서 무관). Sidebar·ProgressBar·발송
-// 버튼이 모두 이 함수를 통해 동일한 기준으로 step 상태를 본다.
-// 필드별 판정은 lib/rfp/required-fields(SSOT)를 공유한다.
+// 신규 견적 요청 wizard 의 단계 상태. 각 step 은 자기 입력값만 보고 독립적으로
+// complete 여부를 판정한다(순서 무관). Sidebar·ProgressBar·발송 버튼이 모두 이
+// 함수를 통해 동일한 기준으로 step 상태를 본다. 판정 자체는 발송 가능 판정
+// (lib/rfp/send-readiness)이 소유하고, 여기서는 단계별로 묶어 첫 미충족 안내만 고른다.
 import { WIZARD_STEPS } from './wizard-steps';
-import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
-import {
-  isTitleValid,
-  isWebsiteValid,
-  isPaymentValid,
-  isPgValid,
-  isDeadlineValid,
-  isContractTypeValid,
-  isDeliveryServicePeriodValid,
-  isMainProductsValid,
-  isMonthlyAvgPgVolumeSatisfied,
-} from '@/lib/rfp/required-fields';
+import { sendReadinessIssues, type SendReadinessInput } from '@/lib/rfp/send-readiness';
 
-export type WizardValidationDraft = {
-  title: string;
-  websiteUrl: string;
-  contractType: 'new' | 'renewal' | null | undefined;
-  mainProducts: string;
-  industryGroupId?: string;
-  industryMode?: 'registered' | 'custom';
-  customIndustryName?: string;
-  monthlyAvgPgVolume: string;
-  deliveryServicePeriod?: string;
-  requiredPaymentMethods: readonly unknown[];
-  customPaymentMethods: readonly unknown[];
-  allowedPgWorkspaceIds: readonly unknown[];
-  deadline: string;
-};
+export type WizardValidationDraft = SendReadinessInput;
 
 export type StepValidity = { num: number; complete: boolean; hint: string };
 
-function isStepComplete(num: number, draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): boolean {
-  switch (num) {
-    case 2:
-      return (
-        isTitleValid(draft.title) &&
-        isWebsiteValid(draft.websiteUrl) &&
-        isContractTypeValid(draft.contractType) &&
-        isMainProductsValid(draft.mainProducts) &&
-        isDeliveryServicePeriodValid(draft.deliveryServicePeriod) &&
-        (groups === undefined || isIndustrySelectionValid(draft, groups)) &&
-        isMonthlyAvgPgVolumeSatisfied(draft.monthlyAvgPgVolume, draft.contractType) &&
-        isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods)
-      );
-    case 3:
-      return isDeadlineValid(draft.deadline) && isPgValid(draft.allowedPgWorkspaceIds);
-    default:
-      // Step 1(사업자 확인)은 필수 입력이 없으므로 항상 complete.
-      return true;
-  }
+/**
+ * 단계 게이트는 묶음 화면(RfpStep2Content — 랜딩·튜토리얼)이 받는 입력만 본다.
+ * 질문 흐름 전용 입력(판매 정보·현재 PG)은 RfpCreateWizard 가 회원 작성에서
+ * contentQuestions 로 덧붙인다.
+ */
+export function getWizardValidity(draft: WizardValidationDraft, groups?: readonly { id: string }[]): StepValidity[] {
+  const issues = sendReadinessIssues(draft, groups).filter((issue) => !issue.questionFlowOnly);
+  return WIZARD_STEPS.map(({ num }) => {
+    const first = issues.find((issue) => issue.step === num);
+    return { num, complete: first === undefined, hint: first?.message ?? '' };
+  });
 }
 
-// step별 미충족 사유 안내. Step 2는 제목 → 홈페이지 → 견적 유형 →
-// 주요 판매 상품 → 월 평균 거래액 → 결제수단 순으로 분기.
-function hintFor(num: number, draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): string {
-  switch (num) {
-    case 2:
-      if (!isTitleValid(draft.title)) return '제목을 입력해주세요';
-      if (draft.websiteUrl.trim() === '') return '홈페이지 주소를 입력해주세요';
-      if (!isWebsiteValid(draft.websiteUrl)) return '홈페이지 주소 형식을 확인해주세요';
-      if (!isContractTypeValid(draft.contractType)) return '견적 유형을 선택해주세요';
-      if (!isMainProductsValid(draft.mainProducts)) return '주요 판매 상품을 입력해주세요';
-      if (!isDeliveryServicePeriodValid(draft.deliveryServicePeriod)) return '배송 및 서비스 기간을 입력해요';
-      if (groups !== undefined && !isIndustrySelectionValid(draft, groups)) return '업종을 선택해주세요';
-      if (!isMonthlyAvgPgVolumeSatisfied(draft.monthlyAvgPgVolume, draft.contractType)) return '전년도 월 평균 PG 거래액을 입력해주세요';
-      return '견적 받을 결제수단을 1개 이상 선택해주세요';
-    case 3:
-      if (!isDeadlineValid(draft.deadline)) return '마감일을 선택해주세요';
-      return 'PG를 1개 이상 선택해주세요';
-    default:
-      return '';
-  }
-}
-
-export function getWizardValidity(draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): StepValidity[] {
-  return WIZARD_STEPS.map(({ num }) => ({
-    num,
-    complete: isStepComplete(num, draft, groups),
-    hint: hintFor(num, draft, groups),
-  }));
-}
-
-export function getFirstIncompleteStep(draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): StepValidity | null {
+export function getFirstIncompleteStep(draft: WizardValidationDraft, groups?: readonly { id: string }[]): StepValidity | null {
   return getWizardValidity(draft, groups).find((s) => !s.complete) ?? null;
 }

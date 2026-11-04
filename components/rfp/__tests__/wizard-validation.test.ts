@@ -16,12 +16,15 @@ const emptyDraft: WizardValidationDraft = {
   deadline: '',
 };
 
-// Step 2 필수 3종(견적 유형·주요 판매 상품·월 평균 거래액)을 모두 채운 값.
+// Step 2 필수(견적 유형·주요 판매 상품·월 평균 거래액·기간·업종)를 모두 채운 값.
+// 업종 목록을 넘기지 않으면 ID/직접 입력의 배타성만 보므로 직접 입력으로 충족한다.
 const step2Extras = {
   contractType: 'new' as const,
   mainProducts: '의류',
   monthlyAvgPgVolume: '1000000000',
   deliveryServicePeriod: 'D+3',
+  industryMode: 'custom' as const,
+  customIndustryName: '의류 소매',
 };
 
 function complete(draft: WizardValidationDraft) {
@@ -43,7 +46,7 @@ describe('getWizardValidity', () => {
   });
 
   it('업종 목록이 비어 있어도 직접 입력을 마치기 전에는 Step 2가 미완료다', () => {
-    const draft = { ...emptyDraft, ...step2Extras, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] };
+    const draft = { ...emptyDraft, ...step2Extras, industryMode: 'registered' as const, customIndustryName: undefined, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] };
     expect(getWizardValidity(draft, [])[1].complete).toBe(false);
     expect(getWizardValidity({ ...draft, industryMode: 'custom' as const, customIndustryName: '방문 돌봄' }, [])[1].complete).toBe(true);
   });
@@ -147,7 +150,9 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     contractType: 'new',
     mainProducts: '의류',
     monthlyAvgPgVolume: '1000000000',
-  deliveryServicePeriod: 'D+3',
+    deliveryServicePeriod: 'D+3',
+    industryMode: 'custom',
+    customIndustryName: '의류 소매',
     requiredPaymentMethods: ['card'],
     customPaymentMethods: [],
     allowedPgWorkspaceIds: [{ id: 'pg1' }],
@@ -158,8 +163,19 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     return getWizardValidity(draft).find((s) => s.num === num)!;
   }
 
-  it('모두 채우면 complete', () => {
-    expect(step(base, 2).complete).toBe(true);
+  it('모두 채우면 complete 이고 안내 문구가 비어 있다', () => {
+    expect(step(base, 2)).toEqual({ num: 2, complete: true, hint: '' });
+  });
+
+  it('업종 미선택이면 미완료 + 업종 안내', () => {
+    const d = { ...base, industryMode: undefined, customIndustryName: undefined };
+    expect(step(d, 2).complete).toBe(false);
+    expect(step(d, 2).hint).toBe('업종을 선택해주세요');
+  });
+
+  it('질문 흐름 전용 입력(판매 정보·현재 PG)은 단계 게이트에 들어오지 않는다', () => {
+    const d = { ...base, contractType: 'renewal' as const, productInfo: {}, currentPgs: [] };
+    expect(step(d, 2).complete).toBe(true);
   });
 
   it('홈페이지 빈값이면 미완료 + 입력 안내', () => {

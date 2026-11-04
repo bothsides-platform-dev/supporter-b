@@ -17,12 +17,7 @@ import {
   isValidWebsiteUrl,
   WEBSITE_URL_ERROR,
 } from "@/lib/validation/website-url";
-import {
-  isDeliveryServicePeriodValid,
-  isContractTypeValid,
-  isMainProductsValid,
-  isMonthlyAvgPgVolumeSatisfied,
-} from "@/lib/rfp/required-fields";
+import { sendReadinessIssues } from "@/lib/rfp/send-readiness";
 import { MERCHANT_TIERS, PAYMENT_METHODS } from "@/lib/types/bid";
 import { SOLUTION_VALUES } from "@/lib/types/rfp-terms";
 import { MAX_FILES } from "@/lib/server/storage/constants";
@@ -90,70 +85,18 @@ export const createRfpInputSchema = z
   })
   .strict()
   .superRefine((d, ctx) => {
-    if (d.send && !isDeliveryServicePeriodValid(d.deliveryServicePeriod))
-      ctx.addIssue({
-        code: "custom",
-        path: ["deliveryServicePeriod"],
-        message: "배송 및 서비스 기간을 입력해요",
-      });
-    if (d.send && !d.productInfo)
-      ctx.addIssue({
-        code: "custom",
-        path: ["productInfo"],
-        message: "판매 정보를 입력해요",
-      });
-    if (
-      d.send &&
-      d.requiredPaymentMethods.length + d.customPaymentMethods.length === 0
-    ) {
+    // 드래프트 저장은 비어도 허용한다. 발송 전제는 발송 가능 판정(lib/rfp/send-readiness)이
+    // 위저드와 같은 규칙표로 판정한다. 단계 3(마감·PG)은 서비스가 영업일 달력과 추천 후보로
+    // 다시 판정하므로 견적 내용(단계 2)만 받는다. parse.ts 가 params.rule 로 오류 코드를 고른다.
+    if (!d.send) return;
+    for (const issue of sendReadinessIssues(d)) {
+      if (issue.step !== 2) continue;
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["requiredPaymentMethods"],
-        message: "발송하려면 결제수단을 1개 이상 선택해야 합니다.",
+        path: [issue.path],
+        message: issue.message,
+        params: { rule: issue.rule },
       });
-    }
-    // 홈페이지: 발송 시 필수 + 형식 검증 (드래프트 저장은 비어도 허용)
-    if (d.send) {
-      const v = (d.websiteUrl ?? "").trim();
-      if (v === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["websiteUrl"],
-          message: "발송하려면 홈페이지 주소를 입력해야 합니다.",
-        });
-      } else if (!isValidWebsiteUrl(v)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["websiteUrl"],
-          message: WEBSITE_URL_ERROR,
-        });
-      }
-    }
-    // 발송 시 필수: 견적 유형·주요 판매 상품·월 평균 PG 거래액 (드래프트는 비어도 허용)
-    // 클라이언트 위저드와 동일한 SSOT(lib/rfp/required-fields) 판정을 공유해 드리프트를 막는다.
-    if (d.send) {
-      if (!isContractTypeValid(d.contractType)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["contractType"],
-          message: "발송하려면 견적 유형을 선택해야 합니다.",
-        });
-      }
-      if (!isMainProductsValid(d.mainProducts ?? "")) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["mainProducts"],
-          message: "발송하려면 주요 판매 상품을 입력해야 합니다.",
-        });
-      }
-      // 신규 계약은 전년도 월 평균 PG 거래액이 존재할 수 없어 필수 제외 (SSOT 공유).
-      if (!isMonthlyAvgPgVolumeSatisfied(d.monthlyAvgPgVolume ?? "", d.contractType)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["monthlyAvgPgVolume"],
-          message: "발송하려면 전년도 월 평균 PG 거래액을 입력해야 합니다.",
-        });
-      }
     }
   });
 

@@ -1295,4 +1295,40 @@ describe('createRfpAction', () => {
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
   });
+
+  describe('발송 전제 오류 코드 (스키마 게이트가 서비스 코드를 유지한다)', () => {
+    const sendable = () => ({
+      title: '발송 전제',
+      deadline: validBusinessDeadline().toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card' as const],
+      websiteUrl: 'example.com',
+      contractType: 'new' as const,
+      mainProducts: '의류',
+      ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
+      send: true,
+    });
+
+    it('업종 미선택은 서비스와 같은 MATCHING_REQUIRED 를 돌려준다', async () => {
+      const r = await createRfpAction({ ...sendable(), industryGroupId: undefined });
+      expect(r).toEqual({ ok: false, error: 'MATCHING_REQUIRED' });
+    });
+
+    it('갱신 계약에 현재 PG 가 없으면 CURRENT_PGS_REQUIRED 를 돌려준다', async () => {
+      const r = await createRfpAction({ ...sendable(), contractType: 'renewal', monthlyAvgPgVolume: '1000000' });
+      expect(r).toEqual({ ok: false, error: 'CURRENT_PGS_REQUIRED' });
+    });
+
+    it('다른 입력 오류가 함께 있으면 종전처럼 INVALID_INPUT 이 먼저다', async () => {
+      const r = await createRfpAction({ ...sendable(), industryGroupId: undefined, mainProducts: '' });
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    });
+
+    it('공백뿐인 제목으로는 발송할 수 없다', async () => {
+      const r = await createRfpAction({ ...sendable(), title: '   ' });
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    });
+  });
 });

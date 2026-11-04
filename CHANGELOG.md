@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.3.3] - 2026-11-04
+
+### Changed
+
+- 견적 요청의 발송 조건을 한 곳에서 판정해요. 작성 화면의 단계 안내, 질문별 완료 표시, 서버 검증이 같은 기준을 쓰고, 공백만 입력한 제목으로는 발송할 수 없어요.
+
 ## [0.46.3.2] - 2026-11-04
 
 ### Changed
