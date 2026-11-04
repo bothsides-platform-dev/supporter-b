@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.3.2] - 2026-11-04
+
+### Changed
+
+- 견적 요청 작성 입력을 한 모듈(`lib/rfp/intake`)로 모았어요. 화면과 동작은 그대로예요.
+
 ## [0.46.3.1] - 2026-10-30
 
 ### Removed
