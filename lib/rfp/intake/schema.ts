@@ -1,3 +1,14 @@
+// 견적 요청 입력 — 구매사 초안이 서버에 제출될 때 갖는 단 하나의 검증된 모양.
+//
+// 이 스키마가 shape 의 단일 출처다. 액션(`parse.ts`)·서비스(`ParsedCreateRfpInput`)·
+// 저장 행(`to-insert.ts`)·위저드(`from-draft.ts`)는 모두 여기서 파생한 타입만 쓴다.
+// 새 필드 = 이 파일 한 곳 + DB 컬럼이며, 필드 목록을 다른 파일에 손으로 복제하지 않는다.
+//
+// `z.input`(클라이언트·액션이 보내는 wire 모양)과 `z.output`(서비스가 받는 모양)은
+// `deadline` 에서만 갈린다 — wire 는 ISO 문자열, 서비스는 Date.
+//
+// 서버 전용: `isValidWebsiteUrl` 이 tldts 를 끌어오므로 클라이언트 컴포넌트는 이 파일을
+// 값으로 import 하지 않는다(타입 import 만 허용).
 import { z } from "zod";
 import { currentPgsSchema } from "@/lib/rfp/current-pgs";
 import { customIndustryNameSchema } from "@/lib/rfp/industry-selection";
@@ -27,7 +38,11 @@ export const createRfpInputSchema = z
     requestKey: z.string().uuid().optional(),
     title: z.string().min(1).max(200),
     memo: z.string().max(2000).optional(),
-    deadline: z.string().datetime({ offset: true }),
+    // wire 는 ISO 문자열, 서비스 입력은 Date — 변환은 여기 한 곳.
+    deadline: z
+      .string()
+      .datetime({ offset: true })
+      .transform((value) => new Date(value)),
     allowedPgWorkspaceIds: z.array(z.string().uuid()).max(50),
     rfpAttachmentIds: z.array(z.string().uuid()).max(MAX_FILES).optional(),
     // 상한은 캐논니컬 개수에서 파생한다 — 손으로 적은 숫자는 결제수단이 하나
@@ -141,3 +156,8 @@ export const createRfpInputSchema = z
       }
     }
   });
+
+/** wire 모양 — 위저드가 보내고 액션이 받는다. `deadline` 은 ISO 문자열. */
+export type CreateRfpInput = z.input<typeof createRfpInputSchema>;
+/** 검증된 모양 — 서비스 `createRfp` 의 입력. `deadline` 은 Date, 기본값이 채워져 있다. */
+export type ParsedCreateRfpInput = z.output<typeof createRfpInputSchema>;

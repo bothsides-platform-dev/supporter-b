@@ -768,7 +768,7 @@ describe('RfpService.createRfp', () => {
       monthlyAvgPgVolume: '100000000', currentFeeRate: '2.5',
       currentSettlementLimit: '50000000', currentGuaranteeInsurance: '10000000',
       currentSettlementCycle: 'D+3', deliveryServicePeriod: '3일',
-      currentSolution: 'cafe24',
+      currentSolution: 'cafe24' as const,
     };
     const original = structuredClone(input);
     const result = await service.createRfp(input, { userId: buyerUserId, workspaceId: buyerWsId });

@@ -2,7 +2,9 @@ export { lookupBizNoAction } from './lookupBizNoAction';
 export type { LookupBizNoResult } from './lookupBizNoAction';
 
 export { createRfpAction } from './createRfpAction';
-export type { CreateRfpInput, CreateRfpResult } from './createRfpAction';
+// 입력 타입은 'use server' 파일이 아니라 소유 module 에서 바로 가져온다(use-server-type-reexport 가드).
+export type { CreateRfpInput } from '@/lib/rfp/intake/schema';
+export type { CreateRfpResult } from './createRfpAction';
 
 export { addPgWorkspacesToRfpAction } from './addPgWorkspacesToRfpAction';
 export type {

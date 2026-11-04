@@ -4,7 +4,8 @@ import { getGuestDraftService } from './guest-drafts';
 import { currentPgsSchema, currentPgNameKey, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
 import { productInfoSchema } from '@/lib/rfp/product-info';
-import type { ProductInfo } from '@/lib/rfp/product-info';
+import type { ParsedCreateRfpInput } from '@/lib/rfp/intake/schema';
+import { toNewRfpInsert } from '@/lib/rfp/intake/to-insert';
 import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { createHash, randomUUID } from 'node:crypto';
@@ -46,40 +47,6 @@ export type { Actor, ServiceResult };
 
 const INVITE_TTL_DAYS = 7;
 const ALLOWED_PG_WORKSPACES_MAX = 50;
-
-export type CreateRfpServiceInput = {
-  guestDraft?: { id: string; revision: number };
-  journeyDraftId?: string;
-  industryGroupId?: string;
-  customIndustryName?: string;
-  requestKey?: string;
-  title: string;
-  memo?: string;
-  deadline: Date;
-  allowedPgWorkspaceIds: string[];
-  rfpAttachmentIds?: string[];
-  requiredPaymentMethods: string[];
-  customPaymentMethods: { id?: string; label: string }[];
-  send: boolean;
-  boardVisible: boolean;
-  currentFeeVisibleToPg: boolean;
-  currentPgs?: CurrentPg[];
-  contractType?: 'new' | 'renewal' | null;
-  bizProfileMode: 'inherit' | 'override' | 'none';
-  bizNoOverride?: string;
-  gradeOverride?: string;
-  websiteUrl?: string;
-  mainProducts?: string;
-  monthlyAvgPgVolume?: string;
-  currentFeeRate?: string;
-  currentSettlementLimit?: string;
-  currentGuaranteeInsurance?: string;
-  currentSettlementCycle?: string;
-  deliveryServicePeriod?: string;
-  productInfo?: ProductInfo;
-  currentSolution?: string;
-  currentSolutionDetail?: string;
-};
 
 function canonicalMatchingInput(value: unknown): string {
   if (value instanceof Date) return JSON.stringify(value.toJSON());
@@ -1118,7 +1085,7 @@ export class RfpService {
   }
 
   async createRfp(
-    input: CreateRfpServiceInput,
+    input: ParsedCreateRfpInput,
     actor: Actor,
     includeTestPg = false,
     transaction?: { tx: Tx; afterCommit: (() => void)[]; guestRequestId?: string },
@@ -1236,37 +1203,14 @@ export class RfpService {
       }
 
       await this.rfpRepo.insertNew(
-        {
+        toNewRfpInsert(input, {
           id: rfpId,
           code,
           buyerWsId: actor.workspaceId,
           bizProfileId: snapshotId,
-          title: input.title.trim(),
-          memo: input.memo?.trim() ?? '',
-          websiteUrl: input.websiteUrl?.trim() ?? null,
-          mainProducts: input.mainProducts?.trim() ?? null,
-          monthlyAvgPgVolume: input.monthlyAvgPgVolume?.trim() ?? null,
-          currentFeeRate: input.currentFeeRate?.trim() ?? null,
-          currentSettlementLimit: input.currentSettlementLimit?.trim() ?? null,
-          currentGuaranteeInsurance: input.currentGuaranteeInsurance?.trim() ?? null,
-          currentSettlementCycle: input.currentSettlementCycle?.trim() ?? null,
-          deliveryServicePeriod: input.deliveryServicePeriod?.trim() ?? null,
-          productInfo: input.productInfo,
-          boardVisible: send ? false : input.boardVisible,
-          currentFeeVisibleToPg: input.currentFeeVisibleToPg,
-          contractType: input.contractType ?? null,
-          currentSolution: input.currentSolution ?? null,
-          currentSolutionDetail: input.currentSolutionDetail?.trim() ?? null,
-          deadline: input.deadline,
-          status: send ? 'sent' : 'draft',
-          requiredPaymentMethods: input.requiredPaymentMethods,
-          customPaymentMethods: input.customPaymentMethods.map((m) => ({
-            id: m.id ?? randomUUID(),
-            label: m.label.trim(),
-          })),
           createdBy: actor.userId,
-          sentAt: send ? now : null,
-        },
+          now,
+        }),
         tx,
       );
 

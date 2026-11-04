@@ -4,7 +4,7 @@ import styles from './guest-quote.module.css';
 import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
-import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
+import { createRfpInputFromDraft } from '@/lib/rfp/intake/from-draft';
 
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +16,6 @@ import { RfpStep1BizProfile } from './RfpStep1BizProfile';
 import { RfpStep2Content } from './RfpStep2Content';
 import { RfpQuestionFlow } from './RfpQuestionFlow';
 import { contentQuestions } from './content-questions';
-import { productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
@@ -28,12 +27,9 @@ import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
 import { Divider } from '@/components/primitives/Divider';
-import { SOLUTION_VALUES } from '@/lib/rfp/solutions';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 const TOTAL_STEPS = STEP_LABELS.length;
-
-type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
 function newRequestKey(): string {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -250,47 +246,23 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     setSubmitting(true);
     setServerError('');
 
-    const solutionRaw = draft.currentSolution;
-    const currentSolution: SolutionValue | undefined =
-      (SOLUTION_VALUES as readonly string[]).includes(solutionRaw) && solutionRaw !== ''
-        ? (solutionRaw as SolutionValue)
-        : undefined;
-
     const requestKey = draftApi.getState().matchingRequestKey || newRequestKey();
     draft.setField('matchingRequestKey', requestKey);
     let result: Awaited<ReturnType<typeof createRfpAction>>;
     try {
       const preparedFiles = prepareAttachments ? await prepareAttachments() : draft.rfpFiles;
       const guestDraft = prepareGuestDraft ? await prepareGuestDraft() : undefined;
-      result = await createRfpAction({
-        ...(guestDraft ? { guestDraft } : {}),
-        ...(journeyDraftId ? { journeyDraftId } : {}),
-        productInfo: productInfoSchema.parse(draft.productInfo),
-        title: draft.title.trim(),
-        websiteUrl: draft.websiteUrl.trim() || undefined,
-        mainProducts: draft.mainProducts.trim() || undefined,
-        monthlyAvgPgVolume: draft.monthlyAvgPgVolume.trim() || undefined,
-        currentFeeRate: draft.currentFeeRate.trim() || undefined,
-        currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
-        currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
-        currentSettlementCycle: draft.currentSettlementCycle.trim() || undefined,
-        deliveryServicePeriod: draft.deliveryServicePeriod.trim() || undefined,
-        currentSolution,
-        currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
-        memo: draft.memo.trim() || undefined,
-        deadline: draft.deadline,
-        allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
-        rfpAttachmentIds: preparedFiles.map((f) => f.id),
-        requiredPaymentMethods: draft.requiredPaymentMethods,
-        customPaymentMethods: draft.customPaymentMethods,
-        boardVisible: draft.boardVisible,
-        currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
-        contractType: draft.contractType ?? undefined,
-        currentPgs: draft.contractType === 'renewal' ? draft.currentPgs : [],
-        send: true,
-        ...draftIndustrySelection(draft),
-        requestKey,
-      }, ...(expectedActor ? [expectedActor] as const : [] as const));
+      // 초안 → wire 입력 변환은 `lib/rfp/intake/from-draft` 가 소유한다(trim·빈값·
+      // 신규/갱신 분기·업종 선택). 위저드는 제출 시점에만 정해지는 값만 보탠다.
+      result = await createRfpAction(
+        createRfpInputFromDraft(draft, {
+          requestKey,
+          rfpAttachmentIds: preparedFiles.map((f) => f.id),
+          ...(guestDraft ? { guestDraft } : {}),
+          ...(journeyDraftId ? { journeyDraftId } : {}),
+        }),
+        ...(expectedActor ? [expectedActor] as const : [] as const),
+      );
     } catch {
       setSubmitting(false);
       trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'submitted', error_code: 'NETWORK_ERROR', ...funnelParams });
