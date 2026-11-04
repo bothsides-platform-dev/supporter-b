@@ -431,7 +431,7 @@ function BidWizardForm({
         setProposal({
           name: file.name,
           status: 'error',
-          error: 'PDF만 업로드 가능합니다.',
+          error: 'PDF 파일만 올릴 수 있어요.',
         });
         return;
       }

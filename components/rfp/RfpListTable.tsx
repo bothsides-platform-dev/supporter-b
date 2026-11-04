@@ -9,11 +9,9 @@ import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import { formatDate } from '@/lib/utils/format';
 import type { RFP } from '@/lib/types/rfp';
-import { RFP_STATUS_CHIP } from '@/lib/rfp/rfp-status';
-import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
-import type { PgReview } from '@/lib/rfp/pg-matching';
+import { buyerRfpChip, type BuyerRfpProgress } from '@/lib/rfp/rfp-status';
 
-export type BuyerListProgress = { bidCount: number; reviewStatus?: PgReview['status'] };
+export type BuyerListProgress = BuyerRfpProgress;
 
 type Props = {
   rfps: RFP[];
@@ -22,16 +20,6 @@ type Props = {
   progressByRfpId?: Record<string, BuyerListProgress>;
   now?: string;
 };
-
-function rowProgress(rfp: RFP, progress: BuyerListProgress | undefined, now: number) {
-  const nextPg = progress?.reviewStatus === 'rejected' || progress?.reviewStatus === 'withdrawn';
-  if (rfp.status === 'sent' && !isRfpBidWindowOpen(rfp, now)) return { label: '마감', color: 'surface' as const, action: progress?.bidCount ? '견적 확인하기' : nextPg ? '다음 PG사 선택' : '결과 확인하기' };
-  if (rfp.status === 'sent' && (progress?.bidCount || progress?.reviewStatus === 'quoted')) return { label: '견적 도착', color: 'tertiary' as const, action: '견적 확인하기' };
-  if (rfp.status === 'sent' && nextPg) return { label: '다음 PG사 선택', color: 'warning' as const, action: '상담 이어가기' };
-  if (rfp.status === 'sent' && progress?.reviewStatus === 'reviewing') return { label: 'PG 검토 중', color: 'warning' as const, action: '상담 현황 보기' };
-  if (rfp.status === 'sent' && progress?.reviewStatus === 'requested') return { label: '상담 요청 완료', color: 'primary' as const, action: '상담 현황 보기' };
-  return { ...RFP_STATUS_CHIP[rfp.status], action: rfp.status === 'awarded' ? '계약 확인하기' : rfp.status === 'sent' ? '요청 현황 보기' : '결과 보기' };
-}
 
 export function RfpListTable({ rfps, onOpenRfp, progressByRfpId, now }: Props) {
   const router = useRouter();
@@ -90,7 +78,7 @@ export function RfpListTable({ rfps, onOpenRfp, progressByRfpId, now }: Props) {
         </thead>
         <tbody className="max-md:block">
           {rfps.map((rfp, i) => {
-            const progress = rowProgress(rfp, progressByRfpId?.[rfp.id], currentTime);
+            const progress = buyerRfpChip(rfp, progressByRfpId?.[rfp.id], currentTime);
             return (
             <tr
               key={rfp.id}

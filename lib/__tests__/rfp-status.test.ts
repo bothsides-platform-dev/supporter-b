@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { RFP_STATUS_CHIP, rfpStatusChip, pgRequestChip } from '../rfp/rfp-status';
+import { RFP_STATUS_CHIP, rfpStatusChip, pgRequestChip, buyerRfpChip } from '../rfp/rfp-status';
 
 describe('RFP_STATUS_CHIP', () => {
   it('5개 RfpStatus 를 모두 매핑한다 (라벨/색)', () => {
@@ -101,5 +101,34 @@ describe('pgRequestChip', () => {
       label: '선정됨',
       color: 'tertiary',
     });
+  });
+});
+
+describe('buyerRfpChip', () => {
+  const now = new Date('2026-11-04T00:00:00Z').getTime();
+  const open = { status: 'sent' as const, deadline: '2026-11-11T09:00:00Z' };
+  const past = { status: 'sent' as const, deadline: '2026-11-01T09:00:00Z' };
+
+  it('견적이 1건이라도 도착하면 목록과 딜룸이 같은 "견적 도착" 칩을 쓴다', () => {
+    expect(buyerRfpChip(open, { bidCount: 2 }, now)).toEqual({ label: '견적 도착', color: 'tertiary', action: '견적 확인하기' });
+    expect(buyerRfpChip(open, { bidCount: 0, reviewStatus: 'quoted' }, now).label).toBe('견적 도착');
+  });
+
+  it('접수 기간이 지나면 견적 유무와 무관하게 "마감"이다', () => {
+    expect(buyerRfpChip(past, { bidCount: 2 }, now)).toEqual({ label: '마감', color: 'surface', action: '견적 확인하기' });
+    expect(buyerRfpChip(past, { bidCount: 0, reviewStatus: 'rejected' }, now).action).toBe('다음 PG사 선택');
+    expect(buyerRfpChip(past, undefined, now).action).toBe('결과 확인하기');
+  });
+
+  it('상담 상태를 단계별 칩으로 보여준다', () => {
+    expect(buyerRfpChip(open, { bidCount: 0, reviewStatus: 'withdrawn' }, now).label).toBe('다음 PG사 선택');
+    expect(buyerRfpChip(open, { bidCount: 0, reviewStatus: 'reviewing' }, now).label).toBe('PG 검토 중');
+    expect(buyerRfpChip(open, { bidCount: 0, reviewStatus: 'requested' }, now).label).toBe('상담 요청 완료');
+  });
+
+  it('진행 정보가 없으면 기본 상태 칩으로 돌아간다', () => {
+    expect(buyerRfpChip(open, undefined, now)).toEqual({ label: '요청 보냄', color: 'warning', action: '요청 현황 보기' });
+    expect(buyerRfpChip({ status: 'awarded', deadline: past.deadline }, { bidCount: 3 }, now)).toEqual({ label: '선정완료', color: 'tertiary', action: '계약 확인하기' });
+    expect(buyerRfpChip({ status: 'draft', deadline: open.deadline }, undefined, now).action).toBe('결과 보기');
   });
 });
