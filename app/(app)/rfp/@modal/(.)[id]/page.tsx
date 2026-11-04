@@ -11,7 +11,7 @@ import { buyerClosedCounterpartyIds } from '@/lib/rfp/closed-counterparties';
 import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
-import { rfpStatusChip } from '@/lib/rfp/rfp-status';
+import { buyerRfpChip } from '@/lib/rfp/rfp-status';
 import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +46,12 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
     );
   }
 
-  const s = rfpStatusChip(data.rfp.status);
+  // 목록표(RfpListTable)와 같은 진행 판정 — 최신 상담 상태는 reviews 의 마지막 행이다
+  // (리포가 createdAt asc 로 돌려주고 latestStatuses 도 같은 순서의 마지막 값을 쓴다).
+  const s = buyerRfpChip(data.rfp, {
+    bidCount: data.bids.length,
+    reviewStatus: data.matching?.reviews.at(-1)?.status,
+  });
 
   return (
     <DealRoomModal
@@ -54,7 +59,7 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
       title={data.rfp.title}
       statusChip={
         <>
-          {s ? <Chip label={s.label} color={s.color} /> : null}
+          <Chip label={s.label} color={s.color} />
           <RfpBoardVisibilityStatus boardVisible={data.rfp.boardVisible ?? true} />
         </>
       }

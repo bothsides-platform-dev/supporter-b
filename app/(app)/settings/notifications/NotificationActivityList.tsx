@@ -2,7 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 
+import { Bell } from 'lucide-react';
+
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { EmptyState } from '@/components/primitives/EmptyState';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import {
@@ -42,11 +45,11 @@ const statusLabel: Record<NotificationStatus, string> = {
 export function NotificationActivityList({ items }: { items: Notification[] }) {
   if (items.length === 0) {
     return (
-      <div className="py-16 text-center">
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          알림이 오면 여기에 표시돼요.
-        </p>
-      </div>
+      <EmptyState
+        icon={<Bell />}
+        title="아직 알림이 없어요"
+        description="알림이 오면 여기에 표시돼요."
+      />
     );
   }
 
