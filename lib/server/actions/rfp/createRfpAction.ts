@@ -10,7 +10,9 @@ import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-p
 import { parseCreateRfpInput } from '@/lib/rfp/intake/parse';
 import type { CreateRfpInput } from '@/lib/rfp/intake/schema';
 
-export type { CreateRfpInput };
+// `'use server'` 파일은 타입 배럴이 아니다 — 바인딩 없는 `export type { X };` 는 Turbopack 이
+// 서버 액션 이름으로 등록해 요청 시 ReferenceError 를 낸다(use-server-type-reexport 가드).
+// `CreateRfpInput` 은 `lib/rfp/intake/schema` 에서 직접 가져간다.
 export type CreateRfpResult = RfpActionResult<{ rfpId: string }>;
 
 // 입력의 모양·검증·거부 사유는 `lib/rfp/intake` 가 소유한다. 액션은 세션과
