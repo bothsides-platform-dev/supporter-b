@@ -187,6 +187,10 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
     // 2g. Step 4: 검토·발송 → ConfirmDialog → 견적 보내기
+    // 1차 시드 견적은 옛 판본이라 0원 값이 넘어온다. 다시 확인했다고 표시해야 보낼 수 있다.
+    await page
+      .getByRole('checkbox', { name: '이전 견적·초안의 0원과 모든 조건을 다시 확인했어요' })
+      .check();
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
     // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면
     // 살아 있는 토스트와 strict-mode 충돌이 난다.
