@@ -112,10 +112,15 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
 
     await loginAs(page, 'pg-toss');
 
-    const inboxLink = page.locator(`a[href="/inbox/${RFP_CODE}?tab=write"]`).first();
-    await expect(inboxLink).toBeVisible({ timeout: 60_000 });
+    // 홈의 응답 필요 요청은 표다. 작성 탭은 행의 행동 버튼이 연다(링크가 아니다).
+    const writeAction = page
+      .getByRole('table', { name: '받은 견적 요청' })
+      .getByRole('row')
+      .filter({ hasText: RFP_CODE })
+      .getByRole('button', { name: '견적 작성', exact: true });
+    await expect(writeAction).toBeVisible({ timeout: 60_000 });
 
-    await inboxLink.click();
+    await writeAction.click();
 
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`), { timeout: 60_000 });
     await expect(page.locator(MODAL)).toHaveCount(0);
@@ -134,7 +139,14 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     // 나고 하드 네비로 폴백한다(CI trace 실측).
     await expect(async () => {
       await page.goto('/inbox');
-      await page.locator(`a[href="/inbox/${RFP_CODE}?tab=write"]`).click();
+      // 행 제목은 미리보기를 연다. 딜룸 작성 탭은 행동 버튼이 연다.
+      // 앞 테스트가 견적을 draft로 돌리면 '견적 작성', 단독 실행이면 '보낸 견적'이다.
+      await page
+        .getByRole('table', { name: '받은 견적 요청' })
+        .getByRole('row')
+        .filter({ hasText: RFP_CODE })
+        .getByRole('button', { name: /^(견적 작성|보낸 견적)$/ })
+        .click();
       await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`), { timeout: 60_000 });
       await expect(page).not.toHaveURL(/\?peek=/);
       await expect(modal).toBeVisible({ timeout: 15_000 });

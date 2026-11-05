@@ -109,6 +109,9 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await quotePage.locator('select:has(option[value="D"])').selectOption('D');
   await quotePage.getByPlaceholder('1', { exact: true }).fill('3');
   await quotePage.getByPlaceholder('50,000,000').fill('50000000');
+  // v2 발송 조건: 가입비·보증보험은 금액·협의 필요·해당 없음 중 하나를 골라야 한다.
+  await quotePage.getByRole('combobox', { name: '가입비 (원·최초 1회) 조건' }).selectOption('negotiable');
+  await quotePage.getByRole('combobox', { name: '보증보험 금액(원) 조건' }).selectOption('not_applicable');
   await quotePage.getByRole('button', { name: '수수료', exact: true }).click();
   for (const input of await quotePage.getByPlaceholder('0.00').all()) await input.fill('0.90');
   await quotePage.getByRole('button', { name: '견적서', exact: true }).click();
