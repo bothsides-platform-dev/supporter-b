@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getPasswordConfirmError,
+  getPasswordError,
   getPasswordRuleChecks,
   isPasswordValid,
   passwordSchema,
-  validatePasswordConfirm,
 } from '../password-validation';
 
 describe('getPasswordRuleChecks', () => {
@@ -56,20 +57,65 @@ describe('isPasswordValid', () => {
   });
 });
 
-describe('validatePasswordConfirm', () => {
-  it('returns null when password and confirm match', () => {
-    expect(validatePasswordConfirm('Aa1!aaaaaa', 'Aa1!aaaaaa')).toBeNull();
+describe('getPasswordError', () => {
+  const signup = { outcome: 'continue' as const, confirmFilled: false };
+
+  it('asks for a password when empty', () => {
+    expect(getPasswordError('', signup)).toBe('비밀번호를 입력해요.');
   });
 
-  it('returns mismatch message when they differ', () => {
-    expect(validatePasswordConfirm('Aa1!aaaaaa', 'different')).toBe(
-      '비밀번호가 일치하지 않습니다.',
+  it('returns null once every rule passes', () => {
+    expect(getPasswordError('Aa1!aaaaaa', signup)).toBeNull();
+  });
+
+  // Chrome 비밀번호 관리자의 기본 제안은 대·소문자·숫자 15자, 특수문자 없음.
+  it('names the special character when it is the only rule left (Chrome suggestion shape)', () => {
+    expect(getPasswordError('Xk7mQ2vLpR9nT4w', signup)).toBe(
+      '특수문자(! @ # 등)를 하나 넣으면 넘어갈 수 있어요.',
     );
   });
 
-  it('treats empty confirm as mismatch', () => {
-    expect(validatePasswordConfirm('Aa1!aaaaaa', '')).toBe(
-      '비밀번호가 일치하지 않습니다.',
+  it('adds the confirm-field hint only when the confirm field is filled', () => {
+    expect(
+      getPasswordError('Xk7mQ2vLpR9nT4w', { outcome: 'continue', confirmFilled: true }),
+    ).toBe(
+      '특수문자(! @ # 등)를 하나 넣으면 넘어갈 수 있어요. 비밀번호 확인 칸도 똑같이 바꿔요.',
+    );
+  });
+
+  it('falls back to the generic rule message when more than the special rule is missing', () => {
+    // 특수문자 + 길이 미충족
+    expect(getPasswordError('Aa1', signup)).toBe(
+      '비밀번호 조건을 모두 채우면 넘어갈 수 있어요.',
+    );
+    // 특수문자는 있고 숫자만 없음 — 특수문자 안내를 띄우면 안 된다
+    expect(getPasswordError('aaaaaaaaaa!', signup)).toBe(
+      '비밀번호 조건을 모두 채우면 넘어갈 수 있어요.',
+    );
+  });
+
+  it('uses the reset wording for the change outcome', () => {
+    expect(getPasswordError('Aa1', { outcome: 'change', confirmFilled: false })).toBe(
+      '비밀번호 조건을 모두 채우면 바꿀 수 있어요.',
+    );
+    expect(
+      getPasswordError('Xk7mQ2vLpR9nT4w', { outcome: 'change', confirmFilled: false }),
+    ).toBe('특수문자(! @ # 등)를 하나 넣으면 바꿀 수 있어요.');
+  });
+});
+
+describe('getPasswordConfirmError', () => {
+  it('returns null when password and confirm match', () => {
+    expect(getPasswordConfirmError('Aa1!aaaaaa', 'Aa1!aaaaaa')).toBeNull();
+  });
+
+  it('asks to type it again when confirm is empty', () => {
+    expect(getPasswordConfirmError('Aa1!aaaaaa', '')).toBe('비밀번호를 한 번 더 입력해요.');
+  });
+
+  it('returns the mismatch message when they differ', () => {
+    expect(getPasswordConfirmError('Aa1!aaaaaa', 'different')).toBe(
+      '비밀번호가 서로 달라요. 같은 비밀번호를 입력해요.',
     );
   });
 });
