@@ -13,6 +13,13 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   trailingIcon?: React.ReactNode;
   children: React.ReactNode;
   /**
+   * 아직 진행할 수 없지만 **누를 수는 있는** 상태. 비활성과 같은 흐린 모양으로
+   * "아직 안 돼요"를 먼저 알리되 클릭·포커스·호버는 그대로 받아, 누르면 호출부가
+   * 막힌 이유를 보여준다(가입 1단계 [다음]). 이유를 보여줄 수 없는 진짜 비활성은
+   * `disabled` 를 쓴다. 의미상 동작하는 버튼이라 `aria-disabled` 는 붙이지 않는다.
+   */
+  dimmed?: boolean;
+  /**
    * React 19 는 함수 컴포넌트에도 `ref` 를 평범한 prop 으로 넘기지만, 타입은
    * `ButtonHTMLAttributes` 에 들어 있지 않아 직접 선언해야 한다. 아래 `...props`
    * 스프레드가 그대로 `<button>` 에 전달한다(forwardRef 불필요).
@@ -105,6 +112,7 @@ export function Button({
   trailingIcon,
   className,
   children,
+  dimmed = false,
   ...props
 }: ButtonProps) {
   return (
@@ -114,6 +122,7 @@ export function Button({
         sizeMap[size],
         variantClasses(variant, color),
         fullWidth && 'w-full',
+        dimmed && 'opacity-38',
         className,
       )}
       {...props}

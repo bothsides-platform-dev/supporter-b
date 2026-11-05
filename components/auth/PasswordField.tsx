@@ -5,7 +5,11 @@ import { Check, Eye, EyeOff, X } from 'lucide-react';
 import { passwordStrength } from '@/lib/auth/strength';
 import { getPasswordRuleChecks } from '@/lib/auth/password-validation';
 import { cn } from '@/lib/utils';
-import { underlineInputBase, underlineInputBorder } from '@/components/forms/inputs';
+import {
+  underlineInputBase,
+  underlineInputBorder,
+  underlineInputErrorBorder,
+} from '@/components/forms/inputs';
 
 const strengthColor = [
   '',
@@ -24,6 +28,11 @@ type PasswordFieldProps = {
   showStrength?: boolean;
   autoComplete?: string;
   error?: string;
+  /**
+   * 제출이 막힌 뒤 true. 미충족 규칙을 기본 글자색에서 오류색으로 올린다 —
+   * 입력 도중에는 빨간색으로 다그치지 않고, 넘어가려다 막혔을 때만 쓴다.
+   */
+  showRuleErrors?: boolean;
 };
 
 export function PasswordField({
@@ -35,6 +44,7 @@ export function PasswordField({
   showStrength = false,
   autoComplete = 'new-password',
   error,
+  showRuleErrors = false,
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
   const strength = showStrength ? passwordStrength(value) : 0;
@@ -43,6 +53,7 @@ export function PasswordField({
   // and confirm). htmlFor + aria-invalid wire up assistive tech beyond the
   // visual error border.
   const inputId = useId();
+  const errorId = `${inputId}-error`;
 
   return (
     <div className="space-y-2">
@@ -62,12 +73,11 @@ export function PasswordField({
           autoComplete={autoComplete}
           placeholder={placeholder}
           aria-invalid={error ? 'true' : 'false'}
+          aria-describedby={error ? errorId : undefined}
           className={cn(
             underlineInputBase,
             'pr-10',
-            error
-              ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]'
-              : underlineInputBorder,
+            error ? underlineInputErrorBorder : underlineInputBorder,
           )}
         />
         <button
@@ -94,30 +104,36 @@ export function PasswordField({
             ))}
           </div>
           <ul className="space-y-1">
-            {getPasswordRuleChecks(value).map((rule) => (
-              <li
-                key={rule.id}
-                className={cn(
-                  'flex items-center gap-1.5 text-xs transition-colors',
-                  rule.satisfied
-                    ? 'text-[var(--md-sys-color-tertiary)]'
-                    : 'text-[var(--md-sys-color-on-surface-variant)]',
-                )}
-              >
-                {rule.satisfied ? (
-                  <Check size={14} strokeWidth={1.5} />
-                ) : (
-                  <X size={14} strokeWidth={1.5} />
-                )}
-                <span>{rule.label}</span>
-              </li>
-            ))}
+            {getPasswordRuleChecks(value).map((rule) => {
+              // 충족은 회색으로 물러나고, 미충족이 진한 글자로 남아 먼저 읽힌다.
+              const state = rule.satisfied ? 'met' : showRuleErrors ? 'error' : 'unmet';
+              return (
+                <li
+                  key={rule.id}
+                  data-state={state}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs transition-colors',
+                    state === 'met' && 'text-[var(--md-sys-color-on-surface-variant)]',
+                    state === 'unmet' && 'text-[var(--md-sys-color-on-surface)]',
+                    state === 'error' && 'text-[var(--md-sys-color-error)]',
+                  )}
+                >
+                  {rule.satisfied ? (
+                    <Check size={14} strokeWidth={1.5} aria-hidden />
+                  ) : (
+                    <X size={14} strokeWidth={1.5} aria-hidden />
+                  )}
+                  <span>{rule.label}</span>
+                  <span className="sr-only">{rule.satisfied ? '충족' : '미충족'}</span>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
       {error && (
-        <p className="text-xs text-[var(--md-sys-color-error)]">
+        <p id={errorId} className="text-xs text-[var(--md-sys-color-error)]">
           {error}
         </p>
       )}

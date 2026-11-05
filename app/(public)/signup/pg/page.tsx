@@ -13,12 +13,18 @@ import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 import { getSignupConsentDocuments } from '@/lib/auth/signup-documents';
 import { validateSignupConsent } from '@/lib/auth/signup-consent';
 import {
-  isPasswordValid,
-  validatePasswordConfirm,
-} from '@/lib/auth/password-validation';
+  getSignupAccountErrors,
+  hasSignupAccountErrors,
+  SIGNUP_EMAIL_PATTERN,
+} from '@/lib/auth/signup-account-errors';
+import { useFocusFirstInvalid } from '@/lib/a11y/use-focus-first-invalid';
 import { checkEmailAvailableAction } from '@/lib/server/actions/auth';
 import { safeInternalNext } from '@/lib/auth/safe-next';
-import { underlineInputBase, underlineInputBorder } from '@/components/forms/inputs';
+import {
+  underlineInputBase,
+  underlineInputBorder,
+  underlineInputErrorBorder,
+} from '@/components/forms/inputs';
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
@@ -62,27 +68,32 @@ function PgSignupEmailForm() {
   const [masterEmail, setMasterEmail] = useState(false);
   const [emailCheckError, setEmailCheckError] = useState('');
 
-  const confirmError =
-    passwordConfirm.length > 0
-      ? validatePasswordConfirm(password, passwordConfirm)
-      : attemptedSubmit
-        ? '비밀번호 확인을 입력해요.'
-        : null;
+  const { containerRef: formRef, requestFocus } = useFocusFirstInvalid<HTMLFormElement>();
+
+  const errors = getSignupAccountErrors({ email: emailInput, password, passwordConfirm, agreements });
+  // 입력 도중에는 확인 칸 불일치만 바로 알린다. 나머지 사유는 [다음]을 눌러 막혔을
+  // 때 한꺼번에 보여주고, 고치는 즉시 사라진다(값에서 다시 계산한다).
+  const shown = attemptedSubmit
+    ? errors
+    : {
+        email: null,
+        password: null,
+        passwordConfirm: passwordConfirm ? errors.passwordConfirm : null,
+        agreements: null,
+      };
+  // 초대 가입은 이메일이 고정이라 EMAIL_TAKEN 을 오류로 띄우지 않고 로그인으로 보낸다.
+  const emailInvalid = !!shown.email || ((emailTaken || masterEmail) && !isInvited);
 
   const canSubmit =
     documents !== null &&
-    emailInput.trim() !== '' &&
     !emailTaken &&
     !masterEmail &&
-    agreements.terms &&
-    agreements.privacy &&
-    isPasswordValid(password) &&
-    !confirmError;
+    !hasSignupAccountErrors(errors);
 
   const handleEmailBlur = async () => {
     if (isInvited) return;
     const email = emailInput.trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (!email || !SIGNUP_EMAIL_PATTERN.test(email)) return;
     setEmailCheckError('');
     try {
       const check = await checkEmailAvailableAction({ email });
@@ -98,13 +109,12 @@ function PgSignupEmailForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting || !documents) return;
     setAttemptedSubmit(true);
-    if (
-      !canSubmit ||
-      validatePasswordConfirm(password, passwordConfirm) !== null ||
-      submitting ||
-      !documents
-    ) return;
+    if (!canSubmit) {
+      requestFocus();
+      return;
+    }
     setEmailTaken(false);
     setMasterEmail(false);
     setEmailCheckError('');
@@ -185,7 +195,8 @@ function PgSignupEmailForm() {
         </p>
       </div>
 
-      <form className="space-y-6" onSubmit={handleSubmit}>
+      {/* noValidate: 브라우저 기본 말풍선 대신 필드 아래 인라인 오류로 통일한다. */}
+      <form ref={formRef} className="space-y-6" onSubmit={handleSubmit} noValidate>
         <div className="space-y-1">
           <label
             htmlFor="email"
@@ -203,13 +214,22 @@ function PgSignupEmailForm() {
             readOnly={isInvited}
             autoComplete="email"
             placeholder="your@pgcompany.com"
+            aria-invalid={emailInvalid ? 'true' : undefined}
+            aria-describedby={shown.email ? 'signup-email-error' : undefined}
             className={[
               underlineInputBase,
               isInvited
                 ? 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] cursor-default select-all'
-                : underlineInputBorder,
+                : emailInvalid
+                  ? underlineInputErrorBorder
+                  : underlineInputBorder,
             ].join(' ')}
           />
+          {shown.email && !emailTaken && !masterEmail && (
+            <p id="signup-email-error" className="text-xs text-[var(--md-sys-color-error)] mt-1">
+              {shown.email}
+            </p>
+          )}
           {emailTaken && !isInvited && (
             <p role="alert" className="text-xs text-[var(--md-sys-color-error)] mt-1">
               이미 가입된 이메일입니다.{' '}
@@ -232,7 +252,10 @@ function PgSignupEmailForm() {
               {emailCheckError}
             </p>
           )}
-          <SignupEmailGuide email={emailInput} hidden={emailTaken || masterEmail || isInvited || !!emailCheckError} />
+          <SignupEmailGuide
+            email={emailInput}
+            hidden={emailTaken || masterEmail || isInvited || !!emailCheckError || !!shown.email}
+          />
         </div>
 
         <PasswordField
@@ -240,7 +263,8 @@ function PgSignupEmailForm() {
           value={password}
           onChange={setPassword}
           showStrength
-          error={attemptedSubmit && !password ? '비밀번호를 입력해요.' : undefined}
+          showRuleErrors={attemptedSubmit}
+          error={shown.password ?? undefined}
         />
         <PasswordField
           label="비밀번호 확인"
@@ -248,7 +272,7 @@ function PgSignupEmailForm() {
           value={passwordConfirm}
           onChange={setPasswordConfirm}
           autoComplete="new-password"
-          error={confirmError ?? undefined}
+          error={shown.passwordConfirm ?? undefined}
         />
 
         {reviewConsent && documents && (
@@ -256,9 +280,15 @@ function PgSignupEmailForm() {
             가입 동의 내용을 다시 확인해 주세요. 아래 문서를 확인하고 동의하면 계속할 수 있어요.
           </p>
         )}
-        <AgreementCheckboxes value={agreements} onChange={setAgreements} documents={documents} disabled={submitting} />
+        <AgreementCheckboxes
+          value={agreements}
+          onChange={setAgreements}
+          documents={documents}
+          disabled={submitting}
+          error={shown.agreements}
+        />
 
-        <Button type="submit" fullWidth size="lg" disabled={submitting || !documents}>
+        <Button type="submit" fullWidth size="lg" disabled={submitting || !documents} dimmed={!canSubmit}>
           {submitting ? '처리 중…' : '다음'}
         </Button>
       </form>

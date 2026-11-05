@@ -15,7 +15,11 @@ type AgreementCheckboxesProps = {
   onChange: (v: AgreementState) => void;
   documents?: SignupConsentDocuments | null;
   disabled?: boolean;
+  /** 제출이 막힌 사유. 있으면 미체크 필수 항목을 오류로 표시하고 목록 아래에 안내한다. */
+  error?: string | null;
 };
+
+const CONSENT_ERROR_ID = 'signup-consent-error';
 
 /**
  * 새 탭 고지 — 약관 링크 전용.
@@ -44,6 +48,7 @@ function AgreementRow({
   children,
   required,
   disabled,
+  invalid = false,
 }: {
   id: string;
   checked: boolean;
@@ -51,10 +56,19 @@ function AgreementRow({
   children: React.ReactNode;
   required?: boolean;
   disabled?: boolean;
+  invalid?: boolean;
 }) {
   return (
     <label htmlFor={id} className="flex items-start gap-3 cursor-pointer group">
-      <Checkbox id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} className="mt-0.5" />
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        invalid={invalid}
+        aria-describedby={invalid ? CONSENT_ERROR_ID : undefined}
+        className="mt-0.5"
+      />
       <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-snug">
         {children}
         {required && <span className="ml-1 text-[var(--md-sys-color-error)]">*</span>}
@@ -63,7 +77,7 @@ function AgreementRow({
   );
 }
 
-export function AgreementCheckboxes({ value, onChange, documents = getSignupConsentDocuments(), disabled = false }: AgreementCheckboxesProps) {
+export function AgreementCheckboxes({ value, onChange, documents = getSignupConsentDocuments(), disabled = false, error = null }: AgreementCheckboxesProps) {
   if (!documents) {
     return <p role="alert" className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">가입 동의 문서를 준비하고 있어요. 준비를 마치면 가입할 수 있어요.</p>;
   }
@@ -86,6 +100,7 @@ export function AgreementCheckboxes({ value, onChange, documents = getSignupCons
           checked={value.terms}
           onChange={(v) => onChange({ ...value, terms: v })}
           required
+          invalid={!!error && !value.terms}
         >
           <a
             href={documents.terms.url}
@@ -106,6 +121,7 @@ export function AgreementCheckboxes({ value, onChange, documents = getSignupCons
           checked={value.privacy}
           onChange={(v) => onChange({ ...value, privacy: v })}
           required
+          invalid={!!error && !value.privacy}
         >
           <a
             href={documents.privacy.url}
@@ -140,6 +156,11 @@ export function AgreementCheckboxes({ value, onChange, documents = getSignupCons
           (선택)
         </AgreementRow>
       </div>
+      {error && (
+        <p id={CONSENT_ERROR_ID} className="text-xs text-[var(--md-sys-color-error)]">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

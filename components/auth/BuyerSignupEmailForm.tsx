@@ -15,13 +15,20 @@ import { readSignupDraft, writeSignupDraft } from "@/lib/auth/signup-storage";
 import { getSignupConsentDocuments } from "@/lib/auth/signup-documents";
 import { validateSignupConsent } from "@/lib/auth/signup-consent";
 import {
-  isPasswordValid,
-  validatePasswordConfirm,
-} from "@/lib/auth/password-validation";
+  getSignupAccountErrors,
+  hasSignupAccountErrors,
+  SIGNUP_EMAIL_PATTERN,
+} from "@/lib/auth/signup-account-errors";
+import { useFocusFirstInvalid } from "@/lib/a11y/use-focus-first-invalid";
 import { checkEmailAvailableAction } from "@/lib/server/actions/auth";
 import { safeInternalNext } from "@/lib/auth/safe-next";
 import { RESUME_PATH } from "@/lib/guest-rfp/draft";
-import { underlineInputClass } from "@/components/forms/inputs";
+import {
+  underlineInputBase,
+  underlineInputBorder,
+  underlineInputErrorBorder,
+} from "@/components/forms/inputs";
+import { cn } from "@/lib/utils";
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
@@ -82,26 +89,36 @@ export function BuyerSignupEmailForm({
   const [masterEmail, setMasterEmail] = useState(false);
   const [emailCheckError, setEmailCheckError] = useState("");
 
-  const confirmError =
-    passwordConfirm.length > 0
-      ? validatePasswordConfirm(password, passwordConfirm)
-      : attemptedSubmit
-        ? "비밀번호 확인을 입력해주세요."
-        : null;
+  const { containerRef: formRef, requestFocus } =
+    useFocusFirstInvalid<HTMLFormElement>();
+
+  const errors = getSignupAccountErrors({
+    email: emailInput,
+    password,
+    passwordConfirm,
+    agreements,
+  });
+  // 입력 도중에는 확인 칸 불일치만 바로 알린다. 나머지 사유는 [다음]을 눌러 막혔을
+  // 때 한꺼번에 보여주고, 고치는 즉시 사라진다(값에서 다시 계산한다).
+  const shown = attemptedSubmit
+    ? errors
+    : {
+        email: null,
+        password: null,
+        passwordConfirm: passwordConfirm ? errors.passwordConfirm : null,
+        agreements: null,
+      };
+  const emailInvalid = !!shown.email || emailTaken || masterEmail;
 
   const canSubmit =
     documents !== null &&
-    emailInput.trim() !== "" &&
     !emailTaken &&
     !masterEmail &&
-    agreements.terms &&
-    agreements.privacy &&
-    isPasswordValid(password) &&
-    !confirmError;
+    !hasSignupAccountErrors(errors);
 
   const handleEmailBlur = async () => {
     const email = emailInput.trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (!email || !SIGNUP_EMAIL_PATTERN.test(email)) return;
     setEmailCheckError("");
     try {
       const check = await checkEmailAvailableAction({ email });
@@ -117,14 +134,12 @@ export function BuyerSignupEmailForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting || !documents) return;
     setAttemptedSubmit(true);
-    if (
-      !canSubmit ||
-      validatePasswordConfirm(password, passwordConfirm) !== null ||
-      submitting ||
-      !documents
-    )
+    if (!canSubmit) {
+      requestFocus();
       return;
+    }
     setEmailTaken(false);
     setMasterEmail(false);
     setEmailCheckError("");
@@ -190,7 +205,13 @@ export function BuyerSignupEmailForm({
         </p>
       </div>
 
-      <form className="space-y-6" onSubmit={handleSubmit}>
+      {/* noValidate: 브라우저 기본 말풍선 대신 필드 아래 인라인 오류로 통일한다. */}
+      <form
+        ref={formRef}
+        className="space-y-6"
+        onSubmit={handleSubmit}
+        noValidate
+      >
         <div className="space-y-1">
           <label
             htmlFor="email"
@@ -212,8 +233,21 @@ export function BuyerSignupEmailForm({
             onBlur={handleEmailBlur}
             autoComplete="email"
             placeholder="your@company.com"
-            className={underlineInputClass}
+            aria-invalid={emailInvalid ? "true" : undefined}
+            aria-describedby={shown.email ? "signup-email-error" : undefined}
+            className={cn(
+              underlineInputBase,
+              emailInvalid ? underlineInputErrorBorder : underlineInputBorder,
+            )}
           />
+          {shown.email && !emailTaken && !masterEmail && (
+            <p
+              id="signup-email-error"
+              className="text-xs text-[var(--md-sys-color-error)] mt-1"
+            >
+              {shown.email}
+            </p>
+          )}
           {emailTaken && (
             <p
               role="alert"
@@ -248,7 +282,9 @@ export function BuyerSignupEmailForm({
           )}
           <SignupEmailGuide
             email={emailInput}
-            hidden={emailTaken || masterEmail || !!emailCheckError}
+            hidden={
+              emailTaken || masterEmail || !!emailCheckError || !!shown.email
+            }
           />
         </div>
 
@@ -257,11 +293,8 @@ export function BuyerSignupEmailForm({
           value={password}
           onChange={setPassword}
           showStrength
-          error={
-            attemptedSubmit && !password
-              ? "비밀번호를 입력해주세요."
-              : undefined
-          }
+          showRuleErrors={attemptedSubmit}
+          error={shown.password ?? undefined}
         />
         <PasswordField
           label="비밀번호 확인"
@@ -269,7 +302,7 @@ export function BuyerSignupEmailForm({
           value={passwordConfirm}
           onChange={setPasswordConfirm}
           autoComplete="new-password"
-          error={confirmError ?? undefined}
+          error={shown.passwordConfirm ?? undefined}
         />
 
         {reviewConsent && documents && (
@@ -286,6 +319,7 @@ export function BuyerSignupEmailForm({
           onChange={setAgreements}
           documents={documents}
           disabled={submitting}
+          error={shown.agreements}
         />
 
         <Button
@@ -293,6 +327,7 @@ export function BuyerSignupEmailForm({
           fullWidth
           size="lg"
           disabled={submitting || !documents}
+          dimmed={!canSubmit}
         >
           {submitting ? "처리 중…" : "다음"}
         </Button>
