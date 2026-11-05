@@ -122,16 +122,21 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await loginAs(page, 'pg-toss');
 
     // 홈과 받은 요청이 같은 수정 요청을 안내하고 카드 행동은 작성 영역으로 연결한다.
+    // 두 화면 모두 표이고, 행동은 링크가 아니라 행의 버튼이다.
     await page.goto('/home');
-    const homeRequest = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem').filter({ hasText: RFP_CODE });
-    await expect(homeRequest.getByRole('link', { name: '견적 수정' })).toHaveAttribute('href', `/inbox/${RFP_CODE}?tab=write`);
+    const homeRequest = page
+      .getByRole('table', { name: '받은 견적 요청' })
+      .getByRole('row')
+      .filter({ hasText: RFP_CODE });
     const effectiveDeadline = await homeRequest.locator('time').getAttribute('datetime');
+    await homeRequest.getByRole('button', { name: '견적 수정', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
     await expect(async () => {
       await page.goto(`/inbox?status=response&q=${RFP_CODE}`);
-      const request = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem');
+      const request = page.getByRole('table', { name: '받은 견적 요청' }).locator('tbody tr');
       await expect(request).toHaveCount(1);
       await expect(request.locator('time')).toHaveAttribute('datetime', effectiveDeadline!);
-      await request.getByRole('link', { name: '견적 수정' }).click();
+      await request.getByRole('button', { name: '견적 수정', exact: true }).click();
       await expect(page.getByTestId('deal-room-modal')).toBeVisible();
       await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
 
@@ -161,6 +166,9 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     // 라운드 값을 프리필하지만(BidWizard:97) 개선 제안이므로 명시적으로 올려 쓴다 —
     // 프리필에 기대면 "무엇을 보냈는지"가 시드에 숨는다.
     await page.getByPlaceholder('50,000,000').fill('80000000');
+    // v2 발송 조건: 가입비·보증보험은 금액·협의 필요·해당 없음 중 하나를 골라야 한다.
+    await page.getByRole('combobox', { name: '가입비 (원·최초 1회) 조건' }).selectOption('negotiable');
+    await page.getByRole('combobox', { name: '보증보험 금액(원) 조건' }).selectOption('not_applicable');
     await page.getByRole('button', { name: '수수료', exact: true }).click();
 
     // 2e. Step 2: 수수료 — fill all visible PercentInput placeholders
@@ -179,6 +187,10 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
     // 2g. Step 4: 검토·발송 → ConfirmDialog → 견적 보내기
+    // 1차 시드 견적은 옛 판본이라 0원 값이 넘어온다. 다시 확인했다고 표시해야 보낼 수 있다.
+    await page
+      .getByRole('checkbox', { name: '이전 견적·초안의 0원과 모든 조건을 다시 확인했어요' })
+      .check();
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
     // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면
     // 살아 있는 토스트와 strict-mode 충돌이 난다.

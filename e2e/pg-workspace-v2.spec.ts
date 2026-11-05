@@ -79,7 +79,10 @@ test.describe.serial('PG 업무 화면 v2', () => {
       const table = page.getByRole('table', { name: '받은 견적 요청' });
       await expect(table).toBeVisible();
       await expect(table.locator('tbody tr')).toHaveCount(50);
-      await expect(page.getByText('1 / 5', { exact: true })).toBeVisible();
+      // production 스트리밍은 Suspense 조각을 `<div hidden id="S:n">`에 남길 수 있다.
+      // getByText는 숨은 사본까지 세서 strict 모드에 걸리므로 접근성 트리에서 찾는다.
+      const pager = page.getByRole('navigation', { name: '페이지 이동' });
+      await expect(pager.getByText('1 / 5', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: /^전체205$/ })).toBeVisible();
       await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width);
       await page.screenshot({
@@ -121,9 +124,9 @@ test.describe.serial('PG 업무 화면 v2', () => {
       await expect(first).toBeFocused();
       await page.getByRole('button', { name: '다음 페이지' }).click();
       await expect(page).toHaveURL(/page=2/);
-      await expect(page.getByText('2 / 5', { exact: true })).toBeVisible();
+      await expect(pager.getByText('2 / 5', { exact: true })).toBeVisible();
       await page.getByRole('combobox', { name: '정렬', exact: true }).selectOption('recent');
-      await expect(page.getByText('1 / 5', { exact: true })).toBeVisible();
+      await expect(pager.getByText('1 / 5', { exact: true })).toBeVisible();
       await page
         .getByRole('textbox', { name: '구매사명·제목·요청 번호 검색' })
         .fill('없는 요청 검색');
