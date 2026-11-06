@@ -37,7 +37,7 @@
 - 직접 만들 때는 `.worktrees/<name>`을 쓴다. Claude Code의 `EnterWorktree`가 `.claude/worktrees/<name>`에 `origin/main` 기반 `worktree-<name>`을 만들면, 작업 전 변경이 없는 새 worktree에서만 `origin/dev` 기반으로 맞추고 브랜치 이름을 위 규칙으로 바꾼다. 두 디렉터리는 gitignore 대상이다.
 - 기능 PR의 대상은 `dev`, 운영 반영 컷 PR은 `dev → main`이다. PR 본문은 문제·변경된 동작·실제 검증·남은 위험을 설명한다. 버전·변경 기록은 아래 기준에 맞추고, push 전 비밀값 검사도 유지한다.
 - [원격 CI](../../.github/workflows/ci.yml): lint+tsc·unit은 `main`·`dev` 대상 PR과 두 브랜치 push에서 돈다. **e2e는 `main` 대상 PR과 `main` push에서만 돌며, dev→main 컷 PR의 e2e 결과를 반드시 읽는다.** 로컬 검사 범위 선택은 이 게이트를 대체하지 않는다.
-- `dev` push는 `STAGING_DEPLOY_ENABLED=true`일 때 CI 통과 후 [스테이징](../STAGING.md)에 자동 배포된다. 운영 배포·관리자 저장소 배포는 포함하지 않는다.
+- `dev` push는 `STAGING_DEPLOY_ENABLED=true`일 때 CI 통과 후 [스테이징](../STAGING.md)에 자동 배포된다. `main` push는 별도 활성화 플래그 없이 lint·unit·E2E·운영 빌드 통과 후 [운영 CI 배포](../PRODUCTION_CI.md)를 실행한다. 관리자 저장소 배포는 포함하지 않는다.
 - 머지 후 변경·미보존 작업이 없는 해당 worktree를 `rtk git worktree remove <path>`로 정리하고, 이어서 `rtk git branch -d <name>`으로 브랜치를 삭제한다.
 
 ## 버전·문서 관리
