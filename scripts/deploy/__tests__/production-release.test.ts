@@ -160,3 +160,12 @@ if [ "$(readlink "$PRODUCTION_TEST_ROOT/current")" = "releases/${releaseId}" ]; 
   expect(readFileSync(join(root, 'running'), 'utf8').trim()).toBe('legacy');
   expect(result.stderr).toContain('Rolled back');
 });
+
+it('preserves server-only Axiom runtime settings without requiring them in the CI artifact', () => {
+  const { root, run } = fixture();
+  const env = 'APP_ENV=production\nAPP_DOMAIN=support-b.com\nNEXT_PUBLIC_AXIOM_TOKEN=runtime-only-fixture\nNEXT_PUBLIC_AXIOM_DATASET=web-vitals\n';
+  writeFileSync(join(root, 'shared/.env.production'), env);
+  const result = run();
+  expect(result.status, result.stderr).toBe(0);
+  expect(readFileSync(join(root, 'current/.env.production'), 'utf8')).toBe(env);
+});

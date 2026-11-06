@@ -112,7 +112,9 @@ if (candidate.environment !== 'production' || candidate.nodeVersion !== process.
   throw new Error('Expected a production artifact built with the installed Node version.');
 }
 if (!candidate.publicEnv || !/^[0-9a-f]{64}$/.test(candidate.infrastructure)) throw new Error('Missing deployment metadata.');
-for (const key of new Set([...Object.keys(candidate.publicEnv), ...Object.keys(env).filter(key => key.startsWith('NEXT_PUBLIC_'))])) {
+// Legacy names used only by the server-side Axiom relay, never inlined by Next.
+const runtimeOnly = new Set(['NEXT_PUBLIC_AXIOM_TOKEN', 'NEXT_PUBLIC_AXIOM_DATASET']);
+for (const key of new Set([...Object.keys(candidate.publicEnv), ...Object.keys(env).filter(key => key.startsWith('NEXT_PUBLIC_') && !runtimeOnly.has(key))])) {
   if ((candidate.publicEnv[key] || '') !== (env[key] || '')) throw new Error(`CI/runtime public environment mismatch: ${key}`);
 }
 const previous = fs.existsSync(`${root}/current/.release.json`)
