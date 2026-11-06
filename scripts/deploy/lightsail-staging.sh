@@ -94,6 +94,7 @@ ACTION="$(node - "$ROOT" "$RELEASE_ID" <<'NODE'
 const fs = require('node:fs');
 const [root, id] = process.argv.slice(2);
 const candidate = JSON.parse(fs.readFileSync(`${root}/releases/${id}/.release.json`, 'utf8'));
+if (candidate.environment !== 'staging') throw new Error('Expected a staging artifact.');
 const build = fs.readFileSync(`${root}/releases/${id}/.next/BUILD_ID`, 'utf8').trim();
 if (candidate.releaseId !== id || candidate.sha !== id.split('-')[0] || build !== candidate.sha ||
     candidate.runNumber !== Number(id.split('-')[1]) || !/^[0-9a-f]{64}$/.test(candidate.schema)) {

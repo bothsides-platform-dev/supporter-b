@@ -1,6 +1,6 @@
 # dev 자동 배포 스테이징
 
-`dev`에 push 또는 PR merge가 생기면 GitHub Actions가 검사·빌드한 **동일한 산출물**을 `dev.support-b.com`에 배포한다. 서버는 소스를 가져오거나 의존성을 설치하거나 빌드하지 않는다. 운영 서버 배포는 기존 런북을 유지한다.
+`dev`에 push 또는 PR merge가 생기면 GitHub Actions가 검사·빌드한 **동일한 산출물**을 `dev.support-b.com`에 배포한다. 서버는 소스를 가져오거나 의존성을 설치하거나 빌드하지 않는다. 운영 서버는 별도 [운영 CI 배포](PRODUCTION_CI.md)를 사용하며 산출물·환경·자격증명을 공유하지 않는다.
 
 ## PG 업무 화면 v2 — DDL·읽기 선행
 

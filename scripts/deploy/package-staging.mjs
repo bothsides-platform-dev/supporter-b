@@ -6,10 +6,11 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { nodeFileTrace } from '@vercel/nft';
 
-const [output, sha, run, attempt] = process.argv.slice(2);
+const [output, sha, run, attempt, environment = "staging"] = process.argv.slice(2);
 if (!output || !/^[0-9a-f]{40}$/.test(sha) || !/^[1-9][0-9]*$/.test(run) || !/^[1-9][0-9]*$/.test(attempt)) {
   throw new Error('Expected output directory, commit SHA, run number and attempt.');
 }
+if (!['staging', 'production'].includes(environment)) throw new Error('Unknown deployment environment.');
 const releaseId = `${sha}-${run}-${attempt}`;
 if (execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== sha) {
   throw new Error('The artifact revision must match the checked out commit.');
@@ -20,13 +21,18 @@ if (readFileSync('.next/standalone/.next/BUILD_ID', 'utf8').trim() !== sha) {
 const schema = createHash('sha256').update(execFileSync('git', [
   'ls-tree', '-r', 'HEAD', '--', 'lib/db/schema', 'scripts/migrations', 'scripts/sql', 'docs/migrations', 'drizzle.config.ts',
 ])).digest('hex');
-const metadata = { sha, releaseId, runNumber: Number(run), schema, nodeVersion: process.versions.node };
+const infrastructure = createHash('sha256').update(execFileSync('git', [
+  'ls-tree', '-r', 'HEAD', '--', 'docker-compose.prod.yml', 'deploy/centrifugo',
+])).digest('hex');
+// Public values are deliberately recorded so activation can detect a CI/VM mismatch.
+const publicEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('NEXT_PUBLIC_')).sort());
+const metadata = { sha, releaseId, runNumber: Number(run), schema, infrastructure, environment, publicEnv, nodeVersion: process.versions.node };
 const stage = mkdtempSync(join(tmpdir(), 'staging-runtime-'));
 const out = resolve(output);
 mkdirSync(out, { recursive: true });
 try {
   // Runtime secrets are injected on the VM, never copied into the artifact.
-  cpSync('.next/standalone', stage, { recursive: true, verbatimSymlinks: true, filter: path => !basename(path).startsWith('.env') });
+  cpSync('.next/standalone', stage, { recursive: true, verbatimSymlinks: true, filter: path => !basename(path).startsWith('.env') && basename(path) !== 'noon-seal-2026-10-21.png' });
   cpSync('public', join(stage, 'public'), { recursive: true });
   cpSync('.next/static', join(stage, '.next/static'), { recursive: true });
   cpSync('assets/fonts', join(stage, 'assets/fonts'), { recursive: true });

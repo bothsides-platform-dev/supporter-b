@@ -89,3 +89,5 @@ sample-contract.pdf
 # mise 개인 설정 — 저장소의 mise.toml 은 Node 고정 버전만 둔다.
 mise.local.toml
 .mise.local.toml
+
+production-artifact/

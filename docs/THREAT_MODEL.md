@@ -352,3 +352,10 @@ assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·
 ### AR-6 — 비회원 추천 조건·등급별 요율의 반복 조회 (수용, 2026-11-02)
 
 가입 전 예상 수수료 확인을 위해 초안 증명 보유자에게 해당 매출 등급의 요율·추천 이유·적용 조건·업종 상태를 공개한다. 매출을 바꾸어 여러 등급의 요율을 수집할 수 있는 잔여 위험을 수용한다. 전체 요율표를 한 응답에 싣지 않으며 동일 출처·HttpOnly 증명·요청 제한을 유지한다. 잠정 등급은 승인 등급을 변경하지 않고 실제 접수 시 서버가 PG 자격을 다시 확인한다. 공개 대상 확대나 수집 악용이 확인되면 재검토한다. 가드: `lib/server/services/__tests__/guest-requests.test.ts`의 공개 필드·5개 구간·소유권·revision·예약 동결 검증.
+
+
+### AR-7 — 운영 CI 배포 자격증명과 복구 경계 (2026-11-06)
+
+운영 빌드 신뢰 경계를 GitHub Actions로 옮긴다. main push의 lint·unit·E2E·운영 빌드 성공, 명시적 활성화, production Environment의 main 브랜치 제한을 전제로 한다. SSH 키는 배포 job에서만 읽고 고정 known_hosts로 검증한다. 런타임 시크릿·법인 도장은 산출물에서 제외한다. 서버는 digest·SHA·BUILD_ID·환경·공개 변수·Node 버전·준비 fingerprint를 확인하고 구버전 실행을 거부한다. 규범: `scripts/deploy/__tests__/production-release.test.ts`, `scripts/deploy/__tests__/staging-package.test.ts`, `lib/__tests__/ci-workflow.test.ts`.
+
+잔여 위험: workflow/main 쓰기 권한 또는 운영 배포 SSH 키를 가진 주체는 운영 앱 실행 권한을 갖는다. SHA-256는 전송 무결성이며 악성 CI에 대한 독립 서명이 아니다. schema-ready·infra-ready는 운영자의 준비 확인이지 실제 DB/컨테이너의 자동 증명이 아니다. DDL·인프라는 자동 변경/복구하지 않으며 이전 앱과의 호환성은 릴리스 전 검토한다. 단일 프로세스 교체 중 짧은 중단, 기본 HTTP 검사에서 발견되지 않는 업무 오류가 남는다. 키 접근 주체 변경·실제 복구 실패·다중 인스턴스 전환 시 재검토한다. 활성화와 최초 PM2 전환은 [운영 CI 런북](PRODUCTION_CI.md)을 따른다.

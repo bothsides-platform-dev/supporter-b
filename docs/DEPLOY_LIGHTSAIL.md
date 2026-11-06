@@ -1,5 +1,7 @@
 # 배포 런북 — AWS Lightsail + Caddy (Amazon Linux 2023)
 
+> **CI 빌드 전환**: 신규 운영 배포 경로는 [운영 CI 산출물 배포](PRODUCTION_CI.md)를 따른다. 최초 서버/GitHub 설정 전까지 아래 기존 서버 빌드 경로가 유지된다. 인프라·DDL·cron 절차는 계속 이 문서를 따른다.
+
 단일 Lightsail VM에 앱·DB·리버스프록시를 모두 올리는 **자체 호스팅** 경로다.
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
