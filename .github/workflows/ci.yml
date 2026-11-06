@@ -367,7 +367,7 @@ jobs:
 
   deploy-production:
     name: deploy production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [lint, unit-test, e2e, build-production]
     runs-on: ubuntu-24.04
     timeout-minutes: 15

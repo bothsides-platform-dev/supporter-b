@@ -356,6 +356,6 @@ assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·
 
 ### AR-7 — 운영 CI 배포 자격증명과 복구 경계 (2026-11-06)
 
-운영 빌드 신뢰 경계를 GitHub Actions로 옮긴다. main push의 lint·unit·E2E·운영 빌드 성공, 명시적 활성화, production Environment의 main 브랜치 제한을 전제로 한다. SSH 키는 배포 job에서만 읽고 고정 known_hosts로 검증한다. 런타임 시크릿·법인 도장은 산출물에서 제외한다. 서버는 digest·SHA·BUILD_ID·환경·공개 변수·Node 버전·준비 fingerprint를 확인하고 구버전 실행을 거부한다. 규범: `scripts/deploy/__tests__/production-release.test.ts`, `scripts/deploy/__tests__/staging-package.test.ts`, `lib/__tests__/ci-workflow.test.ts`.
+운영 빌드 신뢰 경계를 GitHub Actions로 옮긴다. main push의 lint·unit·E2E·운영 빌드 성공, production Environment의 main 브랜치 제한을 전제로 한다. SSH 키는 배포 job에서만 읽고 고정 known_hosts로 검증한다. 런타임 시크릿·법인 도장은 산출물에서 제외한다. 서버는 digest·SHA·BUILD_ID·환경·공개 변수·Node 버전·준비 fingerprint를 확인하고 구버전 실행을 거부한다. 규범: `scripts/deploy/__tests__/production-release.test.ts`, `scripts/deploy/__tests__/staging-package.test.ts`, `lib/__tests__/ci-workflow.test.ts`.
 
-잔여 위험: workflow/main 쓰기 권한 또는 운영 배포 SSH 키를 가진 주체는 운영 앱 실행 권한을 갖는다. SHA-256는 전송 무결성이며 악성 CI에 대한 독립 서명이 아니다. schema-ready·infra-ready는 운영자의 준비 확인이지 실제 DB/컨테이너의 자동 증명이 아니다. DDL·인프라는 자동 변경/복구하지 않으며 이전 앱과의 호환성은 릴리스 전 검토한다. 단일 프로세스 교체 중 짧은 중단, 기본 HTTP 검사에서 발견되지 않는 업무 오류가 남는다. 키 접근 주체 변경·실제 복구 실패·다중 인스턴스 전환 시 재검토한다. 활성화와 최초 PM2 전환은 [운영 CI 런북](PRODUCTION_CI.md)을 따른다.
+잔여 위험: workflow/main 쓰기 권한 또는 운영 배포 SSH 키를 가진 주체는 운영 앱 실행 권한을 갖는다. SHA-256는 전송 무결성이며 악성 CI에 대한 독립 서명이 아니다. schema-ready·infra-ready는 운영자의 준비 확인이지 실제 DB/컨테이너의 자동 증명이 아니다. DDL·인프라는 자동 변경/복구하지 않으며 이전 앱과의 호환성은 릴리스 전 검토한다. 단일 프로세스 교체 중 짧은 중단, 기본 HTTP 검사에서 발견되지 않는 업무 오류가 남는다. 키 접근 주체 변경·실제 복구 실패·다중 인스턴스 전환 시 재검토한다. 최초 설정과 PM2 전환은 [운영 CI 런북](PRODUCTION_CI.md)을 따른다.

@@ -204,8 +204,9 @@ describe('individual unit shard conclusions', () => {
 describe('production deployment gate', () => {
   const workflow = readFileSync(resolve('.github/workflows/ci.yml'), 'utf8');
   const deploy = workflow.slice(workflow.indexOf('  deploy-production:'));
-  it('deploys only an enabled main push after all release checks succeed', () => {
-    expect(deploy).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'");
+  it('deploys every main push after all release checks succeed', () => {
+    expect(deploy).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(deploy).not.toContain('PRODUCTION_DEPLOY_ENABLED');
     expect(deploy).toContain('needs: [lint, unit-test, e2e, build-production]');
     expect(deploy).toContain('cancel-in-progress: false');
     expect(deploy).toContain('name: production');
