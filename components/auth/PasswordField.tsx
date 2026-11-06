@@ -29,8 +29,8 @@ type PasswordFieldProps = {
   autoComplete?: string;
   error?: string;
   /**
-   * 제출이 막힌 뒤 true. 미충족 규칙을 기본 글자색에서 오류색으로 올린다 —
-   * 입력 도중에는 빨간색으로 다그치지 않고, 넘어가려다 막혔을 때만 쓴다.
+   * 미충족 규칙을 오류색으로 표시한다. 가입 화면에서는 입력 즉시 활성화하고,
+   * 그 외 화면에서는 호출부가 표시 시점을 결정한다.
    */
   showRuleErrors?: boolean;
 };

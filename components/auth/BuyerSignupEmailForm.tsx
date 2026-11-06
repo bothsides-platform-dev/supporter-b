@@ -293,7 +293,7 @@ export function BuyerSignupEmailForm({
           value={password}
           onChange={setPassword}
           showStrength
-          showRuleErrors={attemptedSubmit}
+          showRuleErrors
           error={shown.password ?? undefined}
         />
         <PasswordField
