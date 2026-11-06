@@ -7,8 +7,7 @@ import { describe, expect, it } from 'vitest';
 const readPage = (route: 'rfp' | 'inbox') =>
   readFileSync(resolve(__dirname, `../${route}/page.tsx`), 'utf8');
 
-const readHomeLoading = () =>
-  readFileSync(resolve(__dirname, '../home/loading.tsx'), 'utf8');
+const readHomeLoading = () => readFileSync(resolve(__dirname, '../home/loading.tsx'), 'utf8');
 
 describe('견적 목록 페이지 표 전용 계약', () => {
   it.each(['rfp', 'inbox'] as const)(
@@ -29,15 +28,20 @@ describe('견적 목록 페이지 표 전용 계약', () => {
     const source = readPage('rfp');
 
     expect(source).toContain('filterRfps(allRfps, params, now)');
-    expect(source).toContain('<RfpListTable rfps={rfps} progressByRfpId={progressByRfpId} now={now.toISOString()} />');
+    expect(source).toContain(
+      '<RfpListTable rfps={rfps} progressByRfpId={progressByRfpId} now={now.toISOString()} />',
+    );
   });
 
   it('/inbox는 필터 결과를 InboxList에 전달한다', () => {
     const source = readPage('inbox');
 
-    expect(source).toContain('filterInboxRows(allRows, params, now)');
-    expect(source).toContain('<InboxPageContent rows={rows} totalCount={allRows.length} />');
-    expect(readFileSync('components/inbox/InboxPageContent.tsx', 'utf8')).toContain('<InboxList rows={rows} onOpenRfp={onOpenRfp} />');
+    expect(source).toContain('queryInbox(allRows, params)');
+    expect(source).toContain('{...result}');
+    expect(source).toContain('totalCount={allRows.length}');
+    expect(readFileSync('components/inbox/InboxPageContent.tsx', 'utf8')).toMatch(
+      /<InboxList\s+rows=\{rows\}/,
+    );
   });
 
   it('/home 로딩 화면은 칸반이 아니라 현재 대시보드 스켈레톤을 사용한다', () => {

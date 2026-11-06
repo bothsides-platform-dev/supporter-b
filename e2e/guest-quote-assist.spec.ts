@@ -1,7 +1,16 @@
 import { test, expect } from 'playwright/test';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { guestRfpDrafts } from '@/lib/db/schema';
+import { randomUUID } from 'node:crypto';
+import { guestRfpDrafts, pgRecommendationGroups, pgMatchingPolicies, workspaces } from '@/lib/db/schema';
+
+const groupId = randomUUID();
+test.beforeAll(async () => {
+  const [pg] = await db.select().from(workspaces).where(eq(workspaces.name, '서포터 B 페이'));
+  await db.insert(pgRecommendationGroups).values({ id: groupId, name: '의류 판매' });
+  await db.insert(pgMatchingPolicies).values({ groupId, policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.id, reason: '의류 상담', feeNote: '', feesByTier: { sole: null, sme1: null, sme2: null, sme3: null, general: null } }] } });
+});
+test.afterAll(async () => { await db.delete(pgRecommendationGroups).where(eq(pgRecommendationGroups.id, groupId)); });
 
 for (const failure of ['ai-unavailable', 'apick-outage', 'website-unavailable']) {
   test(failure + ': direct writing, reload, server save and signup handoff', async ({ page, context }) => {
@@ -21,6 +30,7 @@ for (const failure of ['ai-unavailable', 'apick-outage', 'website-unavailable'])
     });
     await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));
     await page.goto('/quote-start');
+    await page.addStyleTag({ content: 'nextjs-portal { display: none; }' });
     await page.getByLabel('사업자등록번호').fill('1248100998');
     await page.getByRole('button', { name: '다음', exact: true }).click();
     await page.getByLabel('사업 운영 홈페이지').fill('example.com');
@@ -49,12 +59,15 @@ for (const failure of ['ai-unavailable', 'apick-outage', 'website-unavailable'])
     await page.getByRole('button', { name: '카드', exact: true }).click(); await next();
     await expect(page.getByLabel('제목', { exact: true })).toHaveCount(0);
     await skip(); await skip();
-    await expect(page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeVisible();
+    await expect(page.getByRole('group', { name: '상담할 PG사' })).toBeVisible({ timeout: 20000 });
     await page.reload();
-    await expect(page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeVisible();
+    await page.addStyleTag({ content: 'nextjs-portal { display: none; }' });
+    await expect(page.getByRole('group', { name: '상담할 PG사' })).toBeVisible({ timeout: 20000 });
     expect(analyses).toBe(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+    await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check();
+    await next();
+    await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
     await page.waitForURL(/\/signup\/buyer/);
     const id = await page.evaluate(() => sessionStorage.getItem('support-b-guest-signup-draft'));
     const [row] = await db.select().from(guestRfpDrafts).where(eq(guestRfpDrafts.id, id!));

@@ -30,7 +30,11 @@ export default async function InboxDealRoomModalPage({ params, searchParams }: P
     redirect(`/login?next=/inbox/${rfpCode}`);
   }
 
-  const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: session.user.workspaceId });
+  const data = await loadPgRfpDetail({
+    code: rfpCode,
+    workspaceId: session.user.workspaceId,
+    userId: session.user.id,
+  });
   // 삭제됐거나 접근 불가한 코드 — notFound()는 모달을 넘어 목록까지 날리므로, 닫을
   // 수 있는 모달에 안내를 띄운다.
   if (!data) {
@@ -46,7 +50,14 @@ export default async function InboxDealRoomModalPage({ params, searchParams }: P
   }
 
   const chip = pgRequestState({
-    stage: data.rfp.status === 'awarded' ? (data.awardedToMe ? 'won' : 'lost') : data.myBid ? 'submitted' : 'received',
+    stage:
+      data.rfp.status === 'awarded'
+        ? data.awardedToMe
+          ? 'won'
+          : 'lost'
+        : data.myBid
+          ? 'submitted'
+          : 'received',
     rfpStatus: data.rfp.status,
     reviewStatus: data.review?.status ?? (data.hasWithdrawnBid ? 'withdrawn' : undefined),
     rfpDeadline: data.pendingRequote?.deadline ?? data.rfp.deadline,
@@ -62,7 +73,8 @@ export default async function InboxDealRoomModalPage({ params, searchParams }: P
         title={data.rfp.title}
         statusChip={<Chip label={chip.label} color={chip.color} />}
         headerActions={
-          <PgChatPanel workspaceId={session.user.workspaceId}
+          <PgChatPanel
+            workspaceId={session.user.workspaceId}
             rfpId={data.rfp.id}
             rfpCode={data.rfp.code}
             rfpTitle={data.rfp.title}
@@ -73,9 +85,7 @@ export default async function InboxDealRoomModalPage({ params, searchParams }: P
               logoUpdatedAt: data.buyer.logoUpdatedAt,
             }}
             closedCounterpartyIds={
-              data.rfp.status === 'awarded' && !data.awardedToMe
-                ? [data.rfp.buyerWsId]
-                : []
+              data.rfp.status === 'awarded' && !data.awardedToMe ? [data.rfp.buyerWsId] : []
             }
           />
         }

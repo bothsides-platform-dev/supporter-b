@@ -5,9 +5,20 @@ import type { MerchantTier } from '@/lib/types/bid';
 import { BidStepFees } from './BidStepFees';
 import { useBidWizardContext } from './bid-wizard-context';
 
-export const BidStepFeesContainer = memo(function BidStepFeesContainer({ buyerTier }: { buyerTier?: MerchantTier }) {
-  const { feeInputMethods, customPaymentMethods, fees, setFee, feesAttempted } =
-    useBidWizardContext();
+export const BidStepFeesContainer = memo(function BidStepFeesContainer({
+  buyerTier,
+}: {
+  buyerTier?: MerchantTier;
+}) {
+  const {
+    feeInputMethods,
+    customPaymentMethods,
+    fees,
+    setFee,
+    feesAttempted,
+    conditionStates,
+    setConditionState,
+  } = useBidWizardContext();
   return (
     <BidStepFees
       buyerTier={buyerTier}
@@ -16,6 +27,8 @@ export const BidStepFeesContainer = memo(function BidStepFeesContainer({ buyerTi
       fees={fees}
       onFee={setFee}
       attempted={feesAttempted}
+      conditionStates={conditionStates}
+      onCondition={setConditionState}
     />
   );
 });

@@ -1,10 +1,18 @@
 import { test, expect } from 'playwright/test';
 import { randomUUID } from 'node:crypto';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { pgRecommendationGroups } from '@/lib/db/schema';
+import { pgRecommendationGroups, pgMatchingPolicies, workspaces } from '@/lib/db/schema';
 import { createGuestDraft, GUEST_DRAFT_KEY } from '@/lib/guest-rfp/draft';
 import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
+// Completion now requires an eligible PG before entering review.
+const reviewIndustryId = randomUUID();
+test.beforeAll(async () => {
+  const [pg] = await db.select().from(workspaces).where(eq(workspaces.name, '서포터 B 페이'));
+  await db.insert(pgRecommendationGroups).values({ id: reviewIndustryId, name: '반려동물 방문 돌봄' });
+  await db.insert(pgMatchingPolicies).values({ groupId: reviewIndustryId, policy: { risk: 'gray', candidates: [{ pgWorkspaceId: pg.id, reason: '돌봄 상담', feeNote: '', feesByTier: { sole: null, sme1: null, sme2: null, sme3: null, general: null } }] } });
+});
+test.afterAll(async () => { await db.delete(pgRecommendationGroups).where(eq(pgRecommendationGroups.id, reviewIndustryId)); });
 // Start at the question renderer after intake; guest-quote-assist covers intake.
 test.beforeEach(async ({ page }) => {
   const draft = createGuestDraft();
@@ -391,7 +399,7 @@ test('public answer controls and completion edits remain usable across sizes, th
     ['industry', '어떤 업종에 해당하나요?'],
     ['contract', '어떤 계약을 준비하나요?'],
     ['payment', '어떤 결제수단의 견적을 받을까요?'],
-    ['annual', '전년도 PG 거래액은 얼마인가요?'],
+    ['annual', '전년도 월 평균 PG 거래액은 얼마인가요?'],
     ['delivery', '배송이나 서비스 완료까지 얼마나 걸리나요?'],
     ['attachments', '함께 보낼 자료가 있나요?'],
   ];
@@ -408,7 +416,7 @@ test('public answer controls and completion edits remain usable across sizes, th
           title: '맞춤 PG 견적 요청',
           mainProducts: '의류',
           requiredPaymentMethods: ['card'],
-          annualPgVolume: '1000000000',
+          monthlyAvgPgVolume: '1000000000',
           deliveryServicePeriod: 'W+2',
           currentPgs: [{ pgWorkspaceId: null, name: '기존 결제대행사' }],
           productInfo: {
@@ -520,16 +528,24 @@ test('public answer controls and completion edits remain usable across sizes, th
     .click();
   await page.getByRole('button', { name: '작성 마치기' }).click();
   await expect(
-    page.getByRole('heading', { name: '입력한 사업 정보' }),
-  ).toBeVisible();
+    page.getByRole('group', { name: '상담할 PG사' }),
+  ).toBeVisible({ timeout: 20000 });
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check();
+  await page.getByRole('button', { name: '다음', exact: true }).click();
   await page.getByRole('button', { name: '홈페이지 수정' }).click();
   await page.getByLabel('사업 운영 홈페이지').fill('edited.example.com');
   await page.getByRole('button', { name: '수정 완료' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByText('요청 내용 전체 보기').click();
   await expect(
     page.getByText('https://edited.example.com', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '계약 유형 수정' }).click();
   await page.getByRole('button', { name: '신규 계약', exact: true }).click();
   await page.getByRole('button', { name: '취소', exact: true }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByText('요청 내용 전체 보기').click();
   await expect(page.getByText('갱신 계약', { exact: true })).toBeVisible();
 });

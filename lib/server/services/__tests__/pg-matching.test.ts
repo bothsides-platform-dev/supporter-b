@@ -11,7 +11,7 @@ import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getBusinessCalendarRepo
 import { businessDeadline } from '@/lib/rfp/business-deadline';
 import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 import type { PgliteDB } from '@/lib/db/client-pglite';
-import type { CreateRfpServiceInput } from '../rfp';
+import type { ParsedCreateRfpInput } from '@/lib/rfp/intake/schema';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
 import { recommendPgAction, requestNextPgAction, endAndRequestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -29,7 +29,7 @@ vi.mock('next/cache', async importOriginal => ({ ...await importOriginal<object>
 let db: PgliteDB;
 let buyer: { userId: string; workspaceId: string };
 let pg: { userId: string; workspaceId: string };
-let input: CreateRfpServiceInput;
+let input: ParsedCreateRfpInput;
 let groupId: string;
 beforeEach(async () => {
   testPgCookie.value = undefined;
@@ -307,7 +307,7 @@ describe('맞춤 PG 상담 생성', () => {
     const request = {
       ...matchingInput(),
       contractType: 'new' as const,
-      annualPgVolume: '100000000',
+      monthlyAvgPgVolume: '100000000',
       currentFeeRate: '2.5',
       currentSettlementLimit: '50000000',
       currentGuaranteeInsurance: '10000000',
@@ -319,7 +319,7 @@ describe('맞춤 PG 상담 생성', () => {
     expect(first.ok).toBe(true);
     expect(await service.createRfp({
       ...request,
-      annualPgVolume: '200000000',
+      monthlyAvgPgVolume: '200000000',
       currentFeeRate: '3.0',
       currentSettlementLimit: '60000000',
       currentGuaranteeInsurance: '0',
@@ -740,7 +740,7 @@ it('validates the guest revision before sending, and completes the draft in the 
 });
 
 describe('갱신의 기존 PG 비공개 제외', () => {
-  const renewal = () => ({ ...input, contractType: 'renewal' as const, annualPgVolume: '100000000', industryGroupId: groupId, requestKey: randomUUID() });
+  const renewal = () => ({ ...input, contractType: 'renewal' as const, monthlyAvgPgVolume: '100000000', industryGroupId: groupId, requestKey: randomUUID() });
   it('갱신 입력 누락과 잘못된 ID를 서비스에서 거부한다', async () => {
     const service = await getRfpService();
     expect(await service.createRfp(renewal(), buyer)).toEqual({ ok: false, error: 'CURRENT_PGS_REQUIRED' });

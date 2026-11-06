@@ -9,19 +9,22 @@ const emptyDraft: WizardValidationDraft = {
   websiteUrl: '',
   contractType: null,
   mainProducts: '',
-  annualPgVolume: '',
+  monthlyAvgPgVolume: '',
   requiredPaymentMethods: [],
   customPaymentMethods: [],
   allowedPgWorkspaceIds: [],
   deadline: '',
 };
 
-// Step 2 필수 3종(견적 유형·주요 판매 상품·연간 거래액)을 모두 채운 값.
+// Step 2 필수(견적 유형·주요 판매 상품·월 평균 거래액·기간·업종)를 모두 채운 값.
+// 업종 목록을 넘기지 않으면 ID/직접 입력의 배타성만 보므로 직접 입력으로 충족한다.
 const step2Extras = {
   contractType: 'new' as const,
   mainProducts: '의류',
-  annualPgVolume: '1000000000',
+  monthlyAvgPgVolume: '1000000000',
   deliveryServicePeriod: 'D+3',
+  industryMode: 'custom' as const,
+  customIndustryName: '의류 소매',
 };
 
 function complete(draft: WizardValidationDraft) {
@@ -43,7 +46,7 @@ describe('getWizardValidity', () => {
   });
 
   it('업종 목록이 비어 있어도 직접 입력을 마치기 전에는 Step 2가 미완료다', () => {
-    const draft = { ...emptyDraft, ...step2Extras, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] };
+    const draft = { ...emptyDraft, ...step2Extras, industryMode: 'registered' as const, customIndustryName: undefined, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] };
     expect(getWizardValidity(draft, [])[1].complete).toBe(false);
     expect(getWizardValidity({ ...draft, industryMode: 'custom' as const, customIndustryName: '방문 돌봄' }, [])[1].complete).toBe(true);
   });
@@ -146,8 +149,10 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     websiteUrl: 'example.com',
     contractType: 'new',
     mainProducts: '의류',
-    annualPgVolume: '1000000000',
-  deliveryServicePeriod: 'D+3',
+    monthlyAvgPgVolume: '1000000000',
+    deliveryServicePeriod: 'D+3',
+    industryMode: 'custom',
+    customIndustryName: '의류 소매',
     requiredPaymentMethods: ['card'],
     customPaymentMethods: [],
     allowedPgWorkspaceIds: [{ id: 'pg1' }],
@@ -158,8 +163,19 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     return getWizardValidity(draft).find((s) => s.num === num)!;
   }
 
-  it('모두 채우면 complete', () => {
-    expect(step(base, 2).complete).toBe(true);
+  it('모두 채우면 complete 이고 안내 문구가 비어 있다', () => {
+    expect(step(base, 2)).toEqual({ num: 2, complete: true, hint: '' });
+  });
+
+  it('업종 미선택이면 미완료 + 업종 안내', () => {
+    const d = { ...base, industryMode: undefined, customIndustryName: undefined };
+    expect(step(d, 2).complete).toBe(false);
+    expect(step(d, 2).hint).toBe('업종을 선택해주세요');
+  });
+
+  it('질문 흐름 전용 입력(판매 정보·현재 PG)은 단계 게이트에 들어오지 않는다', () => {
+    const d = { ...base, contractType: 'renewal' as const, productInfo: {}, currentPgs: [] };
+    expect(step(d, 2).complete).toBe(true);
   });
 
   it('홈페이지 빈값이면 미완료 + 입력 안내', () => {
@@ -198,23 +214,23 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     expect(step(d, 2).hint).toBe('주요 판매 상품을 입력해주세요');
   });
 
-  it('갱신 계약에서 연간 PG 총 거래액 빈값이면 미완료 + 거래액 안내', () => {
-    const d = { ...base, contractType: 'renewal' as const, annualPgVolume: '' };
+  it('갱신 계약에서 월 평균 PG 거래액 빈값이면 미완료 + 거래액 안내', () => {
+    const d = { ...base, contractType: 'renewal' as const, monthlyAvgPgVolume: '' };
     expect(step(d, 2).complete).toBe(false);
-    expect(step(d, 2).hint).toBe('전년도 연간 PG 총 거래액을 입력해주세요');
+    expect(step(d, 2).hint).toBe('전년도 월 평균 PG 거래액을 입력해주세요');
   });
 
-  it('신규 계약은 연간 PG 총 거래액이 비어도 complete (존재할 수 없는 값 필수 제외)', () => {
-    const d = { ...base, contractType: 'new' as const, annualPgVolume: '' };
+  it('신규 계약은 월 평균 PG 거래액이 비어도 complete (존재할 수 없는 값 필수 제외)', () => {
+    const d = { ...base, contractType: 'new' as const, monthlyAvgPgVolume: '' };
     expect(step(d, 2).complete).toBe(true);
   });
 
-  it('신규 계약에서 연간 거래액이 비어도 hint는 거래액을 요구하지 않는다', () => {
+  it('신규 계약에서 월 평균 거래액이 비어도 hint는 거래액을 요구하지 않는다', () => {
     // 결제수단만 비워 미완료로 만든 뒤, hint가 거래액이 아닌 결제수단을 안내하는지 확인
     const d = {
       ...base,
       contractType: 'new' as const,
-      annualPgVolume: '',
+      monthlyAvgPgVolume: '',
       requiredPaymentMethods: [],
       customPaymentMethods: [],
     };

@@ -1,3 +1,12 @@
+export type GuestRecommendation = {
+  revision: number;
+  recommendation: import('@/lib/rfp/pg-matching').Recommendation;
+  tierBasis: 'confirmed' | 'provisional' | 'unknown';
+  annualRevenue: number | null;
+  answers: import('./answers').GuestAnswers;
+  attachmentCount: number;
+  files: { id: string; name: string; size: number }[];
+};
 export type GuestRequestStatus = {
   id: string;
   status:

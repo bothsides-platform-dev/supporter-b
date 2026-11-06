@@ -35,6 +35,10 @@ export const underlineInputBorder =
 
 export const underlineInputClass = cn(underlineInputBase, underlineInputBorder);
 
+/** Border for an underline field whose value blocks submit (pair with aria-invalid). */
+export const underlineInputErrorBorder =
+  'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]';
+
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
 export const publicInputClass = 'block w-full min-w-0 min-h-11 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] focus:ring-2 focus:ring-[var(--md-sys-color-primary)]/40 focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/40 focus-visible:border-[var(--md-sys-color-primary)] aria-invalid:border-[var(--md-sys-color-error)] aria-invalid:ring-2 aria-invalid:ring-[var(--md-sys-color-error)]/20';
 export const publicNumericGroupClass = 'flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 focus-within:border-[var(--md-sys-color-primary)] focus-within:ring-2 focus-within:ring-[var(--md-sys-color-primary)]/40 has-[[aria-invalid=true]]:border-[var(--md-sys-color-error)] has-[[aria-invalid=true]]:ring-2 has-[[aria-invalid=true]]:ring-[var(--md-sys-color-error)]/20';
@@ -86,6 +90,7 @@ export function PercentInput({
       </div>
       <div className="flex items-end gap-1">
         <NumericFormat
+          aria-label={label}
           decimalScale={decimalScale}
           allowNegative={false}
           isAllowed={maxAllowed(max)}
@@ -222,9 +227,9 @@ export function CurrencyInput({
       </div>
       <div className={isPublic ? publicNumericGroupClass : 'flex items-end gap-1'}>
         <NumericFormat
-          aria-label={isPublic ? label : undefined}
-          aria-invalid={isPublic && !!error || undefined}
-          aria-describedby={isPublic && (error || hint) ? `${id}-details` : undefined}
+          aria-label={label}
+          aria-invalid={!!error || undefined}
+          aria-describedby={error || hint ? `${id}-details` : undefined}
           thousandSeparator=","
           decimalScale={0}
           allowNegative={false}
@@ -237,7 +242,7 @@ export function CurrencyInput({
         <span className={cn('text-[var(--md-sys-color-on-surface-variant)]', isPublic ? 'text-[14px]' : 'text-[13px] pb-2')}>원</span>
       </div>
       {isPublic && infoTerm && <div className="flex items-center gap-1 text-[14px]">{label}<InfoTip term={infoTerm} /></div>}
-      {isPublic ? <div id={`${id}-details`}>{details}</div> : details}
+      <div id={`${id}-details`}>{details}</div>
     </div>
   );
 }
@@ -312,7 +317,7 @@ export function DayOffsetInput({
         {isPublic && numberInput}
         <Select
           options={isPublic ? [{ value: 'D', label: '일' }, { value: 'W', label: '주' }, { value: 'M', label: '개월' }] : CYCLE_TYPE_OPTIONS}
-          ariaLabel={isPublic ? `${label} 단위` : undefined}
+          ariaLabel={`${label} 단위`}
           value={type}
           onChange={(t) => { setType(t); emit(t, numeric); }}
           className={isPublic ? 'w-[88px] min-h-11 border-0 bg-transparent text-base' : 'w-[100px] h-8 text-[13px]'}

@@ -498,7 +498,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
       bidWindowOpen: false,
     })} />);
     openWriteTab();
-    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(screen.getByText('견적 요청이 종료됐어요')).toBeInTheDocument();
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
   });
 
@@ -508,7 +508,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
       bidWindowOpen: false,
     })} />);
     openWriteTab();
-    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(screen.getByText('견적 접수가 마감됐어요')).toBeInTheDocument();
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
   });
 
@@ -533,7 +533,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     act(() => { vi.advanceTimersByTime(1_001); });
 
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
-    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(screen.getByText('구매사 · 보낸 견적을 검토하고 선정해요')).toBeInTheDocument();
     expect(navigation.refresh).toHaveBeenCalledOnce();
     expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
@@ -541,17 +541,17 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     expect(screen.getByTestId('brief')).not.toHaveTextContent('2026-09-20T00:00:00Z');
   });
 
-  it('이미 견적을 보낸 요청도 접수 기간이 끝나면 마감 안내와 보낸 견적을 함께 보여준다', () => {
+  it('이미 견적을 보낸 요청도 접수 마감 뒤에도 구매사 검토 대기와 보낸 견적을 보여준다', () => {
     render(<PgDealRoomBody data={buildData({
       rfp: { ...baseRfp, status: 'sent' },
       bidWindowOpen: false,
       myBid: submittedBid,
     })} />);
     openWriteTab();
-    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(screen.getByText('구매사 · 보낸 견적을 검토하고 선정해요')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(screen.getByText('정산 주기')).toBeInTheDocument();
-    expect(screen.queryByText('✓ 견적을 보냈어요')).not.toBeInTheDocument();
+    expect(screen.getByText('✓ 견적을 보냈어요')).toBeInTheDocument();
   });
 
   it('취소되면 견적 작성 대신 취소 안내를 보여준다', () => {

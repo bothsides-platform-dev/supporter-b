@@ -70,6 +70,7 @@ export type BuyerRfpDetailData = {
 };
 
 export type PgRfpDetailData = {
+  userId?: string;
   workspaceId?: string;
   industryName?: string;
   contractState?: PgContractState;
@@ -212,7 +213,7 @@ const _PG_STRIPPED_RFP_KEYS = [
 ] as const;
 const _PG_VISIBLE_RFP_KEYS = [
   'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
-  'mainProducts', 'annualPgVolume', 'currentFeeRate', 'currentSettlementLimit',
+  'mainProducts', 'monthlyAvgPgVolume', 'currentFeeRate', 'currentSettlementLimit',
   'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
   'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
   'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',
@@ -367,6 +368,7 @@ export async function loadBuyerRfpDetail(args: {
 export async function loadPgRfpDetail(args: {
   code: string;
   workspaceId: string;
+  userId?: string;
 }): Promise<PgRfpDetailData | null> {
   const rfp = await (await getRfpRepo()).findByCode(args.code);
   if (!rfp) return null;
@@ -455,6 +457,7 @@ export async function loadPgRfpDetail(args: {
   return {
     review,
     workspaceId: args.workspaceId,
+    userId: args.userId,
     industryName: matching?.industryName,
     rfp,
     bidWindowOpen,

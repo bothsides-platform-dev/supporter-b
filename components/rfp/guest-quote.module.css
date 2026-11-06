@@ -482,3 +482,13 @@
   .memberSidebar .introduction { display: none; }
   .memberSidebar { padding-top: 0; }
 }
+
+/* Recommendation and review use the member flow's two equal columns. */
+.reviewLayout { display: block; max-width: 1200px; }
+.reviewLayout .sidebar { padding-bottom: 24px; }
+.reviewLayout .workspace { max-width: none; width: 100%; padding: 0 0 40px; }
+.reviewActions { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; background: var(--md-sys-color-surface); border-top: 1px solid var(--md-sys-color-outline-variant); }
+@media (max-width: 1023px) {
+  .reviewActions { position: fixed; left: 0; right: 0; padding: 12px 20px calc(16px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 1023px) and (max-height: 500px) { .reviewActions { position: static; } }

@@ -10,7 +10,7 @@ it('reports allowed summaries only, without full notes, amounts, or attachment b
   const d = createGuestDraft();
   d.data.websiteUrl = 'https://example.com';
   d.data.memo = 'secret';
-  d.data.annualPgVolume = '100000';
+  d.data.monthlyAvgPgVolume = '100000';
   await sendGuestEvent(d, 'completed', []);
   const body = JSON.parse(request.mock.calls[0][1].body as string);
   expect(Object.keys(body).sort()).toEqual([

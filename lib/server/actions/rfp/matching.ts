@@ -6,8 +6,9 @@ import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { requireBuyerActor, requirePgActor } from '../_session';
-import { getPgMatchingRepo, getWorkspaceRepo, getRfpRepo } from '@/lib/server/repositories/factory';
+import { getWorkspaceRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 import { getPgMatchingService } from '@/lib/server/services/pg-matching';
+import { getPgRecommendationService } from '@/lib/server/services/pg-recommendation';
 import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 
 export async function matchingBusinessAction() {
@@ -30,11 +31,15 @@ export async function recommendPgAction(input: string | (IndustrySelection & { c
   const parsed = industrySelectionSchema.safeParse(selection);
   if (!parsed.success) return { ok: false as const, error: 'MATCHING_REQUIRED' };
   const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
-  const repo = await getPgMatchingRepo();
-  const resolved = await repo.resolveCurrentPgs(current.data);
-  if (!resolved.ok) return resolved;
-  const industry = await repo.resolveIndustry(parsed.data);
-  return { ok: true as const, recommendation: await repo.recommendation(industry.groupId, [], undefined, includeTest, industry.customName, actor.workspaceId, resolved.currentPgs) };
+  const recommended = await (await getPgRecommendationService()).recommend({
+    kind: 'selection',
+    industry: parsed.data,
+    currentPgs: current.data,
+    buyerWorkspaceId: actor.workspaceId,
+    includeTestPg: includeTest,
+  });
+  if (!recommended.ok) return recommended;
+  return { ok: true as const, recommendation: recommended.recommendation };
 }
 
 const Review = z.object({ rfpId: z.string().uuid(), reviewId: z.string().uuid(), status: z.enum(['reviewing', 'rejected']), reason: z.string().trim().max(500) }).strict();

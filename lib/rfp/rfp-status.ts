@@ -1,5 +1,7 @@
 import type { ChipColor } from '@/components/primitives/Chip';
-import type { RfpStatus } from '@/lib/types/rfp';
+import type { RFP, RfpStatus } from '@/lib/types/rfp';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
+import type { PgReview } from '@/lib/rfp/pg-matching';
 
 // 견적 상태/요청 칩의 단일 출처 — 정식 딜룸 페이지, @modal 인터셉트, 목록표가 공유한다.
 // (이전엔 STATUS 맵이 rfp/[id]·rfp/@modal 에 중복 + RfpListTable 에 statusLabel/statusColor
@@ -20,6 +22,25 @@ export const RFP_STATUS_CHIP: Record<RfpStatus, StatusChip> = {
 // 렌더하지 않는다(딜룸 페이지의 기존 `s ? <Chip/> : undefined` 동작 보존).
 export function rfpStatusChip(status: string): StatusChip | undefined {
   return RFP_STATUS_CHIP[status as RfpStatus];
+}
+
+export type BuyerRfpProgress = { bidCount: number; reviewStatus?: PgReview['status'] };
+
+// 구매사 진행 상태 칩 — 목록표와 딜룸 헤더(정식 페이지·@modal)가 같은 판정을 쓴다.
+// 종결 상태 > 기한 마감 > 견적 도착 > 다음 PG 선택 > 검토 중 > 요청 완료 > 기본 칩.
+// (이전엔 목록표만 진행 상황을 반영해 목록은 '견적 도착', 딜룸은 '요청 보냄'으로 어긋났다.)
+export function buyerRfpChip(
+  rfp: Pick<RFP, 'status' | 'deadline'>,
+  progress: BuyerRfpProgress | undefined,
+  nowMs = Date.now(),
+): StatusChip & { action: string } {
+  const nextPg = progress?.reviewStatus === 'rejected' || progress?.reviewStatus === 'withdrawn';
+  if (rfp.status === 'sent' && !isRfpBidWindowOpen(rfp, nowMs)) return { label: '마감', color: 'surface', action: progress?.bidCount ? '견적 확인하기' : nextPg ? '다음 PG사 선택' : '결과 확인하기' };
+  if (rfp.status === 'sent' && (progress?.bidCount || progress?.reviewStatus === 'quoted')) return { label: '견적 도착', color: 'tertiary', action: '견적 확인하기' };
+  if (rfp.status === 'sent' && nextPg) return { label: '다음 PG사 선택', color: 'warning', action: '상담 이어가기' };
+  if (rfp.status === 'sent' && progress?.reviewStatus === 'reviewing') return { label: 'PG 검토 중', color: 'warning', action: '상담 현황 보기' };
+  if (rfp.status === 'sent' && progress?.reviewStatus === 'requested') return { label: '상담 요청 완료', color: 'primary', action: '상담 현황 보기' };
+  return { ...RFP_STATUS_CHIP[rfp.status], action: rfp.status === 'awarded' ? '계약 확인하기' : rfp.status === 'sent' ? '요청 현황 보기' : '결과 보기' };
 }
 
 // PG 인박스/딜룸 요청 상태 칩 — 종결 상태 > 기한 마감 > 재요청 > 견적 보냄 > 신규 우선순위.

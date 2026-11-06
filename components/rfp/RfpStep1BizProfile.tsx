@@ -84,7 +84,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
             ))}
           </div>
           <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            사업자 정보 갱신은 설정 → 프로필에서 가능합니다.
+            사업자 정보는 설정 → 프로필에서 바꿀 수 있어요.
           </p>
         </>
       ) : guest ? (

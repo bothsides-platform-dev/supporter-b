@@ -44,6 +44,7 @@ import {
   outboxEntries,
 } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
+import { getPgRecommendationService } from '../pg-recommendation';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 let db: PgliteDB;
@@ -56,7 +57,7 @@ async function buildService(): Promise<RfpService> {
       getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
       getRfpAllowedPgRepo(), getAttachmentRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo());
+  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo(), await getPgRecommendationService());
 }
 
 beforeEach(async () => {
@@ -765,10 +766,10 @@ describe('RfpService.createRfp', () => {
       allowedPgWorkspaceIds: [], requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: false,
       bizProfileMode: 'none' as const, contractType,
-      annualPgVolume: '100000000', currentFeeRate: '2.5',
+      monthlyAvgPgVolume: '100000000', currentFeeRate: '2.5',
       currentSettlementLimit: '50000000', currentGuaranteeInsurance: '10000000',
       currentSettlementCycle: 'D+3', deliveryServicePeriod: '3일',
-      currentSolution: 'cafe24',
+      currentSolution: 'cafe24' as const,
     };
     const original = structuredClone(input);
     const result = await service.createRfp(input, { userId: buyerUserId, workspaceId: buyerWsId });
@@ -776,7 +777,7 @@ describe('RfpService.createRfp', () => {
     if (!result.ok) throw new Error(result.error);
     const saved = await (await getRfpRepo()).findByCode(result.rfpId);
     expect(saved).toMatchObject({
-      annualPgVolume: contractType === 'new' ? undefined : '100000000',
+      monthlyAvgPgVolume: contractType === 'new' ? undefined : '100000000',
       currentFeeRate: contractType === 'new' ? undefined : '2.5',
       currentSettlementLimit: contractType === 'new' ? undefined : '50000000',
       currentGuaranteeInsurance: contractType === 'new' ? undefined : '10000000',

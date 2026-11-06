@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getGuestDraftService } from './guest-drafts';
-import { getPgMatchingRepo, getAgreementRepo } from '@/lib/server/repositories/factory';
+import { getAgreementRepo } from '@/lib/server/repositories/factory';
+import { getPgRecommendationService } from './pg-recommendation';
 import { calculateQuoteSavings, provisionalTier, type SavingsResult } from '@/lib/server/quote-assist/savings';
 import { industrySelectionSchema } from '@/lib/rfp/industry-selection';
 import { logger } from '@/lib/observability/logger';
@@ -15,8 +16,8 @@ export const savingsRequestSchema = z.object({
 export type QuoteSavingsRequest = z.infer<typeof savingsRequestSchema>;
 export type QuoteSavingsResponse = { result: SavingsResult; candidates: { id: string; name: string }[] };
 async function dependencies() {
-  const [drafts, matching, agreement] = await Promise.all([getGuestDraftService(), getPgMatchingRepo(), getAgreementRepo()]);
-  return { drafts, matching, agreement };
+  const [drafts, recommendation, agreement] = await Promise.all([getGuestDraftService(), getPgRecommendationService(), getAgreementRepo()]);
+  return { drafts, recommendation, agreement };
 }
 export class QuoteSavingsService {
   constructor(private readonly deps: Awaited<ReturnType<typeof dependencies>>) {}
@@ -36,10 +37,15 @@ export class QuoteSavingsService {
     const selection = industrySelectionSchema.safeParse(answers.industryMode === 'custom'
       ? { customIndustryName: answers.customIndustryName } : { industryGroupId: answers.industryGroupId });
     if (!selection.success || !answers.contractType) return unavailable('inputs');
-    const resolved = await this.deps.matching.resolveIndustry(selection.data);
     const tier = input.annualRevenue === undefined ? undefined : provisionalTier(input.annualRevenue);
-    const recommendation = await this.deps.matching.recommendation(resolved.groupId, [], undefined, false,
-      resolved.customName, undefined, answers.contractType === 'renewal' ? answers.currentPgs ?? [] : [], tier);
+    // 다른 호출처와 같은 해석을 거친다 — 낡은 PG id 같은 해석 실패는 입력 부족으로 안내한다.
+    const recommended = await this.deps.recommendation.recommend({
+      kind: 'selection', industry: selection.data,
+      currentPgs: answers.contractType === 'renewal' ? answers.currentPgs ?? [] : [],
+      provisionalTier: tier, includeTestPg: false,
+    });
+    if (!recommended.ok) return unavailable('inputs');
+    const recommendation = recommended.recommendation;
     const candidates = recommendation.candidates.map(c => ({ id: c.pgWorkspaceId, name: c.name }));
     const candidate = input.pgId ? recommendation.candidates.find(c => c.pgWorkspaceId === input.pgId) : recommendation.candidates[0];
     if (!candidate || !tier) return { ...unavailable(tier ? 'rates' : 'inputs'), candidates };

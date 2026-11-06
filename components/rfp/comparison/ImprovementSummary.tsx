@@ -1,10 +1,16 @@
+import { bidConditions, formatCondition } from '@/lib/quote/terms';
 // 포커스 뷰 hero — 선택된 견적이 "지금 조건 대비 얼마나 좋아지나"를 4지표로 보여준다.
 // 카드 수수료·정산주기·월 정산한도·보증보험. 현재 조건(자유 텍스트)이 파싱되면 개선폭
 // 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { formatKRW, formatKrwReadable, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
-import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
+import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
+import {
+  parseCurrentValue,
+  improvement,
+  metricVerdict,
+  cycleQuality,
+} from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { Divider } from '@/components/primitives/Divider';
 
@@ -36,7 +42,10 @@ export function ImprovementSummary({
   showCurrentHint?: boolean;
 }) {
   const hasAnyCurrent = Boolean(
-    current.feeRate || current.settlementCycle || current.settlementLimit || current.guaranteeInsurance,
+    current.feeRate ||
+    current.settlementCycle ||
+    current.settlementLimit ||
+    current.guaranteeInsurance,
   );
 
   // 비교 가능한 지표 중 하나라도 나빠지면 "좋아져요" 단정 대신 중립 헤더로 바꾼다.
@@ -48,13 +57,12 @@ export function ImprovementSummary({
       : null,
     cycleQ,
     metricVerdict(parseCurrentValue(current.settlementLimit, 'krw'), bid.settleLimit, 'higher'),
-    metricVerdict(parseCurrentValue(current.guaranteeInsurance, 'krw'), bid.guaranteeInsurance, 'lower'),
   ];
   const anyWorse = verdicts.some((v) => v === 'worse' || v === 'slower');
 
   const heading = !hasAnyCurrent
     ? '핵심 수치'
-    : anyWorse
+    : anyWorse || !verdicts.some((v) => v === 'better' || v === 'faster')
       ? '지금 조건과 비교하면 이렇게 달라져요'
       : '지금 조건보다 이만큼 좋아져요';
 
@@ -76,17 +84,24 @@ export function ImprovementSummary({
       {/* 라벨·현재값·화살표·제안값·개선폭을 5열 그리드로 묶어 행끼리 열을 정렬한다.
           각 행은 grid-cols-subgrid 로 부모 열을 그대로 물려받아 같은 세로선에 맞춰진다. */}
       <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 border-t border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)] max-md:block">
-        {cardRate !== undefined ? (
+        {
           <MetricRow
             testId="metric-row-card"
             label="카드 수수료"
             currentText={formatFeeRateDisplay(current.feeRate)}
-            proposedText={formatPct(cardRate)}
-            trailing={badgeNode(feeBadge(current.feeRate, cardRate))}
+            proposedText={
+              cardRate === undefined
+                ? formatCondition(bidConditions(bid).fees[`card:${tier}`], '%')
+                : formatPct(cardRate)
+            }
+            proposedNumeric={cardRate !== undefined}
+            trailing={
+              cardRate === undefined ? null : badgeNode(feeBadge(current.feeRate, cardRate))
+            }
             proposedFlash={flash}
             proposedFlashTestId="flash-card-fee"
           />
-        ) : null}
+        }
         <MetricRow
           testId="metric-row-cycle"
           label="정산주기"
@@ -103,10 +118,10 @@ export function ImprovementSummary({
         />
         <MetricRow
           testId="metric-row-guarantee"
-          label="보증보험"
+          label="보증보험 금액(원)"
           currentText={formatKrwField(current.guaranteeInsurance)}
-          proposedText={formatKRW(bid.guaranteeInsurance)}
-          trailing={badgeNode(guaranteeBadge(current.guaranteeInsurance, bid.guaranteeInsurance))}
+          proposedText={formatCondition(bidConditions(bid).guaranteeInsurance)}
+          proposedNumeric={bidConditions(bid).guaranteeInsurance.state === 'confirmed'}
         />
         {/* 가입비는 나머지 네 지표와 성격이 다르다 — 구매사가 "현재 가입비"를 적는 곳이
             없어(CurrentTermsV1 에 키 자체가 없다) 비교 기준선이 없고, 1회성이라 반복 비용인
@@ -117,8 +132,8 @@ export function ImprovementSummary({
           testId="metric-row-signup"
           label="가입비"
           labelNote="한 번만 내는 비용이라 위 비교에 넣지 않았어요"
-          proposedText={bid.signupFee > 0 ? formatKRW(bid.signupFee) : '없어요'}
-          proposedNumeric={bid.signupFee > 0}
+          proposedText={formatCondition(bidConditions(bid).signupFee)}
+          proposedNumeric={bidConditions(bid).signupFee.state === 'confirmed'}
         />
       </div>
     </section>
@@ -129,7 +144,11 @@ function feeBadge(currentText: string | null | undefined, proposed: number) {
   const current = parseCurrentValue(currentText, 'percent');
   const imp = improvement(current, proposed, 'lower');
   if (!imp || current === null) return null;
-  return { text: `${(imp.deltaAbs * 100).toFixed(2)}%p`, down: proposed < current, better: imp.better };
+  return {
+    text: `${(imp.deltaAbs * 100).toFixed(2)}%p`,
+    down: proposed < current,
+    better: imp.better,
+  };
 }
 
 function krwBadge(
@@ -140,17 +159,11 @@ function krwBadge(
   const current = parseCurrentValue(currentText, 'krw');
   const imp = improvement(current, proposed, direction);
   if (!imp || current === null) return null;
-  return { text: formatKRW(imp.deltaAbs), down: proposed < current, better: imp.better };
-}
-
-// 보증보험은 줄어드는 쪽이 이득이라 "감면"으로 읽히게 한글 금액 + 접미사로 표기한다.
-function guaranteeBadge(currentText: string | null | undefined, proposed: number) {
-  const current = parseCurrentValue(currentText, 'krw');
-  const imp = improvement(current, proposed, 'lower');
-  if (!imp || current === null) return null;
-  const down = proposed < current;
-  const amount = formatKrwReadable(imp.deltaAbs) || formatKRW(imp.deltaAbs);
-  return { text: down && imp.better ? `${amount} 감면` : amount, down, better: imp.better };
+  return {
+    text: formatKRW(imp.deltaAbs),
+    down: proposed < current,
+    better: imp.better,
+  };
 }
 
 type Badge = { text: string; down: boolean; better: boolean } | null;
@@ -217,7 +230,10 @@ function MetricRow({
         <span className="max-md:hidden" />
       )}
       {currentText ? (
-        <span data-testid="metric-arrow" className="text-center text-[var(--md-sys-color-on-surface-variant)] max-md:hidden">
+        <span
+          data-testid="metric-arrow"
+          className="text-center text-[var(--md-sys-color-on-surface-variant)] max-md:hidden"
+        >
           →
         </span>
       ) : (
@@ -230,7 +246,9 @@ function MetricRow({
           proposedFlash && 'tier-flash',
         )}
       >
-        <span className="hidden text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)] max-md:block">제안</span>
+        <span className="hidden text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)] max-md:block">
+          제안
+        </span>
         <span className={cn(proposedNumeric && 'md-numeric')}>{proposedText}</span>
       </span>
       <span className="max-md:col-span-2 max-md:justify-self-end">{trailing}</span>

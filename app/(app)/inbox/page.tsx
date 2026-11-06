@@ -4,21 +4,20 @@ import { requirePgPage } from '@/lib/auth/page-guards';
 import { loadPgInboxData, pgInboxDataToRows } from '@/lib/server/board/pgInbox';
 import { InboxListSkeleton } from '@/components/inbox/InboxList';
 import { PageHeader } from '@/components/shell/PageHeader';
-import {
-  filterInboxRows,
-  type BoardFilterParams,
-} from '@/lib/server/board/filterRfps';
+import { queryInbox, parseInboxParams, type InboxParams } from '@/lib/rfp/inbox-query';
+import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
+import { RequestPreview } from '@/components/inbox/RequestPreview';
 
 export const dynamic = 'force-dynamic';
 
 type Props = {
-  searchParams: Promise<BoardFilterParams>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function InboxPage({ searchParams }: Props) {
   const session = await requirePgPage('/inbox');
 
-  const sp = await searchParams;
+  const sp = parseInboxParams(await searchParams);
 
   return (
     <div className="flex flex-col h-full">
@@ -30,7 +29,7 @@ export default async function InboxPage({ searchParams }: Props) {
           </>
         }
       >
-        <InboxListPageLoader wsId={session.user.workspaceId} params={sp} />
+        <InboxListPageLoader wsId={session.user.workspaceId} userId={session.user.id} params={sp} />
       </Suspense>
     </div>
   );
@@ -38,16 +37,42 @@ export default async function InboxPage({ searchParams }: Props) {
 
 async function InboxListPageLoader({
   wsId,
+  userId,
   params,
 }: {
   wsId: string;
-  params: BoardFilterParams;
+  userId: string;
+  params: InboxParams;
 }) {
-  const now = new Date();
-  // 3-쿼리 조립의 단일 출처 — 목록 행과 대시보드가 같은 분류 데이터를 소비한다.
-  const pgData=await loadPgInboxData(wsId);
-  const allRows=pgInboxDataToRows(pgData).sort((a, b) => Date.parse(a.rfpDeadline) - Date.parse(b.rfpDeadline));
-  const rows = filterInboxRows(allRows, params, now);
-
-  return <InboxPageContent rows={rows} totalCount={allRows.length} />;
+  const data = await loadPgInboxData(wsId, userId);
+  const allRows = pgInboxDataToRows(data);
+  const result = queryInbox(allRows, params);
+  let detail = null;
+  let failed = false;
+  if (params.selected) {
+    try {
+      detail = await loadPgRfpDetail({
+        code: params.selected,
+        workspaceId: wsId,
+        userId,
+      });
+    } catch {
+      failed = true;
+    }
+  }
+  return (
+    <InboxPageContent
+      {...result}
+      totalCount={allRows.length}
+      selected={params.selected}
+      industries={[
+        ...new Set(allRows.flatMap((r) => (r.industryName ? [r.industryName] : []))),
+      ].sort()}
+      preview={
+        params.selected ? (
+          <RequestPreview key={params.selected} data={detail} failed={failed} />
+        ) : undefined
+      }
+    />
+  );
 }

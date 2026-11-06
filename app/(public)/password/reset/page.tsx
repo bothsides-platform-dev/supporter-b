@@ -7,7 +7,11 @@ import { Button } from '@/components/primitives/Button';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { CheckSvg } from '@/components/auth/EnvelopeSvg';
 import { passwordResetAction } from '@/lib/server/actions/auth';
-import { isPasswordValid } from '@/lib/auth/password-validation';
+import {
+  getPasswordConfirmError,
+  getPasswordError,
+} from '@/lib/auth/password-validation';
+import { useFocusFirstInvalid } from '@/lib/a11y/use-focus-first-invalid';
 
 function ResetContent() {
   const router = useRouter();
@@ -16,8 +20,10 @@ function ResetContent() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [done, setDone] = useState(false);
-  const [error, setError] = useState('');
+  const [serverError, setServerError] = useState('');
+  const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { containerRef: formRef, requestFocus } = useFocusFirstInvalid<HTMLFormElement>();
 
   if (!token) {
     return (
@@ -27,17 +33,25 @@ function ResetContent() {
     );
   }
 
+  const passwordError = getPasswordError(password, {
+    outcome: 'change',
+    confirmFilled: passwordConfirm !== '',
+  });
+  const confirmError = getPasswordConfirmError(password, passwordConfirm);
+  const canSubmit = !passwordError && !confirmError;
+  // 가입 1단계와 같은 규칙: 확인 칸 불일치는 입력 중에 바로, 나머지는 막힌 뒤에.
+  const shownPasswordError = attempted ? passwordError : null;
+  const shownConfirmError = attempted || passwordConfirm ? confirmError : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isPasswordValid(password)) {
-      setError('비밀번호 규칙을 모두 충족해야 합니다.');
+    if (submitting) return;
+    setAttempted(true);
+    if (!canSubmit) {
+      requestFocus();
       return;
     }
-    if (password !== passwordConfirm) {
-      setError('비밀번호가 일치하지 않습니다.');
-      return;
-    }
-    setError('');
+    setServerError('');
     setSubmitting(true);
     const r = await passwordResetAction({ rawToken: token, password });
     if (!r.ok) {
@@ -45,9 +59,9 @@ function ResetContent() {
       // Server-side policy enforcement uses the same rule set as the client
       // guard above, so WEAK_PASSWORD here is the rare bypass case (direct
       // API call). Token failures stay generic to avoid token-state leakage.
-      setError(
+      setServerError(
         r.error === 'WEAK_PASSWORD'
-          ? '비밀번호 규칙을 모두 충족해야 합니다.'
+          ? '비밀번호 조건을 모두 채우면 바꿀 수 있어요.'
           : '재설정 링크가 만료되었거나 유효하지 않습니다.',
       );
       return;
@@ -84,10 +98,29 @@ function ResetContent() {
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">새 비밀번호</h2>
       </div>
-      <form className="space-y-6" onSubmit={handleSubmit}>
-        <PasswordField label="새 비밀번호" value={password} onChange={setPassword} showStrength />
-        <PasswordField label="비밀번호 확인" name="passwordConfirm" value={passwordConfirm} onChange={setPasswordConfirm} autoComplete="new-password" error={error} />
-        <Button type="submit" fullWidth size="lg" disabled={submitting || !password || !passwordConfirm}>
+      <form ref={formRef} className="space-y-6" onSubmit={handleSubmit} noValidate>
+        <PasswordField
+          label="새 비밀번호"
+          value={password}
+          onChange={setPassword}
+          showStrength
+          showRuleErrors={attempted}
+          error={shownPasswordError ?? undefined}
+        />
+        <PasswordField
+          label="비밀번호 확인"
+          name="passwordConfirm"
+          value={passwordConfirm}
+          onChange={setPasswordConfirm}
+          autoComplete="new-password"
+          error={shownConfirmError ?? undefined}
+        />
+        {serverError && (
+          <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">
+            {serverError}
+          </p>
+        )}
+        <Button type="submit" fullWidth size="lg" disabled={submitting} dimmed={!canSubmit}>
           {submitting ? '처리 중…' : '변경하기'}
         </Button>
       </form>

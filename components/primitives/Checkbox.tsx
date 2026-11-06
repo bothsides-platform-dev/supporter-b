@@ -9,6 +9,9 @@ type CheckboxProps = {
   disabled?: boolean;
   className?: string;
   'aria-label'?: string;
+  /** 제출이 막힌 필수 항목. 미체크 보더를 오류색으로 바꾸고 `aria-invalid` 를 켠다. */
+  invalid?: boolean;
+  'aria-describedby'?: string;
 };
 
 export function Checkbox({
@@ -18,6 +21,8 @@ export function Checkbox({
   disabled = false,
   className,
   'aria-label': ariaLabel,
+  invalid = false,
+  'aria-describedby': ariaDescribedBy,
 }: CheckboxProps) {
   return (
     <span
@@ -33,10 +38,12 @@ export function Checkbox({
           'peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--md-sys-color-primary)]/30',
           checked
             ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary)]'
-            : cn(
-                'border-[var(--md-sys-color-on-surface-variant)] bg-transparent',
-                'peer-enabled:peer-hover:border-[var(--md-sys-color-on-surface)]',
-              ),
+            : invalid
+              ? 'border-[var(--md-sys-color-error)] bg-transparent'
+              : cn(
+                  'border-[var(--md-sys-color-on-surface-variant)] bg-transparent',
+                  'peer-enabled:peer-hover:border-[var(--md-sys-color-on-surface)]',
+                ),
           disabled && 'opacity-50',
         )}
       >
@@ -69,6 +76,8 @@ export function Checkbox({
         checked={checked}
         disabled={disabled}
         aria-label={ariaLabel}
+        aria-invalid={invalid ? 'true' : undefined}
+        aria-describedby={ariaDescribedBy}
         onChange={(e) => onCheckedChange(e.target.checked)}
       />
     </span>

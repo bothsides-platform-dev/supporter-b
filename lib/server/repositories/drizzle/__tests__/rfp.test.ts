@@ -242,7 +242,7 @@ describe('DrizzleRfpRepository', () => {
       ...makeRfp('P-2605-0099', ctx.ws.id, ctx.user.id),
       websiteUrl: 'https://support-b.com/',
       mainProducts: '의류',
-      annualPgVolume: '10억',
+      monthlyAvgPgVolume: '10억',
       currentFeeRate: '3.4%',
       currentSettlementLimit: '월 1억',
       currentGuaranteeInsurance: '3000만원',
@@ -251,7 +251,7 @@ describe('DrizzleRfpRepository', () => {
     const fetched = await repo.findById(rfp.id);
     expect(fetched!.websiteUrl).toBe('https://support-b.com/');
     expect(fetched!.mainProducts).toBe('의류');
-    expect(fetched!.annualPgVolume).toBe('10억');
+    expect(fetched!.monthlyAvgPgVolume).toBe('10억');
     expect(fetched!.currentFeeRate).toBe('3.4%');
     expect(fetched!.currentSettlementLimit).toBe('월 1억');
     expect(fetched!.currentGuaranteeInsurance).toBe('3000만원');
@@ -263,7 +263,7 @@ describe('DrizzleRfpRepository', () => {
     const fetched = await repo.findById(rfp.id);
     expect(fetched!.websiteUrl).toBeUndefined();
     expect(fetched!.mainProducts).toBeUndefined();
-    expect(fetched!.annualPgVolume).toBeUndefined();
+    expect(fetched!.monthlyAvgPgVolume).toBeUndefined();
     expect(fetched!.currentFeeRate).toBeUndefined();
     expect(fetched!.currentSettlementLimit).toBeUndefined();
     expect(fetched!.currentGuaranteeInsurance).toBeUndefined();
@@ -431,7 +431,7 @@ describe('DrizzleRfpRepository', () => {
         memo: '메모',
         websiteUrl: 'https://shop.example.com',
         mainProducts: '패션 잡화',
-        annualPgVolume: '10억',
+        monthlyAvgPgVolume: '10억',
         currentFeeRate: '3.4%',
         currentSettlementLimit: '월 1억',
         currentGuaranteeInsurance: '3000만원',
@@ -457,7 +457,7 @@ describe('DrizzleRfpRepository', () => {
       expect(fetched!.memo).toBe('메모');
       expect(fetched!.websiteUrl).toBe('https://shop.example.com');
       expect(fetched!.mainProducts).toBe('패션 잡화');
-      expect(fetched!.annualPgVolume).toBe('10억');
+      expect(fetched!.monthlyAvgPgVolume).toBe('10억');
       expect(fetched!.currentFeeRate).toBe('3.4%');
       expect(fetched!.currentSettlementLimit).toBe('월 1억');
       expect(fetched!.currentGuaranteeInsurance).toBe('3000만원');
@@ -486,7 +486,7 @@ describe('DrizzleRfpRepository', () => {
         memo: '',
         websiteUrl: null,
         mainProducts: null,
-        annualPgVolume: null,
+        monthlyAvgPgVolume: null,
         currentFeeRate: null,
         currentSettlementLimit: null,
         currentGuaranteeInsurance: null,

@@ -17,6 +17,6 @@ export const currentTermsV1Schema = z
     deliveryServicePeriod: z.string().max(100).optional(),
     solution: z.enum(SOLUTION_VALUES).optional(),
     solutionDetail: z.string().max(100).optional(),
-    annualPgVolume: z.string().max(100).optional(),
+    monthlyAvgPgVolume: z.string().max(100).optional(),
   })
   .strict();

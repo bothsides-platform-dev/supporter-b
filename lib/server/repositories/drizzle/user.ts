@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { users, userSignupConsents } from '@/lib/db/schema';
+import { users, userSignupConsents, bidDrafts } from '@/lib/db/schema';
 import type { ValidatedSignupConsent } from '@/lib/auth/signup-consent';
 import type { User } from '@/lib/types/user';
 import { hashPassword } from '@/lib/auth/password';
@@ -244,6 +244,7 @@ export class DrizzleUserRepository implements UserRepo {
 
   async softDelete(userId: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
+    await db.delete(bidDrafts).where(eq(bidDrafts.userId, userId));
     await db
       .update(users)
       .set({

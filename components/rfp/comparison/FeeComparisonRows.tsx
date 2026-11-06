@@ -39,7 +39,7 @@ function FeeComparisonRowsImpl({
         const rows: CompareRow[] = ranked.map((r) => ({
           bid: r.bid,
           isBest: r.isBest,
-          valueText: r.value !== null ? fmtFee(r.value) : '—',
+          valueText: row.getText?.(r.bid, tier) ?? (r.value !== null ? fmtFee(r.value) : '미입력'),
         }));
         const activeValue = row.getValue(active, tier);
         const shouldFlash = flash && row.isTiered;
@@ -65,7 +65,8 @@ function FeeComparisonRowsImpl({
                 )}
                 style={shouldFlash ? { animationDelay: `${delay}ms` } : undefined}
               >
-                {activeValue !== null ? fmtFee(activeValue) : '—'}
+                {row.getText?.(active, tier) ??
+                  (activeValue !== null ? fmtFee(activeValue) : '미입력')}
               </span>
             </MetricComparePopover>
           </div>

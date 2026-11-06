@@ -234,10 +234,12 @@ export function RfpInviteManager({
                 {inputError}
               </p>
             )}
-            <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-              칩을 누르면 &ldquo;대기중&rdquo;으로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
-              누르면 메일이 나가요.
-            </p>
+            {(availablePgs.length > 0 || draftCount > 0) && (
+              <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+                칩을 누르면 &ldquo;대기중&rdquo;으로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
+                누르면 메일이 나가요.
+              </p>
+            )}
           </div>
 
           {/* 초대 보내기 */}

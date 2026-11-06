@@ -110,7 +110,7 @@ describe('createRfpAction', () => {
     sessionRef.value = null;
   });
 
-  describe('send=true 신규 필수 필드 (견적 유형·주요 판매 상품·연간 거래액)', () => {
+  describe('send=true 신규 필수 필드 (견적 유형·주요 판매 상품·월 평균 거래액)', () => {
     const base = () => ({
       title: '신규 필수 검증',
       deadline: validBusinessDeadline().toISOString(),
@@ -119,7 +119,7 @@ describe('createRfpAction', () => {
       websiteUrl: 'example.com',
       contractType: 'new' as const,
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       deliveryServicePeriod: 'D+0',
@@ -197,26 +197,26 @@ describe('createRfpAction', () => {
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('갱신 계약에서 연간 PG 총 거래액이 비면 INVALID_INPUT', async () => {
-      const r = await createRfpAction({ ...base(), contractType: 'renewal', annualPgVolume: '' });
+    it('갱신 계약에서 월 평균 PG 거래액이 비면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'renewal', monthlyAvgPgVolume: '' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('갱신 계약에서 연간 PG 총 거래액이 공백뿐이면 INVALID_INPUT', async () => {
-      const r = await createRfpAction({ ...base(), contractType: 'renewal', annualPgVolume: '   ' });
+    it('갱신 계약에서 월 평균 PG 거래액이 공백뿐이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'renewal', monthlyAvgPgVolume: '   ' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('갱신 계약에서 연간 PG 총 거래액이 0이면 INVALID_INPUT (양수 필수)', async () => {
-      const r = await createRfpAction({ ...base(), contractType: 'renewal', annualPgVolume: '0' });
+    it('갱신 계약에서 월 평균 PG 거래액이 0이면 INVALID_INPUT (양수 필수)', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'renewal', monthlyAvgPgVolume: '0' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('신규 계약은 연간 PG 총 거래액이 비어도 발송 성공 (존재할 수 없는 값 필수 제외)', async () => {
-      const r = await createRfpAction({ ...base(), contractType: 'new', annualPgVolume: '' });
+    it('신규 계약은 월 평균 PG 거래액이 비어도 발송 성공 (존재할 수 없는 값 필수 제외)', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'new', monthlyAvgPgVolume: '' });
       expect(r.ok).toBe(true);
     });
 
@@ -225,7 +225,7 @@ describe('createRfpAction', () => {
         ...base(),
         contractType: undefined,
         mainProducts: '',
-        annualPgVolume: '',
+        monthlyAvgPgVolume: '',
         send: false,
       });
       expect(r.ok).toBe(true);
@@ -241,7 +241,7 @@ describe('createRfpAction', () => {
       websiteUrl: 'example.com',
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       deliveryServicePeriod: 'D+0',
@@ -466,7 +466,7 @@ describe('createRfpAction', () => {
       websiteUrl: 'example.com',
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       deliveryServicePeriod: 'D+0',
@@ -502,7 +502,7 @@ describe('createRfpAction', () => {
       websiteUrl: 'example.com',
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       deliveryServicePeriod: 'D+0',
@@ -757,7 +757,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pgWsId],
       websiteUrl: 'https://support-b.com/',
       mainProducts: '의류',
-      annualPgVolume: '10억',
+      monthlyAvgPgVolume: '10억',
       currentFeeRate: '3.4%',
       currentSettlementLimit: '월 1억',
       currentGuaranteeInsurance: '3000만원',
@@ -770,7 +770,7 @@ describe('createRfpAction', () => {
     const terms = migrateCurrentTerms(row.currentTerms);
     expect(row.websiteUrl).toBe('https://support-b.com/');
     expect(row.mainProducts).toBe('의류');
-    expect(terms.annualPgVolume).toBe('10억');
+    expect(terms.monthlyAvgPgVolume).toBe('10억');
     expect(terms.feeRate).toBe('3.4%');
     expect(terms.settlementLimit).toBe('월 1억');
     expect(terms.guaranteeInsurance).toBe('3000만원');
@@ -783,7 +783,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pgWsId],
       contractType: 'new',
       // 탈취 draft·직접 호출 시나리오 — 신규 계약에 존재할 수 없는 PG 이력 값을 함께 전달
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       currentFeeRate: '3.4%',
       currentSettlementLimit: '월 1억',
       currentGuaranteeInsurance: '3000만원',
@@ -800,7 +800,7 @@ describe('createRfpAction', () => {
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     const terms = migrateCurrentTerms(row.currentTerms);
     // 존재할 수 없는 값 → strip (문서에 부재)
-    expect(terms.annualPgVolume).toBeUndefined();
+    expect(terms.monthlyAvgPgVolume).toBeUndefined();
     expect(terms.feeRate).toBeUndefined();
     expect(terms.settlementLimit).toBeUndefined();
     expect(terms.guaranteeInsurance).toBeUndefined();
@@ -886,7 +886,7 @@ describe('createRfpAction', () => {
     const terms = migrateCurrentTerms(row.currentTerms);
     expect(row.websiteUrl).toBeNull();
     expect(row.mainProducts).toBeNull();
-    expect(terms.annualPgVolume).toBeUndefined();
+    expect(terms.monthlyAvgPgVolume).toBeUndefined();
     expect(terms.feeRate).toBeUndefined();
     expect(terms.settlementLimit).toBeUndefined();
     expect(terms.guaranteeInsurance).toBeUndefined();
@@ -1179,7 +1179,7 @@ describe('createRfpAction', () => {
         websiteUrl: 'example.com',
         contractType: 'new',
         mainProducts: '의류',
-        annualPgVolume: '1000000000',
+        monthlyAvgPgVolume: '1000000000',
         ...await seedMatchingPolicy(db, [pg.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       deliveryServicePeriod: 'D+0',
@@ -1293,6 +1293,42 @@ describe('createRfpAction', () => {
       });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+  });
+
+  describe('발송 전제 오류 코드 (스키마 게이트가 서비스 코드를 유지한다)', () => {
+    const sendable = () => ({
+      title: '발송 전제',
+      deadline: validBusinessDeadline().toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card' as const],
+      websiteUrl: 'example.com',
+      contractType: 'new' as const,
+      mainProducts: '의류',
+      ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
+      send: true,
+    });
+
+    it('업종 미선택은 서비스와 같은 MATCHING_REQUIRED 를 돌려준다', async () => {
+      const r = await createRfpAction({ ...sendable(), industryGroupId: undefined });
+      expect(r).toEqual({ ok: false, error: 'MATCHING_REQUIRED' });
+    });
+
+    it('갱신 계약에 현재 PG 가 없으면 CURRENT_PGS_REQUIRED 를 돌려준다', async () => {
+      const r = await createRfpAction({ ...sendable(), contractType: 'renewal', monthlyAvgPgVolume: '1000000' });
+      expect(r).toEqual({ ok: false, error: 'CURRENT_PGS_REQUIRED' });
+    });
+
+    it('다른 입력 오류가 함께 있으면 종전처럼 INVALID_INPUT 이 먼저다', async () => {
+      const r = await createRfpAction({ ...sendable(), industryGroupId: undefined, mainProducts: '' });
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    });
+
+    it('공백뿐인 제목으로는 발송할 수 없다', async () => {
+      const r = await createRfpAction({ ...sendable(), title: '   ' });
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
     });
   });
 });

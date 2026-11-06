@@ -1,11 +1,16 @@
-import { act } from 'react';
+import { act, Profiler, StrictMode } from 'react';
 import { render } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WordMaskRoll } from '../WordMaskRoll';
 
 const phrases = ['협상의 주도권을', '연간 수천만 원의 절감을'];
-const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+// Flush boundary commits between frames, as the browser does before the next rAF.
+const advance = (ms: number) => {
+  for (let remaining = ms; remaining > 0; remaining -= 16) {
+    act(() => vi.advanceTimersByTime(Math.min(remaining, 16)));
+  }
+};
 function visible(container: HTMLElement, layer: string) {
   return container.querySelector(`[data-roll-layer="${layer}"]`);
 }
@@ -153,4 +158,68 @@ describe('WordMaskRoll', () => {
     rerender(<WordMaskRoll phrases={[]} />);
     expect(container.textContent).toBe('');
   });
+
+  it('commits only at roll boundaries, preserving DOM progress across parent renders', () => {
+    const onRender = vi.fn();
+    const view = (values = phrases) => (
+      <Profiler id="roll" onRender={onRender}>
+        <WordMaskRoll phrases={values} />
+      </Profiler>
+    );
+    const { container, rerender } = render(view());
+    advance(3200);
+    onRender.mockClear();
+    advance(320);
+    expect(onRender).not.toHaveBeenCalled();
+    const character = visible(container, 'current')!.querySelector<HTMLElement>('[data-roll-character]')!;
+    const transform = character.style.transform;
+    rerender(view([...phrases]));
+    expect(character.style.transform).toBe(transform);
+    onRender.mockClear();
+    advance(640);
+    expect(onRender).toHaveBeenCalledTimes(1);
+    expect(visible(container, 'next')).toBeNull();
+  });
+
+  it('keeps one loop in Strict Mode and pauses an in-progress roll until visible', () => {
+    const { container, unmount } = render(<StrictMode><WordMaskRoll phrases={phrases} /></StrictMode>);
+    expect(vi.getTimerCount()).toBe(1);
+    advance(3520);
+    const character = visible(container, 'current')!.querySelector<HTMLElement>('[data-roll-character]')!;
+    const transform = character.style.transform;
+    const visibility = (hidden: boolean) => act(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    visibility(true);
+    expect(vi.getTimerCount()).toBe(0);
+    advance(10000);
+    expect(character.style.transform).toBe(transform);
+    visibility(false);
+    visibility(false);
+    expect(vi.getTimerCount()).toBe(1);
+    advance(16);
+    expect(character.style.transform).not.toBe(transform);
+    expect(visible(container, 'next')).not.toBeNull();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    advance(10000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('restarts changed content during a roll with only one pending frame', () => {
+    const { container, rerender, unmount } = render(<WordMaskRoll phrases={phrases} />);
+    advance(3520);
+    rerender(<WordMaskRoll phrases={['새 문구', '다음 문구']} />);
+    expect(visible(container, 'current')?.textContent).toBe('새 문구');
+    expect(visible(container, 'next')).toBeNull();
+    expect(vi.getTimerCount()).toBe(1);
+    advance(3184);
+    expect(visible(container, 'next')).toBeNull();
+    advance(32);
+    expect(visible(container, 'next')).not.toBeNull();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
 });

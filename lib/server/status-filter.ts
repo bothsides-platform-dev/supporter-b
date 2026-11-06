@@ -63,13 +63,19 @@ export function mapInboxParam(param: string | undefined): readonly PgKanbanStage
 }
 
 /** Filter inbox rows by sidebar URL token. Returns all if param is absent. */
-export function filterInboxRowsByParam(rows: InboxRow[], param: string | undefined, now = Date.now()): InboxRow[] {
+export function filterInboxRowsByParam(
+  rows: InboxRow[],
+  param: string | undefined,
+  now = Date.now(),
+): InboxRow[] {
+  if (param === 'draft') return rows.filter((r) => r.hasDraft);
+  if (param === 'revision') return rows.filter((r) => pgRequestState(r, now).label === '수정 요청');
   const stages = mapInboxParam(param);
   if (stages === undefined) {
     if (!param) return rows;
     return [];
   }
-  if (param === 'response') return rows.filter(r => pgRequestState(r, now).needsResponse);
+  if (param === 'response') return rows.filter((r) => pgRequestState(r, now).needsResponse);
   if (param === 'new') {
     return rows.filter((r) => r.stage === 'received' && pgRequestState(r, now).needsResponse);
   }
@@ -78,5 +84,7 @@ export function filterInboxRowsByParam(rows: InboxRow[], param: string | undefin
       (r) => !pgRequestState(r, now).needsResponse && pgRequestState(r, now).label !== '견적 보냄',
     );
   }
-  return rows.filter((r) => stages.includes(r.stage) && pgRequestState(r, now).label === '견적 보냄');
+  return rows.filter(
+    (r) => stages.includes(r.stage) && pgRequestState(r, now).label === '견적 보냄',
+  );
 }

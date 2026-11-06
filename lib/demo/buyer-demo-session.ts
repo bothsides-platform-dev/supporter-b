@@ -95,8 +95,8 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
       title: draft.title,
       websiteUrl: draft.websiteUrl,
       mainProducts: draft.mainProducts,
-      annualPgVolume:
-        draft.contractType === "new" ? undefined : draft.annualPgVolume,
+      monthlyAvgPgVolume:
+        draft.contractType === "new" ? undefined : draft.monthlyAvgPgVolume,
       currentFeeRate:
         draft.contractType === "new" ? undefined : draft.currentFeeRate,
       currentSettlementCycle:

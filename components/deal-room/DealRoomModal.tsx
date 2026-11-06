@@ -15,6 +15,7 @@
  * 이전/다음(‹ ›): useDealRoomNav 의 목록 순서에서 prev/next 코드를 계산해 같은
  * 세그먼트로 router.replace(인터셉트 → 모달 교체, Back 은 항상 목록 복귀).
  */
+import { leaveBidDraft } from '@/components/inbox/usePersonalBidDraft';
 import { type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
@@ -42,16 +43,17 @@ export function DealRoomModal({
 }: DealRoomModalProps) {
   const router = useRouter();
   const { basePath, codes, fullscreen, setFullscreen } = useDealRoomNav();
-  const close = () => {
-    setFullscreen(false); // 닫을 때만 전체화면 해제 — 다음 오픈은 윈도우드.
-    router.back();
-  };
+  const close = () =>
+    leaveBidDraft(() => {
+      setFullscreen(false); // 닫을 때만 전체화면 해제 — 다음 오픈은 윈도우드.
+      router.back();
+    });
 
   const i = codes.indexOf(code);
   const prevCode = i > 0 ? codes[i - 1] : undefined;
   const nextCode = i >= 0 && i < codes.length - 1 ? codes[i + 1] : undefined;
   const go = (target?: string) => {
-    if (target && basePath) router.replace(`${basePath}/${target}`);
+    if (target && basePath) leaveBidDraft(() => router.replace(`${basePath}/${target}`));
   };
 
   return (
@@ -75,7 +77,8 @@ export function DealRoomModal({
             mode="modal"
             code={code}
             title={title}
-            statusChip={statusChip} headerActions={headerActions}
+            statusChip={statusChip}
+            headerActions={headerActions}
             onClose={close}
             chat={chat}
             fullscreen={fullscreen}

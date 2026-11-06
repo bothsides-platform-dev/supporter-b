@@ -248,7 +248,7 @@ React 모션은 `motion/react`에서 임포트한다.
 | `elevated` | surface-low + 보더 + elevation-1 | 카드 위 액션 |
 | `tonal` | secondary/primary 컨테이너 | 중간 강조 |
 
-`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 이유를 읽어 줘야 하는 비활성(예: 리마인더 쿨다운)은 네이티브 `disabled` 대신 `aria-disabled` + `aria-describedby` 로 포커스를 남기며, 모양은 같다(`aria-disabled:opacity-38`, 포인터 이벤트 차단). 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용).
+`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 이유를 읽어 줘야 하는 비활성(예: 리마인더 쿨다운)은 네이티브 `disabled` 대신 `aria-disabled` + `aria-describedby` 로 포커스를 남기며, 모양은 같다(`aria-disabled:opacity-38`, 포인터 이벤트 차단). 반대로 **아직 진행할 수 없지만 눌러서 이유를 봐야 하는** 제출 버튼(가입 1단계 [다음], 비밀번호 재설정 [변경하기])은 `dimmed` 로 같은 `opacity-38` 모양만 주고 클릭·포커스·호버는 살린다 — 누르면 호출부가 필드별 사유와 첫 문제 필드 포커스로 답한다. 동작하는 버튼이므로 `aria-disabled` 를 붙이지 않는다. 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용).
 
 ### Chip — 4개 유형 (높이 24px, 4px 반경)
 `assist` / `filter` / `input` / `suggestion`. `color`: `primary`/`tertiary`/`warning`/`error`/`surface`(기본). 뮤트 톤.
@@ -274,13 +274,15 @@ React 모션은 `motion/react`에서 임포트한다.
 - **밑줄형** (`underlineInputClass`, `components/forms/inputs.tsx`): `border-b` `outline`, `py-2`, 16px, 포커스 시 하단 보더 `on-surface`. 숫자 필드는 `numericInputClass`(= 밑줄 + `.md-numeric`).
 - **박스형** (`components/ui/input.tsx`, base-ui): `h-8`(32px), `rounded-md`(6px), `border-input`(=outline), 투명 배경, `px-2.5`. 포커스 `ring-3` @50%, `aria-invalid` → error 보더 + error ring, disabled `opacity-50`.
 
+**PasswordField 조건 체크리스트** (`components/auth/PasswordField.tsx`, `showStrength`): 규칙 행은 3상태다 — 충족 `met` = on-surface-variant + ✓, 미충족 `unmet` = on-surface + ✗, 제출이 막힌 뒤(`showRuleErrors`) 남은 미충족 `error` = error + ✗. 충족을 초록으로 강조하지 않는다 — 남은 조건이 먼저 읽혀야 한다. 오류색은 입력 도중이 아니라 막힌 뒤에만 쓴다(`RequiredMark` 의 empty→error 와 같은 원칙). 각 행은 sr-only 로 충족/미충족을 읽힌다. 위 강도 막대(`lib/auth/strength.ts`)는 그대로다.
+
 **Field · Label**:
 - `Field`(`primitives/Field.tsx`): label(label-medium, on-surface) + `required` 시 `*`(error) + 자식 + 선택 `hint`(body-small 13px, on-surface-variant, `role=note`). **인라인 에러를 렌더하지 않는다** — 저장 에러는 toast 로(멤버스 패리티). `space-y-1`.
 - `Label`(`primitives/Label.tsx`): 크기 `lg/md/sm`(label 타입스케일), `muted` 기본 true(on-surface-variant)/false(on-surface), 다형 `as`. `as="label"` 일 때만 `htmlFor` 가 실제로 붙는다(다른 태그에선 무시) — 라벨을 입력에 묶지 않으면 그 입력에 접근 가능한 이름이 없다.
 
 **Select · Checkbox · Slider**:
 - `Select`(`primitives/Select.tsx`): 네이티브 `<select>` 래퍼, `h-8`(32px), `rounded-md`(6px), `surface-container-low` 배경, `outline-variant` 보더, ▾ 셰브론. 포커스 primary 보더 + `ring-2 @40%`.
-- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님). RFP 작성 3단계 PG 선택 토글(`RfpStep3PgSelect`)은 별도의 버튼이며, 선택 상태는 칩 색상·`aria-pressed`·선택 카운터로 표시한다. 토글은 raw `<button>` 이라 `cursor-pointer`·`transition-colors duration-short-4`·`focus-visible:ring-2 primary/50` 을 직접 싣는다(§8 사이드바 푸터 행과 같은 규칙).
+- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). `invalid`(제출이 막힌 필수 항목)는 미체크 보더를 error 로 바꾸고 `aria-invalid` 를 켠다. 커스텀(네이티브 아님). RFP 작성 3단계 PG 선택 토글(`RfpStep3PgSelect`)은 별도의 버튼이며, 선택 상태는 칩 색상·`aria-pressed`·선택 카운터로 표시한다. 토글은 raw `<button>` 이라 `cursor-pointer`·`transition-colors duration-short-4`·`focus-visible:ring-2 primary/50` 을 직접 싣는다(§8 사이드바 푸터 행과 같은 규칙).
 - `Slider`(`ui/slider.tsx`, Radix): 트랙 1px `outline`, range 1px `on-surface`, 썸 14×14 `surface` 배경 + `on-surface` 보더 `rounded-md`, 호버 `scale-110`(140ms). Linear 1px 트랙.
 
 **숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric`, 기본은 밑줄형이며 공개·회원 견적 작성 질문에서는 위 박스형을 사용한다:

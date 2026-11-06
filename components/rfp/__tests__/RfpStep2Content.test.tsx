@@ -17,7 +17,7 @@ function resetStore() {
     websiteUrl: '',
     contractType: null,
     mainProducts: '',
-    annualPgVolume: '',
+    monthlyAvgPgVolume: '',
     currentFeeRate: '',
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
@@ -49,7 +49,7 @@ describe('RfpStep2Content', () => {
 
   it('계약 유형을 고르기 전에는 갱신 계약의 현재 조건을 묻지 않는다', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.queryByText('전년도 연간 PG 총 거래액')).not.toBeInTheDocument();
+    expect(screen.queryByText('전년도 월 평균 PG 거래액')).not.toBeInTheDocument();
     expect(screen.queryByText('현재 카드 수수료')).not.toBeInTheDocument();
   });
 
@@ -309,13 +309,13 @@ describe('RfpStep2Content', () => {
     });
   });
 
-  describe('전년도 연간 PG 총 거래액 — CurrencyInput', () => {
+  describe('전년도 월 평균 PG 거래액 — CurrencyInput', () => {
     beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
     it('숫자를 입력하면 천단위 콤마로 표시된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-      // placeholder "10억"으로 전년도 거래액 필드 특정
-      const input = screen.getByPlaceholderText('10억');
+      // placeholder "1억"으로 전년도 월 평균 거래액 필드 특정
+      const input = screen.getByPlaceholderText('1억');
       await user.type(input, '10000000');
       // CurrencyInput(NumericFormat)이면 10,000,000 으로 표시됨
       expect(screen.getByDisplayValue('10,000,000')).toBeInTheDocument();
@@ -324,10 +324,10 @@ describe('RfpStep2Content', () => {
     it('입력값이 store에 raw digit 문자열로 저장된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-      const input = screen.getByPlaceholderText('10억');
+      const input = screen.getByPlaceholderText('1억');
       await user.type(input, '50000000');
       // CurrencyInput onValueChange → values.value (raw digit)
-      expect(useRfpDraftStore.getState().annualPgVolume).toBe('50000000');
+      expect(useRfpDraftStore.getState().monthlyAvgPgVolume).toBe('50000000');
     });
   });
 
@@ -469,9 +469,9 @@ describe('RfpStep2Content', () => {
     });
   });
 
-  describe('연간 PG 총 거래액 인라인 에러 (attempted)', () => {
+  describe('월 평균 PG 거래액 인라인 에러 (attempted)', () => {
     beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
-    const ERR = '전년도 연간 PG 총 거래액을 입력해주세요';
+    const ERR = '전년도 월 평균 PG 거래액을 입력해주세요';
 
     it('다음 클릭 전에는 거래액 미입력 에러가 표시되지 않는다', () => {
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
@@ -484,7 +484,7 @@ describe('RfpStep2Content', () => {
     });
 
     it('showFieldErrors=true 이어도 거래액을 입력하면 에러가 표시되지 않는다', () => {
-      useRfpDraftStore.setState({ annualPgVolume: '1000000000' });
+      useRfpDraftStore.setState({ monthlyAvgPgVolume: '1000000000' });
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
       expect(screen.queryByText(ERR)).not.toBeInTheDocument();
     });
@@ -492,7 +492,7 @@ describe('RfpStep2Content', () => {
 
   describe('신규 계약: 존재할 수 없는 PG 이력 필드 숨김', () => {
     const HIDDEN_LABELS = [
-      '전년도 연간 PG 총 거래액',
+      '전년도 월 평균 PG 거래액',
       '현재 카드 수수료',
       '현재 월 정산한도',
       '현재 보증보험',
@@ -532,7 +532,7 @@ describe('RfpStep2Content', () => {
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
       await user.click(screen.getByRole('button', { name: '다음' }));
       expect(
-        screen.queryByText('전년도 연간 PG 총 거래액을 입력해주세요'),
+        screen.queryByText('전년도 월 평균 PG 거래액을 입력해주세요'),
       ).not.toBeInTheDocument();
     });
   });

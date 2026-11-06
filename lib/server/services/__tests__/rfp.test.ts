@@ -37,6 +37,7 @@ import {
   rfps,
 } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
+import { getPgRecommendationService } from '../pg-recommendation';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 let db: PgliteDB;
@@ -49,7 +50,7 @@ async function buildService(): Promise<RfpService> {
       getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
       getRfpAllowedPgRepo(), getAttachmentRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo());
+  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo(), await getPgRecommendationService());
 }
 
 beforeEach(async () => {

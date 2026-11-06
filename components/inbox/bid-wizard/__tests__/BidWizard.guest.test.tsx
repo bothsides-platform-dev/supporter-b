@@ -14,9 +14,14 @@ vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')));
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock, refresh: refreshMock }),
+}));
 
-const submitBidMock = vi.fn(async (_i: unknown) => ({ ok: true as const, bidId: 'b1' }));
+const submitBidMock = vi.fn(async (_i: unknown) => ({
+  ok: true as const,
+  bidId: 'b1',
+}));
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
@@ -32,7 +37,10 @@ const { fireMock } = vi.hoisted(() => {
   return { fireMock: fn };
 });
 vi.mock('canvas-confetti', () => ({
-  default: Object.assign(vi.fn(), { create: vi.fn(() => fireMock), reset: vi.fn() }),
+  default: Object.assign(vi.fn(), {
+    create: vi.fn(() => fireMock),
+    reset: vi.fn(),
+  }),
 }));
 vi.mock('motion/react', () => ({
   motion: new Proxy(
@@ -52,7 +60,6 @@ vi.mock('motion/react', () => ({
 import { BidWizard } from '../BidWizard';
 import { buyerOf } from '@/lib/types/__tests__/_workspace-fixtures';
 
-
 const rfp = {
   id: 'rfp-uuid',
   code: 'P-2606-0001',
@@ -60,20 +67,34 @@ const rfp = {
   customPaymentMethods: [],
 } as never;
 
+async function confirmCosts(user: ReturnType<typeof userEvent.setup>) {
+  for (const name of ['가입비 입력 금액', '보증보험 입력 금액']) {
+    const label = screen.queryByText(name);
+    const input = label?.closest('.space-y-1')?.querySelector('input');
+    if (input && !input.value) await user.type(input, '0');
+  }
+}
+
 beforeEach(() => {
   localStorage.clear();
   submitBidMock.mockClear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 async function driveToSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.clear(screen.getByPlaceholderText('1'));
   await user.type(screen.getByPlaceholderText('1'), '1');
   await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+  await confirmCosts(user);
   await user.click(screen.getByRole('button', { name: '수수료' }));
   await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
   await user.click(screen.getByRole('button', { name: '견적서' }));
   await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
+  if (screen.queryByRole('checkbox', { name: /이전 견적·초안의 0원/ }))
+    await user.click(screen.getByRole('checkbox', { name: /이전 견적·초안의 0원/ }));
   await user.click(screen.getByRole('button', { name: '견적 보내기' }));
   await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 }

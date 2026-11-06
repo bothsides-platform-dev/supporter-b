@@ -98,7 +98,7 @@ async function fillQuote(page: Page, title: string, renewal = false) {
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await next();
   if (renewal) {
-    await page.getByLabel('전년도 연간 PG 총 거래액', { exact: true }).fill('1000000000'); await next();
+    await page.getByLabel('전년도 월 평균 PG 거래액', { exact: true }).fill('1000000000'); await next();
     await page.getByLabel('현재 카드 수수료', { exact: true }).fill('2.1'); await next();
     await page.getByLabel('현재 월 정산한도', { exact: true }).fill('100000000'); await next();
     await page.getByLabel('현재 보증보험', { exact: true }).fill('30000000'); await next();
@@ -112,7 +112,9 @@ async function completeAndLogin(page: Page) {
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  if (await page.getByRole('button', { name: '다음', exact: true }).isVisible()) await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
   await page.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }).click();
   await page.waitForURL(/\/login\?next=%2Frfp-create%3Fresume%3Dguest/);
   await page.locator('input[name="email"]').fill('yeonseong.dev@gmail.com');
@@ -325,7 +327,9 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  if (await page.getByRole('button', { name: '다음', exact: true }).isVisible()) await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
   await page.getByLabel('이메일', { exact: true }).fill(email);
   await page.getByLabel('비밀번호', { exact: true }).fill('Password123!');
   await page.getByLabel('비밀번호 확인', { exact: true }).fill('Password123!');
@@ -482,7 +486,9 @@ test('PG login cannot import a buyer draft', async ({ page }) => {
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('group', { name: '상담할 PG사' }).getByRole('radio').first().check({ timeout: 20000 });
+  if (await page.getByRole('button', { name: '다음', exact: true }).isVisible()) await page.getByRole('button', { name: '다음', exact: true }).click();
+  await page.getByRole('button', { name: '가입하고 이어갈게요' }).click();
   await page.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }).click();
   await page.waitForURL(/\/login\?next=%2Frfp-create%3Fresume%3Dguest/);
   await page.locator('input[name="email"]').fill('ws-toss-admin@example.com');

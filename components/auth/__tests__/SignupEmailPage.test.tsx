@@ -68,7 +68,7 @@ describe.each([
     await user.click(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i }));
 
     fireEvent.submit(document.querySelector('form')!);
-    await screen.findByText(/비밀번호 확인을 입력/);
+    await screen.findByText('비밀번호를 한 번 더 입력해요.');
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mockPush).not.toHaveBeenCalled();
@@ -79,6 +79,106 @@ describe.each([
     fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: VALID_PW } });
     fireEvent.submit(document.querySelector('form')!);
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith(destination));
+  });
+});
+
+// Chrome 비밀번호 관리자 기본 제안 모양: 대·소문자·숫자 15자, 특수문자 없음.
+// 제안을 받아들이면 비밀번호와 확인 칸이 같은 값으로 함께 채워진다.
+const CHROME_SUGGESTED_PW = 'Xk7mQ2vLpR9nT4w';
+
+describe.each([
+  ['buyer', BuyerSignupEmailPage, '/signup/buyer/workspace'],
+  ['pg', PgSignupEmailPage, '/signup/pg/workspace'],
+] as const)('SignupEmailPage — %s 막힌 [다음] 안내', (_role, Page, destination) => {
+  beforeEach(() => {
+    mockDraftData = {};
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams();
+  });
+
+  it('조건이 덜 채워져도 [다음]은 흐린 채 누를 수 있고, 누르면 빈 항목마다 이유를 보여주며 첫 항목으로 포커스한다', async () => {
+    const user = userEvent.setup();
+    render(<Page />);
+    const next = screen.getByRole('button', { name: '다음' });
+    expect(next).toBeEnabled();
+    expect(next).toHaveClass('opacity-38');
+
+    await user.click(next);
+
+    expect(await screen.findByText('이메일을 입력해요.')).toBeInTheDocument();
+    expect(screen.getByText('비밀번호를 입력해요.')).toBeInTheDocument();
+    expect(screen.getByText('비밀번호를 한 번 더 입력해요.')).toBeInTheDocument();
+    expect(screen.getByText('필수 약관에 동의하면 가입할 수 있어요.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('이메일')).toHaveFocus());
+    expect(screen.getByRole('checkbox', { name: /이용약관 동의/i })).toHaveAttribute('aria-invalid', 'true');
+    expect(mockCheckEmailAvailable).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('Chrome 제안 비밀번호(특수문자 없음)로 막히면 특수문자 안내와 함께 비밀번호 칸으로 포커스하고, 고치면 넘어간다', async () => {
+    const user = userEvent.setup();
+    render(<Page />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'kim@example.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: CHROME_SUGGESTED_PW } });
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: CHROME_SUGGESTED_PW } });
+    await user.click(screen.getByRole('checkbox', { name: /이용약관 동의/i }));
+    await user.click(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i }));
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+
+    const password = screen.getByLabelText('비밀번호');
+    await waitFor(() => expect(password).toHaveFocus());
+    expect(password).toHaveAccessibleDescription(
+      '특수문자(! @ # 등)를 하나 넣으면 넘어갈 수 있어요. 비밀번호 확인 칸도 똑같이 바꿔요.',
+    );
+    expect(screen.getByText('특수문자 포함').closest('li')).toHaveAttribute('data-state', 'error');
+    expect(screen.getByText('10자 이상').closest('li')).toHaveAttribute('data-state', 'met');
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // 안내대로 두 칸에 같은 특수문자를 붙이면 오류가 사라지고 넘어간다.
+    fireEvent.change(password, { target: { value: `${CHROME_SUGGESTED_PW}!` } });
+    expect(screen.getByLabelText('비밀번호 확인')).toHaveAccessibleDescription(
+      '비밀번호가 서로 달라요. 같은 비밀번호를 입력해요.',
+    );
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: `${CHROME_SUGGESTED_PW}!` } });
+    expect(screen.queryByText(/특수문자\(! @ # 등\)/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다음' })).not.toHaveClass('opacity-38');
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith(destination));
+  });
+
+  it('필수 약관만 빠지면 약관 안내를 보여주고 빠진 체크박스로 포커스한다', async () => {
+    const user = userEvent.setup();
+    render(<Page />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'kim@example.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: VALID_PW } });
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: VALID_PW } });
+    await user.click(screen.getByRole('checkbox', { name: /이용약관 동의/i }));
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+
+    const privacy = screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i });
+    await waitFor(() => expect(privacy).toHaveFocus());
+    expect(privacy).toHaveAccessibleDescription('필수 약관에 동의하면 가입할 수 있어요.');
+    expect(screen.getByRole('checkbox', { name: /이용약관 동의/i })).not.toHaveAttribute('aria-invalid');
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('이메일 형식이 틀리면 브라우저 말풍선 대신 인라인으로 안내한다', async () => {
+    const user = userEvent.setup();
+    render(<Page />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'kim@example' } });
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+
+    expect(document.querySelector('form')).toHaveAttribute('novalidate');
+    expect(await screen.findByText('your@company.com 형식으로 입력해요.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('이메일')).toHaveFocus());
   });
 });
 

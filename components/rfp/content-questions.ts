@@ -2,40 +2,41 @@ import { formatSolutionSummary } from '@/lib/rfp/solutions';
 import { industryDisplay } from '@/lib/rfp/industry-display';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
-import { currentPgsSchema } from '@/lib/rfp/current-pgs';
-import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
-import { isDeliveryServicePeriodValid, isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
-import { MAXIMUM_PRICE_LABELS, SALES_METHOD_LABELS, productInfoSchema } from '@/lib/rfp/product-info';
+import { sendReadinessIssues } from '@/lib/rfp/send-readiness';
+import { MAXIMUM_PRICE_LABELS, SALES_METHOD_LABELS } from '@/lib/rfp/product-info';
 import type { GLOSSARY } from '@/lib/glossary';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
 type Question = { id: string; title: string; valid: boolean; section: string; optional: boolean; infoTerm?: keyof typeof GLOSSARY };
 
+// 질문별 완료 조건은 발송 가능 판정(lib/rfp/send-readiness)이 질문 id 로 소유한다.
+// 여기서는 순서·신규/갱신 분기·문구만 정한다.
 export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndustry[]): Question[] {
-  const product = productInfoSchema.safeParse(d.productInfo);
-  const validProductField = (field: string) => product.success || !product.error.issues.some(issue => issue.path[0] === field);
+  const issues = sendReadinessIssues(d, groups);
+  const ok = (id: string) => !issues.some((issue) => issue.questionId === id);
   return [
-    { id: 'website', section: '홈페이지', optional: false, title: '어떤 홈페이지에서 판매하나요?', valid: isWebsiteValid(d.websiteUrl) },
+    { id: 'website', section: '홈페이지', optional: false, title: '어떤 홈페이지에서 판매하나요?', valid: ok('website') },
     { id: 'solution', section: '홈페이지', optional: true, title: '홈페이지를 어떻게 만들었나요?', valid: true },
-    { id: 'industry', section: '판매 정보', optional: false, title: '어떤 업종에 해당하나요?', valid: isIndustrySelectionValid(d, groups) },
-    { id: 'products', section: '판매 정보', optional: false, title: '어떤 상품이나 서비스를 판매하나요?', valid: isMainProductsValid(d.mainProducts) },
+    { id: 'industry', section: '판매 정보', optional: false, title: '어떤 업종에 해당하나요?', valid: ok('industry') },
+    { id: 'products', section: '판매 정보', optional: false, title: '어떤 상품이나 서비스를 판매하나요?', valid: ok('products') },
     { id: 'sellers', section: '판매 정보', optional: true, title: '다른 판매자가 입점해 판매하나요?', valid: true },
-    { id: 'cash', section: '판매 정보', optional: false, title: '환금성 상품을 판매하나요?', valid: validProductField('cashConvertible') },
-    { id: 'price', section: '판매 정보', optional: false, title: '가장 비싼 상품은 얼마인가요?', valid: validProductField('maximumPrice') },
-    { id: 'sales', section: '판매 정보', optional: false, title: '어떤 방식으로 판매하나요?', valid: validProductField('salesMethods') },
-    { id: 'delivery', section: '판매 정보', optional: false, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: isDeliveryServicePeriodValid(d.deliveryServicePeriod), infoTerm: 'NDX' },
-    { id: 'contract', section: '계약 조건', optional: false, title: '어떤 계약을 준비하나요?', valid: isContractTypeValid(d.contractType) },
-    ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: currentPgsSchema.min(1).safeParse(d.currentPgs).success }] : []),
-    { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: isPaymentValid(d.requiredPaymentMethods, d.customPaymentMethods) },
+    { id: 'cash', section: '판매 정보', optional: false, title: '환금성 상품을 판매하나요?', valid: ok('cash') },
+    { id: 'price', section: '판매 정보', optional: false, title: '가장 비싼 상품은 얼마인가요?', valid: ok('price') },
+    { id: 'sales', section: '판매 정보', optional: false, title: '어떤 방식으로 판매하나요?', valid: ok('sales') },
+    { id: 'delivery', section: '판매 정보', optional: false, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: ok('delivery'), infoTerm: 'NDX' },
+    { id: 'contract', section: '계약 조건', optional: false, title: '어떤 계약을 준비하나요?', valid: ok('contract') },
+    ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: ok('current-pgs') }] : []),
+    { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: ok('payment') },
     ...(d.contractType === 'renewal' ? [
-      { id: 'annual', section: '계약 조건', optional: false, title: '전년도 PG 거래액은 얼마인가요?', valid: isAnnualPgVolumeSatisfied(d.annualPgVolume, d.contractType) },
+      // id 는 GA4·여정 이벤트 식별자라 값이 월 평균이어도 유지한다.
+      { id: 'annual', section: '계약 조건', optional: false, title: '전년도 월 평균 PG 거래액은 얼마인가요?', valid: ok('annual') },
       { id: 'fee', section: '계약 조건', optional: true, title: '현재 카드 수수료는 얼마인가요?', valid: true },
       { id: 'limit', section: '계약 조건', optional: true, title: '현재 월 정산한도는 얼마인가요?', valid: true },
       { id: 'insurance', section: '계약 조건', optional: true, title: '현재 보증보험 금액은 얼마인가요?', valid: true },
       { id: 'cycle', section: '계약 조건', optional: true, title: '현재 정산주기는 어떻게 되나요?', valid: true, infoTerm: '정산주기' as const },
     ] : []),
-    { id: 'title', section: '마무리', optional: false, title: '견적 요청의 제목을 정해요', valid: isTitleValid(d.title) },
+    { id: 'title', section: '마무리', optional: false, title: '견적 요청의 제목을 정해요', valid: ok('title') },
     { id: 'memo', section: '마무리', optional: true, title: 'PG사에 더 전달할 내용이 있나요?', valid: true },
     { id: 'attachments', section: '마무리', optional: true, title: '함께 보낼 자료가 있나요?', valid: true },
   ];
@@ -60,7 +61,7 @@ export function questionAnswer(id: string, d: RfpDraftStore, groups: readonly Pu
     case 'contract': value = d.contractType ? CONTRACT_TYPE_LABELS[d.contractType] : ''; break;
     case 'current-pgs': value = d.currentPgs.map(pg => pg.name).join(', '); break;
     case 'payment': value = [...d.requiredPaymentMethods.map(v => PAYMENT_METHOD_LABELS[v]), ...d.customPaymentMethods.map(v => v.label)].join(', '); break;
-    case 'annual': value = money(d.annualPgVolume); break;
+    case 'annual': value = money(d.monthlyAvgPgVolume); break;
     case 'fee': value = d.currentFeeRate ? `${d.currentFeeRate}%` : ''; break;
     case 'limit': value = money(d.currentSettlementLimit); break;
     case 'insurance': value = money(d.currentGuaranteeInsurance); break;

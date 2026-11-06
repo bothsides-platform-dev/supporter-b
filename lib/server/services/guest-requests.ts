@@ -1,16 +1,19 @@
+import { z } from 'zod';
+import { provisionalTier } from '@/lib/server/quote-assist/savings';
+import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
 import {
   getDb,
   getGuestRequestRepo,
   getGuestDraftRepo,
-  getPgMatchingRepo,
   getBusinessCalendarRepo,
 } from "@/lib/server/repositories/factory";
+import { getPgRecommendationService } from "./pg-recommendation";
 import type { Tx } from "@/lib/server/repositories/types";
 import type { Actor } from "./types";
 import { assertPublicDraft } from "./guest-drafts";
 import type { GuestDraftRow } from "@/lib/server/repositories/drizzle/guest-draft";
-import type { GuestAnswers } from "@/lib/guest-rfp/answers";
-import { createRfpInputSchema } from "@/lib/rfp/create-input";
+import { selectGuestAnswers, type GuestAnswers } from "@/lib/guest-rfp/answers";
+import { createRfpInputSchema } from "@/lib/rfp/intake/schema";
 import { normalizeWebsiteUrl } from "@/lib/validation/website-url";
 import { businessDeadline } from "@/lib/rfp/business-deadline";
 import { kstDateOf } from "@/lib/utils/deadline";
@@ -54,11 +57,11 @@ function submission(
   });
 }
 export async function getGuestRequestService() {
-  const [db, repo, drafts, matching] = await Promise.all([
+  const [db, repo, drafts, recommender] = await Promise.all([
     getDb(),
     getGuestRequestRepo(),
     getGuestDraftRepo(),
-    getPgMatchingRepo(),
+    getPgRecommendationService(),
   ]);
   async function access(id: string, proof: Access, tx: Tx) {
     const draft = await drafts.lock(id, tx);
@@ -76,37 +79,51 @@ export async function getGuestRequestService() {
   }
   async function recommendation(draft: GuestDraftRow, tx: Tx) {
     const answers = draft.answers.data;
-    const industry = await matching.resolveIndustry(
-      answers.industryMode === "custom"
+    const annualRevenue = draft.answers.quoteContext?.savings?.annualRevenue;
+    const recommended = await recommender.recommend({
+      kind: "selection",
+      industry: answers.industryMode === "custom"
         ? { customIndustryName: answers.customIndustryName! }
         : { industryGroupId: answers.industryGroupId! },
-      tx,
-    );
-    const current = await matching.resolveCurrentPgs(
-      answers.contractType === "renewal" ? answers.currentPgs : [],
-      tx,
-    );
-    if (!current.ok) throw new Error(current.error);
-    return matching.recommendation(
-      industry.groupId,
-      [],
-      tx,
-      false,
-      industry.customName,
-      draft.workspaceId ?? undefined,
-      current.currentPgs,
-    );
+      currentPgs: answers.contractType === "renewal" ? answers.currentPgs ?? [] : [],
+      buyerWorkspaceId: draft.workspaceId ?? undefined,
+      provisionalTier: annualRevenue === undefined ? undefined : provisionalTier(annualRevenue),
+      includeTestPg: false,
+    }, tx);
+    if (!recommended.ok) throw new Error(recommended.error);
+    return recommended;
   }
   return {
-    async recommend(id: string, proof: string | Access) {
+    async recommend(id: string, proof: string | Access, options: { revision?: number; annualRevenue?: number | null } = {}) {
       return db.transaction(async (tx: Tx) => {
         const draft = await access(
           id,
           typeof proof === "string" ? { secret: proof } : proof,
           tx,
         );
-        const result = await recommendation(draft, tx);
+        const input = z.object({ revision: z.number().int().positive().optional(), annualRevenue: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional() }).strict().parse(options);
+        if (input.revision !== undefined && input.revision !== draft.revision) throw new Error('GUEST_DRAFT_CHANGED');
+        if (input.annualRevenue !== undefined) {
+          if (input.revision === undefined) throw new Error('INVALID_INPUT');
+          await drafts.assertEditable(id, tx);
+          if ((await repo.find(id, tx))?.status === 'submitted') throw new Error('GUEST_REQUEST_ALREADY_SENT');
+          const context = draft.answers.quoteContext ?? newQuoteContext();
+          draft.answers.quoteContext = { ...context, savings: { ...context.savings, annualRevenue: input.annualRevenue ?? undefined, response: undefined, inputKey: undefined } };
+          draft.revision += 1;
+          await drafts.update(id, { answers: draft.answers, revision: draft.revision, updatedAt: new Date(), ...(!draft.userId ? { expiresAt: new Date(Date.now() + 86400000) } : {}) }, tx);
+        }
+        const recommended = await recommendation(draft, tx);
+        const result = recommended.recommendation;
+        const annualRevenue = draft.answers.quoteContext?.savings?.annualRevenue;
+        const files = (await drafts.files(id, tx)).filter(file => draft.fileIds.includes(file.clientId));
         return {
+          revision: draft.revision,
+          recommendation: result,
+          tierBasis: recommended.tierBasis,
+          annualRevenue: annualRevenue ?? null,
+          answers: selectGuestAnswers(draft.answers.data),
+          attachmentCount: draft.fileIds.length,
+          files: files.map(file => ({ id: file.clientId, name: file.name, size: file.size })),
           summary: {
             title: draft.answers.data.title || "맞춤 PG 견적",
             websiteUrl: draft.answers.data.websiteUrl ?? "",
@@ -147,7 +164,7 @@ export async function getGuestRequestService() {
             throw new Error("GUEST_REQUEST_FROZEN");
           return;
         }
-        const candidate = (await recommendation(draft, tx)).candidates.find(
+        const candidate = (await recommendation(draft, tx)).recommendation.candidates.find(
           (c) => c.pgWorkspaceId === input.pgId,
         );
         if (!candidate) throw new Error("MATCHING_UNAVAILABLE");

@@ -74,22 +74,19 @@ describe('BidStepSettlement', () => {
     const user = userEvent.setup();
     const { onField } = renderStep({ cycleNum: '' });
     await user.type(screen.getByPlaceholderText('1'), '1.5');
-    const cycleVals = onField.mock.calls
-      .filter((c) => c[0] === 'cycleNum')
-      .map((c) => c[1]);
+    const cycleVals = onField.mock.calls.filter((c) => c[0] === 'cycleNum').map((c) => c[1]);
     expect(cycleVals.some((v: string) => v.includes('.'))).toBe(false);
   });
 
-  it('가입비 (원/최초 1회) 입력 필드가 렌더되고, 입력 시 onField(signupFee) 호출', async () => {
+  it('가입비 (원·최초 1회) 입력 필드가 렌더되고, 입력 시 onField(signupFee) 호출', async () => {
     const user = userEvent.setup();
     const { onField } = renderStep({ signupFee: '' });
-    const label = screen.getByText('가입비 (원/최초 1회)');
+    const label = screen.getByText('가입비 (원·최초 1회)');
     const wrapper = label.closest('.space-y-1') as HTMLElement;
     const input = within(wrapper).getByRole('textbox');
     await user.type(input, '5');
     expect(onField).toHaveBeenCalledWith('signupFee', '5');
   });
-
 });
 
 describe('BidStepSettlement 필수 마커/에러 (정산주기)', () => {

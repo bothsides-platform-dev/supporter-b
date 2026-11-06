@@ -12,7 +12,7 @@ describe('demoFieldsForStage — 자동재생 단계별 누적 채움', () => {
     const f = demoFieldsForStage(2);
     expect(f.title).toBeTruthy();
     expect(f.mainProducts).toBeTruthy();
-    expect(f.annualPgVolume).toBeTruthy();
+    expect(f.monthlyAvgPgVolume).toBeTruthy();
     expect(f.requiredPaymentMethods).toContain('card');
     expect(f.contractType).toBe('renewal');
     expect(f.industryGroupId).toBe('demo-shopping');

@@ -1,0 +1,22 @@
+diff --git a/dist/server/lib/router-utils/setup-dev-bundler.js b/dist/server/lib/router-utils/setup-dev-bundler.js
+index 85c0d78813501002f1a00944660ed291508adeb7..b4e00ff6a244cb1f667d9d6ac2e3ac5389a3c86b 100644
+--- a/dist/server/lib/router-utils/setup-dev-bundler.js
++++ b/dist/server/lib/router-utils/setup-dev-bundler.js
+@@ -47,6 +47,7 @@ const _normalizepathsep = require("../../../shared/lib/page-path/normalize-path-
+ const _createclientrouterfilter = require("../../../lib/create-client-router-filter");
+ const _absolutepathtopage = require("../../../shared/lib/page-path/absolute-path-to-page");
+ const _generateinterceptionroutesrewrites = require("../../../lib/generate-interception-routes-rewrites");
++const _isinterceptionrouterewrite = require("../../../lib/is-interception-route-rewrite");
+ const _constants = require("../../../shared/lib/constants");
+ const _middlewareroutematcher = require("../../../shared/lib/router/utils/middleware-route-matcher");
+ const _utils1 = require("../../../build/utils");
+@@ -889,6 +890,9 @@ async function startWatcher(opts) {
+             serverFields.hasAppNotFound = hasRootAppNotFound;
+             opts.fsChecker.middlewareMatcher = ((_serverFields_middleware = serverFields.middleware) == null ? void 0 : _serverFields_middleware.matchers) ? (0, _middlewareroutematcher.getMiddlewareRouteMatcher)((_serverFields_middleware1 = serverFields.middleware) == null ? void 0 : _serverFields_middleware1.matchers) : undefined;
+             const interceptionRoutes = (0, _generateinterceptionroutesrewrites.generateInterceptionRoutesRewrites)(Object.keys(appPaths), opts.nextConfig.basePath).map((item)=>(0, _filesystem.buildCustomRoute)('before_files_rewrite', item, opts.nextConfig.basePath, opts.nextConfig.experimental.caseSensitiveRoutes));
++            // PATCH(vercel/next.js#91265): HMR 재스캔마다 인터셉트 리라이트가 누적돼
++            // params.id 가 "(.)(.)(.)<id>" 로 오염된다. 기존 인터셉트 리라이트를 걷어낸 뒤 다시 넣는다.
++            opts.fsChecker.rewrites.beforeFiles = opts.fsChecker.rewrites.beforeFiles.filter((r)=>!(0, _isinterceptionrouterewrite.isInterceptionRouteRewrite)(r));
+             opts.fsChecker.rewrites.beforeFiles.push(...interceptionRoutes);
+             const exportPathMap = typeof nextConfig.exportPathMap === 'function' && await (nextConfig.exportPathMap == null ? void 0 : nextConfig.exportPathMap.call(nextConfig, {}, {
+                 dev: true,

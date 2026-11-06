@@ -11,7 +11,8 @@ vi.mock('@/lib/server/services/rfp', () => ({
     throw new Error('must not reach service');
   },
 }));
-import { createRfpAction, type CreateRfpInput } from '../createRfpAction';
+import { createRfpAction } from '../createRfpAction';
+import type { CreateRfpInput } from '@/lib/rfp/intake/schema';
 it('rejects a resumed draft after account or workspace changes before any creation', async () => {
   for (const owner of [
     { userId: 'other', workspaceId: 'workspace' },

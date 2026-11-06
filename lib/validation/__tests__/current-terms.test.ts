@@ -35,7 +35,7 @@ describe('currentTermsV1Schema', () => {
       currentTermsV1Schema.safeParse({ _v: 1, feeRate: 'x'.repeat(51) }).success,
     ).toBe(false);
     expect(
-      currentTermsV1Schema.safeParse({ _v: 1, annualPgVolume: 'x'.repeat(101) }).success,
+      currentTermsV1Schema.safeParse({ _v: 1, monthlyAvgPgVolume: 'x'.repeat(101) }).success,
     ).toBe(false);
   });
 });

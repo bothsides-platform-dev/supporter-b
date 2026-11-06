@@ -44,23 +44,23 @@ export function isMainProductsValid(mainProducts: string): boolean {
   return mainProducts.trim() !== '';
 }
 
-// 연간 PG 총 거래액은 필수이면서 0보다 큰 정수여야 한다 — 0원은 사실상 오입.
+// 월 평균 PG 거래액은 필수이면서 0보다 큰 정수여야 한다 — 0원은 사실상 오입.
 // CurrencyInput(decimalScale=0)은 정수 자릿수 문자열만 방출하므로 정수 외 형태
 // (Infinity·지수·16진수·소수)는 거부한다. 서버가 trust boundary이므로(탈취 draft·직접
 // 호출) Number() 만으로는 'Infinity'·'1e120' 등이 JSONB·PG 브리프에 그대로 새는 것을 막는다.
-export function isAnnualPgVolumeValid(annualPgVolume: string): boolean {
-  const trimmed = annualPgVolume.trim();
+export function isMonthlyAvgPgVolumeValid(monthlyAvgPgVolume: string): boolean {
+  const trimmed = monthlyAvgPgVolume.trim();
   return /^\d+$/.test(trimmed) && Number(trimmed) > 0;
 }
 
-// 신규 계약(첫 PG 계약)은 이전 PG가 없어 전년도 PG 거래액이 존재할 수 없으므로
+// 신규 계약(첫 PG 계약)은 이전 PG가 없어 전년도 월 평균 PG 거래액이 존재할 수 없으므로
 // 필수에서 제외한다. 갱신·미선택은 기존대로 양의 정수 문자열을 요구한다.
-export function isAnnualPgVolumeSatisfied(
-  annualPgVolume: string,
+export function isMonthlyAvgPgVolumeSatisfied(
+  monthlyAvgPgVolume: string,
   contractType: 'new' | 'renewal' | null | undefined,
 ): boolean {
   if (contractType === 'new') return true;
-  return isAnnualPgVolumeValid(annualPgVolume);
+  return isMonthlyAvgPgVolumeValid(monthlyAvgPgVolume);
 }
 
 export type MarkerState = 'empty' | 'filled' | 'error';

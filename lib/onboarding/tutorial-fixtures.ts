@@ -29,7 +29,7 @@ export type RfpDraftSeedFields = {
   websiteUrl: string;
   mainProducts: string;
   industryGroupId: string;
-  annualPgVolume: string;
+  monthlyAvgPgVolume: string;
   currentFeeRate: string;
   currentSettlementLimit: string;
   currentGuaranteeInsurance: string;
@@ -116,7 +116,7 @@ export const tutorialBuyerRfp: RFP = {
   title: '온라인 쇼핑몰 PG 견적 요청 (튜토리얼)',
   memo: '결제대행사 비교를 체험해보는 튜토리얼 견적 요청이에요.',
   mainProducts: '패션 의류, 잡화',
-  annualPgVolume: '1200000000',
+  monthlyAvgPgVolume: '100000000',
   currentFeeRate: '2.8%',
   currentSettlementLimit: '30000000',
   currentGuaranteeInsurance: '10000000',
@@ -237,7 +237,7 @@ export const tutorialBids: Bid[] = [
  * 정액 수단(virtual_account)은 건당 원 정수 문자열.
  */
 export const tutorialBidDraftSeed: BidDraft = {
-  __v: 3,
+  __v: 4,
   cycleUnit: 'D',
   cycleNum: '2',
   settleLimit: '50000000',
@@ -276,7 +276,7 @@ export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
   websiteUrl: 'https://tutorial-shop.example.com',
   mainProducts: '패션 의류, 잡화',
   industryGroupId: 'tutorial-shopping',
-  annualPgVolume: '1200000000',
+  monthlyAvgPgVolume: '100000000',
   currentFeeRate: '2.8',
   currentSettlementLimit: '30000000',
   currentGuaranteeInsurance: '10000000',

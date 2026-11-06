@@ -24,7 +24,7 @@ import {
   isContractTypeValid,
   isDeliveryServicePeriodValid,
   isMainProductsValid,
-  isAnnualPgVolumeSatisfied,
+  isMonthlyAvgPgVolumeSatisfied,
   markerState,
 } from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
@@ -78,9 +78,9 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
   const contractTypeError = attempted && !isContractTypeValid(draft.contractType);
   const mainProductsError = attempted && !isMainProductsValid(draft.mainProducts);
   const industryError = attempted && industryGroups.length > 0 && !industryGroups.some((group) => group.id === draft.industryGroupId);
-  const annualPgVolumeError =
-    attempted && !isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType);
-  // 신규 계약(첫 PG 계약)은 전년도 PG 거래액·현재 수수료 등 PG 계약 이력 값이 존재할 수
+  const monthlyAvgPgVolumeError =
+    attempted && !isMonthlyAvgPgVolumeSatisfied(draft.monthlyAvgPgVolume, draft.contractType);
+  // 신규 계약(첫 PG 계약)은 전년도 월 평균 PG 거래액·현재 수수료 등 PG 계약 이력 값이 존재할 수
   // 없으므로 해당 입력란을 숨긴다. 배송·서비스 기간과 현재 운영 솔루션은 PG와 무관한
   // 사업 속성이라 유지한다. store 값은 보존(유형 토글 복원)하고 저장 시 서버에서 strip 한다.
   const showPgHistoryFields = draft.contractType === 'renewal';
@@ -226,12 +226,12 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
       <>{/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어 숨김 */}
       {(!question || question === 'annual') && (<CurrencyInput
         presentation={presentation}
-        label="전년도 연간 PG 총 거래액"
-        value={draft.annualPgVolume}
-        onChange={(v) => draft.setField('annualPgVolume', v)}
-        placeholder={isPublic ? '1,000,000,000' : '10억'}
-        markerState={markerState({ valid: isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType), attempted })}
-        error={annualPgVolumeError ? '전년도 연간 PG 총 거래액을 입력해주세요' : undefined}
+        label="전년도 월 평균 PG 거래액"
+        value={draft.monthlyAvgPgVolume}
+        onChange={(v) => draft.setField('monthlyAvgPgVolume', v)}
+        placeholder={isPublic ? '100,000,000' : '1억'}
+        markerState={markerState({ valid: isMonthlyAvgPgVolumeSatisfied(draft.monthlyAvgPgVolume, draft.contractType), attempted })}
+        error={monthlyAvgPgVolumeError ? '전년도 월 평균 PG 거래액을 입력해주세요' : undefined}
       />)}
       {(!question || question === 'fee') && (<div className="space-y-1">
         <div className="flex items-center gap-1">

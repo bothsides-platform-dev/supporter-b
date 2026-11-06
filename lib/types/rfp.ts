@@ -23,7 +23,7 @@ export type RFP = {
   memo: string;
   websiteUrl?: string;
   mainProducts?: string;
-  annualPgVolume?: string;
+  monthlyAvgPgVolume?: string;
   currentFeeRate?: string;
   currentSettlementLimit?: string;
   currentGuaranteeInsurance?: string;
