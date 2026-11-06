@@ -1,28 +1,23 @@
 'use client';
 
-import { motion } from 'motion/react';
-import type { Transition } from 'motion/react';
-
-const ease: Transition = {
-  duration: 0.4,
-  ease: [0.05, 0.7, 0.1, 1],
-};
+import { cn } from '@/lib/utils';
 
 type PageEnterProps = {
   children: React.ReactNode;
   className?: string;
   delay?: number;
+  /** DESIGN.md §9에서 승인한 랜딩 데모 진입에만 always를 사용한다. */
+  motionPolicy?: 'system' | 'always';
 };
 
-export function PageEnter({ children, className, delay = 0 }: PageEnterProps) {
+export function PageEnter({ children, className, delay = 0, motionPolicy = 'system' }: PageEnterProps) {
   return (
-    <motion.div
-      className={className}
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...ease, delay }}
+    <div
+      className={cn('page-enter', className)}
+      data-motion-policy={motionPolicy}
+      style={{ animationDelay: `${delay}s` }}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

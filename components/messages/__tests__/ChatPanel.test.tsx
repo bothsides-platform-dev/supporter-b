@@ -95,6 +95,24 @@ function renderPanel(
 }
 
 describe('ChatPanel', () => {
+  it('탭 탐색만으로 팀 스레드를 로드하지 않고 선택하면 연결된 패널을 갱신한다', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    expect(screen.getByRole('tablist', { name: '채팅 종류' })).toBeInTheDocument();
+    const panel = screen.getByRole('tabpanel', { name: '상대방 채팅' });
+    const teamTab = screen.getByRole('tab', { name: '팀 채팅' });
+    expect(teamTab).toHaveAttribute('aria-controls', panel.id);
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(teamTab).toHaveFocus();
+    expect(teamThreadViewProps).not.toHaveBeenCalled();
+    expect(panel).toHaveAccessibleName('상대방 채팅');
+    await user.keyboard(' ');
+    await screen.findByTestId('team-thread-view');
+    expect(screen.getByRole('tabpanel', { name: '팀 채팅' })).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', teamTab.id);
+  });
+
   it('탭을 렌더한다 (open-gate 없음)', () => {
     renderPanel();
     expect(screen.getByRole('tablist')).toBeInTheDocument();

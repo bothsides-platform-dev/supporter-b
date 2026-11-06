@@ -9,6 +9,29 @@ afterEach(() => {
 });
 
 describe('Checkbox', () => {
+  it('키보드 초점이 보이는 박스로 전달되고 Space로 토글한다', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(<Checkbox id="terms" checked={false} onCheckedChange={onCheckedChange} aria-label="이용약관 동의" />);
+    await user.tab();
+    expect(screen.getByRole('checkbox')).toHaveFocus();
+    // Tailwind peer variants use a following-sibling selector. The invisible input
+    // must precede the visible box for keyboard focus (and hover) feedback to match.
+    expect(screen.getByTestId('checkbox-box').matches('.peer:focus-visible ~ *')).toBe(true);
+    await user.keyboard(' ');
+    expect(onCheckedChange).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it('비활성 체크박스는 Tab과 클릭으로 변경되지 않는다', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(<><Checkbox id="terms" checked={false} disabled onCheckedChange={onCheckedChange} aria-label="이용약관 동의" /><button>다음</button></>);
+    await user.tab();
+    expect(screen.getByRole('button')).toHaveFocus();
+    await user.click(screen.getByRole('checkbox'));
+    expect(onCheckedChange).not.toHaveBeenCalled();
+  });
+
   it('renders unchecked with on-surface-variant border', () => {
     render(<Checkbox id="terms" checked={false} onCheckedChange={() => {}} aria-label="이용약관 동의" />);
 

@@ -2,12 +2,14 @@
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 import { useDemoNavigate } from '@/lib/nav/demo-nav-context';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/lib/stores/ui';
 import { Command } from 'cmdk';
 import { XIcon } from '@/components/icons';
 import { IconButton } from '@/components/primitives/IconButton';
+import { Button } from '@/components/primitives/Button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { ShortcutHint } from '@/components/shell/ShortcutHint';
 import { getNavCommands, getAccountCommands } from '@/lib/nav/nav-config';
 import type { WorkspaceType } from '@/lib/types/workspace';
@@ -19,6 +21,11 @@ import {
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 const EMPTY_RESULTS: SearchResults = { rfps: [], bids: [], opportunities: [] };
+
+type SearchState = { query: string; attempt: number } & (
+  | { status: 'success'; results: SearchResults }
+  | { status: 'error' }
+);
 
 const HEADING_CLASS =
   'px-4 py-1 block md-label-small text-[var(--md-sys-color-on-surface-variant)]';
@@ -33,16 +40,35 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
   const demoNavigate = useDemoNavigate();
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
-  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState<SearchState | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [confirmingLogout, setConfirmingLogout] = useState(false);
 
   const navCommands = getNavCommands(workspaceType);
   const accountCommands = getAccountCommands();
+  const searchQuery = query.trim();
+  const shouldSearch = commandPaletteOpen && !confirmingLogout && searchQuery !== '';
+  const currentSearch = search?.query === searchQuery && search.attempt === attempt ? search : null;
+  const loading = shouldSearch && currentSearch === null;
+  const searchFailed = shouldSearch && currentSearch?.status === 'error';
+  const results = shouldSearch && currentSearch?.status === 'success'
+    ? currentSearch.results
+    : EMPTY_RESULTS;
+
+  const changeQuery = (value: string) => {
+    setQuery(value);
+    if (value.trim() !== searchQuery) setSearch(null);
+  };
+  const retrySearch = () => {
+    setSearch(null);
+    setAttempt((value) => value + 1);
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      if (!e.isComposing && typeof e.key === 'string' && e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         useUIStore.getState().toggleCommandPalette();
       }
@@ -57,44 +83,38 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
     if (commandPaletteOpen) return;
     const t = setTimeout(() => {
       setQuery('');
-      setResults(EMPTY_RESULTS);
-      setLoading(false);
+      setSearch(null);
       setConfirmingLogout(false);
     }, 0);
     return () => clearTimeout(t);
   }, [commandPaletteOpen]);
 
-  // Debounced server-side search-as-you-type. Empty query short-circuits without
-  // a round trip; stale responses are dropped via the `cancelled` flag. All state
-  // updates happen inside the timer so none run synchronously in the effect body.
+  // Results belong to a query and attempt. While debouncing a new query, neither
+  // old results nor the empty state may masquerade as the current search result.
   useEffect(() => {
-    const q = query.trim();
+    if (!shouldSearch) return;
     let cancelled = false;
-    const t = setTimeout(
-      () => {
-        if (cancelled) return;
-        if (!q) {
-          setResults(EMPTY_RESULTS);
-          setLoading(false);
-          return;
-        }
-        setLoading(true);
-        (demo ? Promise.resolve({ ...EMPTY_RESULTS, rfps: [demo.getSnapshot().deal?.rfp].flatMap(rfp => rfp && `${rfp.title} ${rfp.code}`.includes(q) ? [{ code: rfp.code, title: rfp.title, memo: rfp.memo ?? '', status: rfp.status, href: `/rfp/${rfp.code}` }] : []) }) : searchEntitiesAction(q))
-          .then((r) => {
-            if (!cancelled) setResults(r);
-          })
-          .catch(() => {})
-          .finally(() => {
-            if (!cancelled) setLoading(false);
-          });
-      },
-      q ? 200 : 0,
-    );
+    const t = setTimeout(async () => {
+      try {
+        const rfp = demo?.getSnapshot().deal?.rfp;
+        const results = demo
+          ? {
+              ...EMPTY_RESULTS,
+              rfps: rfp && `${rfp.title} ${rfp.code}`.includes(searchQuery)
+                ? [{ code: rfp.code, title: rfp.title, memo: rfp.memo ?? '', status: rfp.status, href: `/rfp/${rfp.code}` }]
+                : [],
+            }
+          : await searchEntitiesAction(searchQuery);
+        if (!cancelled) setSearch({ query: searchQuery, attempt, status: 'success', results });
+      } catch {
+        if (!cancelled) setSearch({ query: searchQuery, attempt, status: 'error' });
+      }
+    }, 200);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, demo]);
+  }, [searchQuery, attempt, shouldSearch, demo]);
 
   // Nav commands are static, so we filter them client-side (cmdk's own filter is
   // off — entity results are already filtered by the server). Chosung (초성)
@@ -159,33 +179,57 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
       : []),
   ];
 
-  if (!commandPaletteOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 dark:bg-white/10 backdrop-blur-[4px] pt-[12vh]"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) closeCommandPalette();
-      }}
+    <Dialog
+      open={commandPaletteOpen}
+      onOpenChange={(open) => { if (!open) closeCommandPalette(); }}
     >
-      <div className="w-[620px] bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-md overflow-hidden shadow-[var(--command-palette-shadow)]">
-        <Command shouldFilter={false}>
+      <DialogContent
+        aria-modal="true"
+        initialFocus={inputRef}
+        showCloseButton={false}
+        overlayClassName="bg-black/40 dark:bg-white/10 supports-backdrop-filter:backdrop-blur-[4px] data-open:animate-none data-closed:animate-none"
+        className="top-[12vh] block w-[620px] max-w-full translate-y-0 gap-0 rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-0 ring-0 shadow-[var(--command-palette-shadow)] overflow-hidden sm:max-w-[620px] data-open:animate-none data-closed:animate-none"
+      >
+        <DialogTitle className="sr-only">검색</DialogTitle>
+        <Command shouldFilter={false} label="검색어">
           <div className="flex items-center border-b border-[var(--md-sys-color-outline-variant)] px-4">
             <Command.Input
               value={query}
-              onValueChange={setQuery}
+              onValueChange={changeQuery}
+              ref={inputRef}
               className="flex-1 h-12 bg-transparent font-sans text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] outline-none"
               placeholder="검색..."
-              autoFocus
             />
-            <IconButton label="닫기" size="sm" onClick={closeCommandPalette}>
-              <XIcon size={14} />
-            </IconButton>
+            <DialogClose
+              // cmdk otherwise treats Enter on this button as selecting its active option.
+              onKeyDown={(event) => { if (event.key === 'Enter') event.stopPropagation(); }}
+              render={<IconButton label="닫기" size="sm"><XIcon size={14} /></IconButton>}
+            />
           </div>
-          <Command.List className="max-h-80 overflow-y-auto py-2">
-            <Command.Empty className="py-8 text-center md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-              결과 없음
-            </Command.Empty>
+          <div role="status" className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+            {loading && <p className="px-4 py-3">불러오는 중이에요…</p>}
+            {searchFailed && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <p>검색 결과를 불러오지 못했어요. 다시 시도해 주세요.</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="text"
+                  onClick={retrySearch}
+                  onKeyDown={(event) => { if (event.key === 'Enter') event.stopPropagation(); }}
+                >
+                  다시 시도
+                </Button>
+              </div>
+            )}
+          </div>
+          <Command.List label="검색 결과" aria-busy={loading} className="max-h-80 overflow-y-auto py-2">
+            {!loading && !searchFailed && !confirmingLogout && (
+              <Command.Empty className="py-8 text-center md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+                결과 없음
+              </Command.Empty>
+            )}
 
             {confirmingLogout ? (
               // Logout confirmation panel — replaces the normal list to prevent
@@ -236,12 +280,6 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                       </Command.Item>
                     ))}
                   </Command.Group>
-                )}
-
-                {loading && (
-                  <span className="px-4 py-3 block md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                    불러오는 중이에요…
-                  </span>
                 )}
 
                 {entityGroups.map(
@@ -295,7 +333,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                             // navigating immediately, to prevent accidental sign-out.
                             // Clear the query so the debounced search short-circuits
                             // while the confirmation panel is displayed.
-                            setQuery('');
+                            changeQuery('');
                             setConfirmingLogout(true);
                           }
                         }}
@@ -310,7 +348,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
             )}
           </Command.List>
         </Command>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

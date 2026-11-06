@@ -191,6 +191,22 @@
   }
 }
 
+/* A fixed page entrance, not a gesture: CSS reads the preference before the
+   first paint and reacts to changes without waiting for hydration. */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .page-enter {
+    animation: page-enter 400ms cubic-bezier(0.05, 0.7, 0.1, 1) backwards;
+  }
+}
+.page-enter[data-motion-policy="always"] {
+  animation: page-enter 400ms cubic-bezier(0.05, 0.7, 0.1, 1) backwards;
+}
+
 @keyframes spin-once {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }

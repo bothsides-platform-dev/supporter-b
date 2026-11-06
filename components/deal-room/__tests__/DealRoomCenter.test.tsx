@@ -13,6 +13,44 @@ const tabs = [
 ];
 
 describe('DealRoomCenter', () => {
+  it('방향키로 계약 탭에 초점만 옮길 때는 로드하지 않고, 선택 후에는 편집 상태를 보존한다', async () => {
+    const user = userEvent.setup();
+    const mounted = vi.fn();
+    function ContractEditor() {
+      useEffect(() => { mounted(); }, []);
+      return <input aria-label="계약 초안" defaultValue="" />;
+    }
+    const panels = [
+      { id: 'request', label: '요청 조건', content: <p>요청 본문</p> },
+      { id: 'contract', label: '계약', content: <ContractEditor />, keepMounted: true },
+    ];
+    function Host() {
+      const [active, setActive] = useState('request');
+      return <DealRoomCenter tabs={panels} activeId={active} onChange={setActive} />;
+    }
+    render(<Host />);
+    expect(screen.getByRole('tablist', { name: '견적 상세' })).toBeInTheDocument();
+    const contract = screen.getByRole('tab', { name: '계약' });
+    const shell = document.getElementById(contract.getAttribute('aria-controls')!);
+    expect(shell).toHaveAttribute('role', 'tabpanel');
+    expect(shell).toHaveAttribute('aria-labelledby', contract.id);
+    expect(shell).not.toBeVisible();
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    expect(contract).toHaveFocus();
+    expect(mounted).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    const editor = screen.getByRole('textbox', { name: '계약 초안' });
+    await user.type(editor, '편집 중인 계약');
+    await user.click(screen.getByRole('tab', { name: '요청 조건' }));
+    expect(editor).not.toBeVisible();
+    await user.keyboard('{ArrowRight} ');
+    expect(screen.getByRole('textbox', { name: '계약 초안' })).toBe(editor);
+    expect(editor).toHaveValue('편집 중인 계약');
+    expect(mounted).toHaveBeenCalledTimes(1);
+  });
+
   it('활성 탭의 본문만 렌더한다', () => {
     render(<DealRoomCenter tabs={tabs} activeId="compare" onChange={() => {}} />);
     expect(screen.getByText('비교 본문')).toBeInTheDocument();

@@ -52,7 +52,7 @@ export function InfoTip({ term, side = 'top', className }: InfoTipProps) {
             className={cn(
               'z-50 max-w-xs origin-(--transform-origin) rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-3 py-2 text-[13px] leading-relaxed shadow-md',
               'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-              'data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+              'motion-safe:data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 motion-safe:data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
             )}
           >
             <Popover.Title className="mb-0.5 text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">

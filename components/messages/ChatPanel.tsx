@@ -14,11 +14,11 @@
  *     생성은 첫 전송(sendChatMessageAction)에만 일어난다.
  *   - 팀 탭은 (rfp, 세션 워크스페이스) 내부 스레드. unmount 시 캐시 무효화.
  */
-import { Suspense, useState } from 'react';
+import { Suspense, useId, useState } from 'react';
 import Link from 'next/link';
 
 import { conversationThreadLink, teamThreadLink } from '@/lib/chat/thread-link';
-import { Tabs } from '@/components/primitives/Tabs';
+import { getTabId, Tabs } from '@/components/primitives/Tabs';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -63,6 +63,8 @@ export function ChatPanel({
   onClose,
 }: Props) {
   const { tab, counterparty, setTab } = useDealRoom();
+  const tabsId = useId();
+  const panelId = `${tabsId}-panel`;
 
   // wsId → conversationId 읽기 전용 해소 — 열람만으로 대화를 만들지 않는다(sealed-bid).
   // conversationId: undefined=해소 중, null=대화 없음(새 대화 컴포저), string=해소됨.
@@ -81,6 +83,9 @@ export function ChatPanel({
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]">
       <div className="flex shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] pr-1.5">
         <Tabs
+          id={tabsId}
+          label="채팅 종류"
+          panelId={panelId}
           className="flex-1 border-b-0"
           tabs={RAIL_TABS}
           active={tab}
@@ -93,7 +98,13 @@ export function ChatPanel({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-labelledby={getTabId(tabsId, tab)}
+        tabIndex={0}
+        className="flex min-h-0 flex-1 flex-col"
+      >
         {tab === 'counterparty' ? (
           !counterparty ? (
             <EmptyState
