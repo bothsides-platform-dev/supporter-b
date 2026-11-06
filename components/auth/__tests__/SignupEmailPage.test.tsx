@@ -59,6 +59,23 @@ describe.each([
     mockSearchParams = new URLSearchParams();
   });
 
+  it('제출 전 입력 중 미충족 조건을 오류색으로 표시하고 수정·삭제에 따라 갱신한다', () => {
+    render(<Page />);
+    const password = screen.getByLabelText('비밀번호');
+    expect(screen.queryByText('10자 이상')).not.toBeInTheDocument();
+    fireEvent.change(password, { target: { value: 'a' } });
+    for (const label of ['10자 이상', '숫자 포함', '특수문자 포함']) {
+      expect(screen.getByText(label).closest('li')).toHaveClass('text-[var(--md-sys-color-error)]');
+    }
+    expect(screen.getByText('영문자 포함').closest('li')).toHaveAttribute('data-state', 'met');
+    fireEvent.change(password, { target: { value: VALID_PW } });
+    expect(screen.getByText('특수문자 포함').closest('li')).toHaveAttribute('data-state', 'met');
+    fireEvent.change(password, { target: { value: 'Password123' } });
+    expect(screen.getByText('특수문자 포함').closest('li')).toHaveAttribute('data-state', 'error');
+    fireEvent.change(password, { target: { value: '' } });
+    expect(screen.queryByText('10자 이상')).not.toBeInTheDocument();
+  });
+
   it('첫 제출에서 빈 비밀번호 확인을 차단하고 입력을 채우면 계속한다', async () => {
     const user = userEvent.setup();
     render(<Page />);
