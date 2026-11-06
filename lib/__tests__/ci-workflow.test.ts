@@ -199,3 +199,20 @@ describe('individual unit shard conclusions', () => {
     ).toBe(1);
   });
 });
+
+
+describe('production deployment gate', () => {
+  const workflow = readFileSync(resolve('.github/workflows/ci.yml'), 'utf8');
+  const deploy = workflow.slice(workflow.indexOf('  deploy-production:'));
+  it('deploys every main push after all release checks succeed', () => {
+    expect(deploy).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
+    expect(deploy).not.toContain('PRODUCTION_DEPLOY_ENABLED');
+    expect(deploy).toContain('needs: [lint, unit-test, e2e, build-production]');
+    expect(deploy).toContain('cancel-in-progress: false');
+    expect(deploy).toContain('name: production');
+    expect(deploy).toContain('commits/main');
+    expect(deploy).toContain('StrictHostKeyChecking=yes');
+    expect(deploy).toContain('name: ${{ needs.build-production.outputs.artifact-name }}');
+    expect(deploy).not.toContain('pnpm build');
+  });
+});

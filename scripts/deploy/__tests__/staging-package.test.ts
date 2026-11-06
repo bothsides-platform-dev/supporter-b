@@ -24,6 +24,7 @@ function fixture() {
   put('.next/standalone/server.js', 'built server');
   put('.next/standalone/.next/BUILD_ID', 'built-id');
   put('.next/standalone/.env.production', 'AUTH_SECRET=must-not-ship');
+  put('.next/standalone/lib/server/signing/assets/noon-seal-2026-10-21.png', 'private seal must not ship');
   put('.next/static/app.js', 'built client');
   put('.staging-ops/check.cjs', 'compiled check');
   put('.staging-ops/sync.cjs', 'compiled sync');
@@ -34,7 +35,7 @@ function fixture() {
   git('add', '.'); git('commit', '-m', 'fixture');
   const sha = git('rev-parse', 'HEAD');
   put('.next/standalone/.next/BUILD_ID', sha);
-  const run = (revision = sha) => spawnSync(process.execPath, [resolve('scripts/deploy/package-staging.mjs'), join(root, 'output'), revision, '42', '1'], { cwd: root, encoding: 'utf8' });
+  const run = (revision = sha, environment = "staging") => spawnSync(process.execPath, [resolve('scripts/deploy/package-staging.mjs'), join(root, 'output'), revision, '42', '1', environment], { cwd: root, encoding: 'utf8' });
   return { root, sha, run, put };
 }
 
@@ -53,6 +54,7 @@ it('packages the standalone runtime, static assets and compiled operations witho
   expect(readFileSync(join(unpacked, '.next/static/app.js'), 'utf8')).toBe('built client');
   expect(readFileSync(join(unpacked, '.ops/check.cjs'), 'utf8')).toBe('compiled check');
   expect(existsSync(join(unpacked, '.env.production'))).toBe(false);
+  expect(existsSync(join(unpacked, 'lib/server/signing/assets/noon-seal-2026-10-21.png'))).toBe(false);
   expect(JSON.parse(readFileSync(join(unpacked, '.release.json'), 'utf8'))).toMatchObject({ sha, schema: expect.stringMatching(/^[0-9a-f]{64}$/) });
 });
 
@@ -90,4 +92,12 @@ it('refuses to label a build with another commit or package a build from another
   expect(run('a'.repeat(40)).status).not.toBe(0);
   put('.next/standalone/.next/BUILD_ID', 'old-build');
   expect(run().status).not.toBe(0);
+});
+
+it('labels production separately and records the infrastructure fingerprint', () => {
+  const { root, sha, run } = fixture();
+  expect(run(sha, 'production').status).toBe(0);
+  const metadata = JSON.parse(readFileSync(join(root, 'output/release.json'), 'utf8'));
+  expect(metadata).toMatchObject({ environment: 'production', infrastructure: expect.stringMatching(/^[0-9a-f]{64}$/), nodeVersion: process.versions.node });
+  expect(run(sha, 'unknown').status).not.toBe(0);
 });

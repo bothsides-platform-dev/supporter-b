@@ -291,3 +291,153 @@ jobs:
       - name: Remove SSH credentials
         if: always()
         run: rm -rf "$RUNNER_TEMP/staging-ssh"
+
+  build-production:
+    name: build production artifact
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    needs: [lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      APP_ENV: production
+      CI_STANDALONE: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+      AUTH_SECRET: ci-build-only-not-a-runtime-secret
+      AUTH_URL: https://support-b.com
+      DATABASE_URL: postgres://build:build@127.0.0.1:5432/build
+      NEXT_PUBLIC_BASE_URL: https://support-b.com
+      NEXT_PUBLIC_BUYER_ORIGIN: https://support-b.com
+      NEXT_PUBLIC_PARTNER_ORIGIN: https://partner.support-b.com
+      NEXT_PUBLIC_CENTRIFUGO_WS_URL: wss://support-b.com/connection/websocket
+      NEXT_PUBLIC_SENTRY_DSN: ${{ vars.PRODUCTION_NEXT_PUBLIC_SENTRY_DSN }}
+      NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY: ${{ vars.PRODUCTION_NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY }}
+      NEXT_PUBLIC_GA_MEASUREMENT_ID: ${{ vars.PRODUCTION_NEXT_PUBLIC_GA_MEASUREMENT_ID }}
+      NEXT_PUBLIC_MASTER_OAUTH_ENABLED: ${{ vars.PRODUCTION_NEXT_PUBLIC_MASTER_OAUTH_ENABLED }}
+      NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED: ${{ vars.PRODUCTION_NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED }}
+    outputs:
+      artifact-name: ${{ steps.package.outputs.artifact-name }}
+      release-id: ${{ steps.package.outputs.release-id }}
+      digest: ${{ steps.package.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: mise.toml
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-production-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-production-next-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm build
+        env:
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
+      - name: Compile maintenance commands
+        run: pnpm exec esbuild scripts/calendar/sync.ts scripts/calendar/check.ts --bundle --platform=node --format=cjs --packages=external --outdir=.staging-ops --out-extension:.js=.cjs
+      - name: Package the verified runtime
+        id: package
+        run: |
+          node scripts/deploy/package-staging.mjs production-artifact "$GITHUB_SHA" "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_ATTEMPT" production
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const release = JSON.parse(readFileSync('production-artifact/release.json', 'utf8'));
+          appendFileSync(process.env.GITHUB_OUTPUT, `artifact-name=production-${release.releaseId}\nrelease-id=${release.releaseId}\ndigest=${release.digest}\n`);
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact-name }}
+          path: |
+            production-artifact/*.tar.gz
+            production-artifact/release.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  deploy-production:
+    name: deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, unit-test, e2e, build-production]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment:
+      name: production
+      url: https://support-b.com
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      PRODUCTION_SSH_HOST: ${{ vars.PRODUCTION_SSH_HOST }}
+      PRODUCTION_SSH_USER: ${{ vars.PRODUCTION_SSH_USER }}
+      PRODUCTION_PATH: ${{ vars.PRODUCTION_PATH }}
+      RELEASE_ID: ${{ needs.build-production.outputs.release-id }}
+      ARTIFACT_SHA256: ${{ needs.build-production.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Skip superseded main runs
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$(gh api "repos/$GH_REPO/commits/main" --jq .sha)" = "$GITHUB_SHA" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Skipping superseded main commit.'
+          fi
+      - uses: actions/download-artifact@v4
+        if: steps.latest.outputs.deploy == 'true'
+        with:
+          name: ${{ needs.build-production.outputs.artifact-name }}
+          path: production-artifact
+      - name: Configure SSH
+        if: steps.latest.outputs.deploy == 'true'
+        env:
+          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$PRODUCTION_SSH_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$PRODUCTION_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$PRODUCTION_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          [[ "$RELEASE_ID" =~ ^[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$ ]]
+          [[ "$ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
+          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
+          install -d -m 700 "$RUNNER_TEMP/production-ssh"
+          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/production-ssh/key"
+          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/production-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/production-ssh/key" "$RUNNER_TEMP/production-ssh/known_hosts"
+      - name: Deploy the built artifact
+        if: steps.latest.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          ssh_options=(
+            -i "$RUNNER_TEMP/production-ssh/key"
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$RUNNER_TEMP/production-ssh/known_hosts"
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
+          )
+          remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+          ssh "${ssh_options[@]}" "$remote" "mkdir -p '$PRODUCTION_PATH/incoming'"
+          scp "${ssh_options[@]}" "production-artifact/$RELEASE_ID.tar.gz" "$remote:$PRODUCTION_PATH/incoming/$RELEASE_ID.tar.gz"
+          scp "${ssh_options[@]}" scripts/deploy/lightsail-production.sh "$remote:$PRODUCTION_PATH/incoming/$RELEASE_ID.sh"
+          ssh "${ssh_options[@]}" "$remote" "bash '$PRODUCTION_PATH/incoming/$RELEASE_ID.sh' '$PRODUCTION_PATH' '$RELEASE_ID' '$ARTIFACT_SHA256'"
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/production-ssh"

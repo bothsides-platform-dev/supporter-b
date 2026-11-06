@@ -18,7 +18,7 @@ function fixture() {
   writeFileSync(join(root, 'shared/schema-ready'), `${schema}\n`);
   const put = (path: string, value: string) => { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, value); };
   const candidate = join(temp, 'candidate'); mkdirSync(candidate);
-  put(join(candidate, '.release.json'), JSON.stringify({ sha, releaseId, schema, runNumber: 42 }));
+  put(join(candidate, '.release.json'), JSON.stringify({ sha, releaseId, schema, runNumber: 42, environment: 'staging' }));
   put(join(candidate, 'server.js'), 'setInterval(() => {}, 1000);');
   put(join(candidate, '.next/BUILD_ID'), sha);
   put(join(candidate, '.ops/check.cjs'), 'process.exit(0);');
@@ -74,11 +74,15 @@ if [ "$(readlink "$STAGING_TEST_ROOT/current")" = "releases/${releaseId}" ]; the
   expect(result.stderr).toContain('Rolled back');
 });
 
-it.each(['production environment', 'wrong build', 'unapplied schema', 'concurrent deployment'])(
+it.each(['production environment', 'production artifact', 'wrong build', 'unapplied schema', 'concurrent deployment'])(
   'rejects %s before activating the artifact', (scenario) => {
     const { root, bin, candidate, run, previous } = fixture();
     const old = previous();
     if (scenario === 'production environment') writeFileSync(join(root, 'shared/.env.production'), 'APP_ENV=production\nAPP_DOMAIN=support-b.com\n');
+    if (scenario === 'production artifact') {
+      const path = join(candidate, '.release.json');
+      writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), environment: 'production' }));
+    }
     if (scenario === 'wrong build') writeFileSync(join(candidate, '.next/BUILD_ID'), 'another-build');
     if (scenario === 'unapplied schema') {
       rmSync(join(root, 'shared/schema-ready'));
