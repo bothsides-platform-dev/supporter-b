@@ -6,7 +6,6 @@ import { cookies, headers } from 'next/headers';
 import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { CommandPalette } from '@/components/shell/CommandPalette';
-import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { WorkspacePresenceProvider } from '@/components/presence/WorkspacePresenceProvider';
 import { PresenceClient } from '@/components/presence/PresenceClient';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
@@ -142,7 +141,6 @@ export default async function AppLayout({
         </AppSidebarLayout>
         <CommandPalette workspaceType={active.type} />
         <PresenceClient workspaceId={active.id} />
-        <GlobalShortcuts />
         <SentryUserContext user={sentryUser} />
       </WorkspacePresenceProvider>
     </ToasterProvider>

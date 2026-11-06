@@ -112,6 +112,26 @@ const counterpartyItem: Extract<InboxListItem, { kind: 'counterparty' }> = {
 const items: InboxListItem[] = [counterpartyItem];
 
 describe('MessageInbox', () => {
+  it('방향키는 필터 초점만 옮기고 Enter 선택 후 목록 패널의 이름을 갱신한다', async () => {
+    const user = userEvent.setup();
+    render(<MessageInbox items={items} guest />);
+    expect(screen.getByRole('tablist', { name: '대화 종류' })).toBeInTheDocument();
+    const panel = screen.getByRole('tabpanel', { name: '전체' });
+    await user.tab(); // 검색
+    await user.tab(); // 선택된 필터
+    await user.keyboard('{End}');
+    const team = screen.getByRole('tab', { name: '팀' });
+    expect(team).toHaveFocus();
+    expect(team).toHaveAttribute('aria-controls', panel.id);
+    expect(screen.getByRole('button', { name: /OO페이/ })).toBeInTheDocument();
+    expect(panel).toHaveAccessibleName('전체');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('tabpanel', { name: '팀' })).toBe(panel);
+    expect(panel).toHaveAttribute('aria-labelledby', team.id);
+    expect(screen.queryByRole('button', { name: /OO페이/ })).not.toBeInTheDocument();
+    expect(loadConversationThread).not.toHaveBeenCalled();
+  });
+
   it('selecting a conversation loads its thread via the server action', async () => {
     const user = userEvent.setup();
     loadConversationThread.mockResolvedValue({
@@ -268,15 +288,17 @@ describe('MessageInbox', () => {
     );
 
     render(<MessageInbox items={items} />);
-    await user.click(screen.getByRole('button', { name: /OO페이/ }));
-
-    // While loading, skeleton is visible (animate-pulse element)
-    await waitFor(() => {
-      expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
     });
 
-    // Cleanup: resolve so no pending promises leak
-    resolveThread({ ok: false, error: 'CANCELLED' });
+    // Loading remains visible even when the user's reduced-motion setting stops the pulse.
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeInTheDocument();
+
+    // Cleanup: resolve so no pending promises leak.
+    await act(async () => {
+      resolveThread({ ok: false, error: 'CANCELLED' });
+    });
   });
 
   it('initialSelectedKey로 마운트 시 해당 대화의 스레드를 즉시 보여준다', async () => {

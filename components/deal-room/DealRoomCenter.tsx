@@ -4,9 +4,9 @@
  * DealRoomCenter — 딜룸 가운데 탭 뷰어. 탭 바(primitives/Tabs) + 활성 탭 본문.
  * 탭 상태는 controlled(부모 = side별 body)이다.
  */
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
-import { Tabs } from '@/components/primitives/Tabs';
+import { getTabId, getTabPanelId, Tabs } from '@/components/primitives/Tabs';
 
 export type DealRoomTab = {
   id: string;
@@ -29,6 +29,7 @@ type Props = {
 };
 
 export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
+  const tabsId = useId();
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   // 활성이었던 적이 있는 keepMounted 탭만 계속 살려 둔다 — 열지도 않은 탭을 미리
   // 마운트하면 지연 마운트의 이점(구독·요청)이 사라진다.
@@ -41,21 +42,29 @@ export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
   // 순간 같은 컴포넌트가 다른 위치로 이동해 React 가 언마운트→재마운트한다 — keepMounted
   // 가 이름값을 못 한다(실제로 그렇게 짰다가 마운트 카운터 테스트에서 잡혔다).
   // 그래서 활성이든 아니든 **하나의 안정된 keyed 목록**으로 그리고 hidden 만 토글한다.
-  const rendered = tabs.filter((t) => t.id === openedId || (t.keepMounted && seen.includes(t.id)));
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-background)]">
       <div className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-[var(--md-sys-color-outline-variant)] px-4 py-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Tabs
+          id={tabsId}
+          label="견적 상세"
           className="w-max min-w-full border-b-0"
           tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
-          active={activeId}
+          active={openedId ?? ''}
           onChange={onChange}
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        {rendered.map((t) => (
-          <div key={t.id} hidden={t.id !== openedId}>
-            {t.content}
+        {tabs.map((t) => (
+          <div
+            key={t.id}
+            id={getTabPanelId(tabsId, t.id)}
+            role="tabpanel"
+            aria-labelledby={getTabId(tabsId, t.id)}
+            tabIndex={t.id === openedId ? 0 : -1}
+            hidden={t.id !== openedId}
+          >
+            {(t.id === openedId || (t.keepMounted && seen.includes(t.id))) && t.content}
           </div>
         ))}
       </div>

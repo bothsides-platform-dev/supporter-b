@@ -227,6 +227,8 @@ React 모션은 `motion/react`에서 임포트한다.
 
 ### 로딩 모션 — 기능적 모션 허용
 
+**공통 UI의 동작 줄이기**: `PageEnter`는 CSS 미디어 쿼리로 첫 페인트부터 선호를 반영한다. 저감 시 콘텐츠를 이동·지연 없이 즉시 표시하고, 일반 모드에서는 기존 400ms·12px 진입을 유지한다. 랜딩 데모의 세 호출부(`HomePageHost`·`PgHomePageHost`·`PgMessagesPageHost`)만 `motionPolicy="always"`로 §9 예외를 명시한다. Sheet는 저감 시 이동 없이 100ms 페이드, Dialog·메뉴·툴팁·InfoTip은 진입·이탈 키프레임 없이 표시한다. 위치 정렬용 transform은 유지한다. Accordion 셰브론과 사이드바 폭·위치 전환은 저감 시 즉시 반영한다.
+
 넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. PG 추천 준비 화면의 브랜드 로고 레일은 기능적 진행 연출로 `transform`·`opacity`·테두리 색상만 바꾸며, 모션 감소 설정에서는 중앙 로고를 정적으로 표시한다. 공식 워드마크의 가독성을 위해 로고 타일은 다크 모드에서도 흰 배경을 유지한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시 텍스트는 한국어로 통일한다 — 버튼 진행은 `처리 중…`(문맥이 있으면 `저장 중…` 등, `ConfirmDialog` 는 `loadingLabel` prop), 페이지/섹션 자리 표시는 `불러오는 중이에요…`. 영문 `LOADING…` 표기는 폐지됐다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(다섯 예외: 축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션·예상 절감 계산기). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
 
 > **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
@@ -261,6 +263,8 @@ React 모션은 `motion/react`에서 임포트한다.
 
 ### Tabs
 2px 하단 인디케이터(primary, `after` 의사요소 `bottom-[-1px]`). 활성 텍스트 on-surface, 비활성 on-surface-variant(호버 on-surface). 높이 36px(`h-9`), label-large. 탭별 카운트는 `.md-numeric` 로 붙는다.
+
+키보드는 **수동 선택**이다. 방향키·Home·End는 초점만 옮기고 Enter·Space로 선택한다. 목록을 나갔다 다시 Tab으로 들어오면 선택된 탭에 초점을 둔다. 호출부의 `useId`로 탭·패널을 연결하고 목록 이름을 제공한다. 딜룸의 지연 마운트와 계약 탭의 `keepMounted`는 유지한다.
 
 > **두 레이어** — `components/primitives/*` 가 디자인 시스템 코어(앱 표준), `components/ui/*` 는 base-ui/shadcn 래퍼(오버레이·인풋 프리미티브). 둘이 겹치면 `primitives/*` 가 표준이다.
 

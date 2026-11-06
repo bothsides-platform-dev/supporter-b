@@ -8,7 +8,7 @@ import { demoDashboard, demoInboxItems, demoUnreadCount } from '../demo-app-fixt
 // 래퍼·여백은 실제 BuyerHome(PageEnter + px-8 py-10)과 같게 맞춘다.
 export function HomePageHost() {
   return (
-    <PageEnter className="relative px-8 py-10">
+    <PageEnter motionPolicy="always" className="relative px-8 py-10">
       <HomeDashboard
         dashboard={demoDashboard}
         workspaceType="buyer"

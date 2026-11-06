@@ -8,7 +8,7 @@ import { demoPgDashboard, demoPgInboxItems, demoPgUnread } from './pg-demo-fixtu
 // 래퍼·반응형 여백은 실제 PgHome과 같게 맞춘다.
 export function PgHomePageHost() {
   return (
-    <PageEnter className="relative px-4 py-6 sm:px-8 sm:py-10">
+    <PageEnter motionPolicy="always" className="relative px-4 py-6 sm:px-8 sm:py-10">
       <HomeDashboard
         dashboard={demoPgDashboard}
         workspaceType="pg"

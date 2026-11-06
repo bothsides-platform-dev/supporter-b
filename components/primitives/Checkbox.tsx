@@ -29,6 +29,20 @@ export function Checkbox({
       data-testid="checkbox-root"
       className={cn('relative inline-flex h-4 w-4 shrink-0', className)}
     >
+      <input
+        id={id}
+        type="checkbox"
+        className={cn(
+          'peer absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0',
+          disabled && 'cursor-not-allowed',
+        )}
+        checked={checked}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-invalid={invalid ? 'true' : undefined}
+        aria-describedby={ariaDescribedBy}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+      />
       <span
         data-testid="checkbox-box"
         data-state={checked ? 'checked' : 'unchecked'}
@@ -66,20 +80,6 @@ export function Checkbox({
           </svg>
         )}
       </span>
-      <input
-        id={id}
-        type="checkbox"
-        className={cn(
-          'peer absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0',
-          disabled && 'cursor-not-allowed',
-        )}
-        checked={checked}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        aria-invalid={invalid ? 'true' : undefined}
-        aria-describedby={ariaDescribedBy}
-        onChange={(e) => onCheckedChange(e.target.checked)}
-      />
     </span>
   );
 }

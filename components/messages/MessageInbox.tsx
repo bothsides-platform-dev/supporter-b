@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useId, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Tabs } from '@/components/primitives/Tabs';
+import { getTabId, Tabs } from '@/components/primitives/Tabs';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { ConversationList } from './ConversationList';
@@ -35,6 +35,8 @@ const FILTER_TABS = [
 ];
 
 export function MessageInbox({ items, initialSelectedKey = null, className, guest = false }: Props) {
+  const tabsId = useId();
+  const panelId = `${tabsId}-panel`;
   const [selectedKey, setSelectedKey] = useState<string | null>(initialSelectedKey);
   const [showList, setShowList] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
@@ -106,12 +108,21 @@ export function MessageInbox({ items, initialSelectedKey = null, className, gues
           {!guest && <NewConversationSheet />}
         </div>
         <Tabs
+          id={tabsId}
+          label="대화 종류"
+          panelId={panelId}
           className="max-sm:[&_button]:min-h-11"
           tabs={FILTER_TABS}
           active={filter}
           onChange={(id) => setFilter(id as Filter)}
         />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          id={panelId}
+          role="tabpanel"
+          aria-labelledby={getTabId(tabsId, filter)}
+          tabIndex={0}
+          className="min-h-0 flex-1 overflow-y-auto"
+        >
           {visible.length === 0 ? <EmptyState
             className="py-10"
             icon={<EnvelopeIcon />}
