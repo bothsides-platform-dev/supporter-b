@@ -35,7 +35,7 @@ function fixture() {
   git('add', '.'); git('commit', '-m', 'fixture');
   const sha = git('rev-parse', 'HEAD');
   put('.next/standalone/.next/BUILD_ID', sha);
-  const run = (revision = sha, environment = "staging") => spawnSync(process.execPath, [resolve('scripts/deploy/package-staging.mjs'), join(root, 'output'), revision, '42', '1', environment], { cwd: root, encoding: 'utf8' });
+  const run = (revision = sha, environment = "staging", env = process.env) => spawnSync(process.execPath, [resolve('scripts/deploy/package-staging.mjs'), join(root, 'output'), revision, '42', '1', environment], { cwd: root, encoding: 'utf8', env });
   return { root, sha, run, put };
 }
 
@@ -100,4 +100,14 @@ it('labels production separately and records the infrastructure fingerprint', ()
   const metadata = JSON.parse(readFileSync(join(root, 'output/release.json'), 'utf8'));
   expect(metadata).toMatchObject({ environment: 'production', infrastructure: expect.stringMatching(/^[0-9a-f]{64}$/), nodeVersion: process.versions.node });
   expect(run(sha, 'unknown').status).not.toBe(0);
+});
+
+it('excludes legacy-prefixed Axiom runtime credentials from release metadata', () => {
+  const { root, sha, run } = fixture();
+  const result = run(sha, 'production', { ...process.env, NEXT_PUBLIC_AXIOM_TOKEN: 'runtime-only-fixture', NEXT_PUBLIC_AXIOM_DATASET: 'web-vitals', NEXT_PUBLIC_BASE_URL: 'https://support-b.com' });
+  expect(result.status, result.stderr).toBe(0);
+  const metadata = JSON.parse(readFileSync(join(root, 'output/release.json'), 'utf8'));
+  expect(metadata.publicEnv.NEXT_PUBLIC_BASE_URL).toBe('https://support-b.com');
+  expect(metadata.publicEnv).not.toHaveProperty('NEXT_PUBLIC_AXIOM_TOKEN');
+  expect(metadata.publicEnv).not.toHaveProperty('NEXT_PUBLIC_AXIOM_DATASET');
 });

@@ -25,7 +25,9 @@ const infrastructure = createHash('sha256').update(execFileSync('git', [
   'ls-tree', '-r', 'HEAD', '--', 'docker-compose.prod.yml', 'deploy/centrifugo',
 ])).digest('hex');
 // Public values are deliberately recorded so activation can detect a CI/VM mismatch.
-const publicEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('NEXT_PUBLIC_')).sort());
+// These legacy-prefixed values are runtime credentials read through an env object.
+const runtimeOnly = new Set(['NEXT_PUBLIC_AXIOM_TOKEN', 'NEXT_PUBLIC_AXIOM_DATASET']);
+const publicEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('NEXT_PUBLIC_') && !runtimeOnly.has(key)).sort());
 const metadata = { sha, releaseId, runNumber: Number(run), schema, infrastructure, environment, publicEnv, nodeVersion: process.versions.node };
 const stage = mkdtempSync(join(tmpdir(), 'staging-runtime-'));
 const out = resolve(output);

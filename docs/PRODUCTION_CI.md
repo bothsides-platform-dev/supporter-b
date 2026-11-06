@@ -33,7 +33,7 @@
 - `PRODUCTION_NEXT_PUBLIC_MASTER_OAUTH_ENABLED`
 - `PRODUCTION_NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED`
 
-`NEXT_PUBLIC_BASE_URL=https://support-b.com`, `NEXT_PUBLIC_BUYER_ORIGIN=https://support-b.com`, `NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.support-b.com`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://support-b.com/connection/websocket`은 workflow에 고정한다. 서버와 다르면 배포가 중단된다. 신규 `NEXT_PUBLIC_*`를 추가할 때 workflow도 함께 갱신한다.
+`NEXT_PUBLIC_BASE_URL=https://support-b.com`, `NEXT_PUBLIC_BUYER_ORIGIN=https://support-b.com`, `NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.support-b.com`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://support-b.com/connection/websocket`은 workflow에 고정한다. 서버와 다르면 배포가 중단된다. 신규 `NEXT_PUBLIC_*`를 추가할 때 workflow도 함께 갱신한다. 단, `NEXT_PUBLIC_AXIOM_TOKEN`·`NEXT_PUBLIC_AXIOM_DATASET`은 기존 이름을 유지한 서버 전용 릴레이 설정이다. 이 두 값은 서버 환경 파일에만 보존하고 CI 공개 변수·산출물 metadata·빌드 값 비교에서 제외한다.
 
 Sentry 업로드를 유지하려면 Repository variables `SENTRY_ORG`, `SENTRY_PROJECT`와 Repository secret `SENTRY_AUTH_TOKEN`을 설정한다. 토큰은 main push의 빌드 단계에만 주입하며 PR 빌드에는 전달하지 않는다. AUTH_SECRET·DB·메일·결제 등 런타임 시크릿은 서버에만 둔다.
 
