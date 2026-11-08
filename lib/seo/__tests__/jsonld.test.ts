@@ -20,6 +20,15 @@ describe('buildOrganizationJsonLd', () => {
     expect(buildOrganizationJsonLd().sameAs).toEqual(['https://www.linkedin.com/company/109884859/']);
   });
 
+  it('uses the published operator email for Korean customer support', () => {
+    expect(buildOrganizationJsonLd().contactPoint).toEqual({
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: siteConfig.operator.email,
+      availableLanguage: 'ko',
+    });
+  });
+
   it('defaults url/logo/description from siteConfig', () => {
     const org = buildOrganizationJsonLd();
     expect(org.url).toBe(siteConfig.url);
@@ -58,7 +67,17 @@ describe('buildSoftwareApplicationJsonLd', () => {
   });
 
   it('describes the product with the 맞춤 PG 견적 framing', () => {
-    expect(buildSoftwareApplicationJsonLd().description).toBe('PG 도입을 위한 맞춤 PG 견적 플랫폼');
+    const app = buildSoftwareApplicationJsonLd();
+    expect(app.description).toBe(siteConfig.description);
+    expect(app.applicationSubCategory).toBe('맞춤 PG 견적');
+  });
+
+  it('links the application to its public URL and shared organization', () => {
+    const app = buildSoftwareApplicationJsonLd();
+    expect(app.url).toBe(new URL('/', siteConfig.url).href);
+    expect(app.publisher['@id']).toBe(buildOrganizationJsonLd()['@id']);
+    expect(app.inLanguage).toBe('ko');
+    expect(app.isAccessibleForFree).toBe(true);
   });
 });
 

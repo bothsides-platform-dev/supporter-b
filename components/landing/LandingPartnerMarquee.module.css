@@ -34,6 +34,9 @@
   transition: opacity 220ms ease-out;
 }
 .ink { background: currentColor; mask: var(--logo-image) center / 100% 100% no-repeat; }
+@supports (mask-image: image-set(url("") type("image/webp"))) {
+  .ink { mask-image: image-set(var(--logo-image-webp) type("image/webp"), var(--logo-image) type("image/png")); }
+}
 .mono { opacity: 0.8; }
 .color { opacity: 0; }
 .wordmark { position: absolute; inset: 0; clip-path: var(--logo-wordmark-clip); }

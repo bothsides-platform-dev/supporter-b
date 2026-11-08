@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: '이용약관',
+  description: '서포트비 서비스 이용에 관한 회원과 회사의 권리, 의무와 책임을 확인해요.',
   alternates: { canonical: '/legal/terms' },
 };
 

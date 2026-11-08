@@ -5,7 +5,8 @@ import Image from 'next/image';
 import styles from './LandingPartnerMarquee.module.css';
 import { useHeroToneStore } from './hero/hero-tone-store';
 
-// The supplied files stay intact. Toss's transparent padding is cropped only in
+// Original PNGs stay as fallbacks; lossless WebP copies serve both masks and images.
+// Toss's transparent padding is cropped only in
 // its display viewport; Hecto stays below its source height of 30px.
 const PARTNERS = [
   { name: '토스페이먼츠', file: 'toss-payments.png', accentColor: '#3478f5', width: 1000, height: 333,
@@ -84,6 +85,7 @@ export function LandingPartnerMarquee() {
                       onMouseLeave={() => setPartnerAccent(null)} style={{
                       '--logo-width': `${partner.displayWidth}px`,
                       '--logo-image': `url("/images/landing-partners/${partner.file}")`,
+                      '--logo-image-webp': `url("/images/landing-partners/${partner.file.replace('.png', '.webp')}")`,
                       '--logo-source-ratio': `${partner.width} / ${partner.height}`,
                       '--logo-symbol-clip': partner.symbolClip,
                       '--logo-wordmark-clip': partner.wordmarkClip,
@@ -99,9 +101,12 @@ export function LandingPartnerMarquee() {
                         {/* Clip in source-image coordinates: preserve bright lettering
                             while revealing only Toss's original symbol. */}
                         <span className={`${styles.ink} ${styles.wordmark}`} />
-                        <Image src={`/images/landing-partners/${partner.file}`} alt=""
-                          width={partner.width} height={partner.height} unoptimized loading="eager"
-                          draggable={false} className={styles.image} />
+                        <picture>
+                          <source srcSet={`/images/landing-partners/${partner.file.replace('.png', '.webp')}`} type="image/webp" />
+                          <Image src={`/images/landing-partners/${partner.file}`} alt=""
+                            width={partner.width} height={partner.height} unoptimized loading="eager"
+                            draggable={false} className={styles.image} />
+                        </picture>
                       </span>
                     </span>
                   ))}
