@@ -14,6 +14,7 @@ describe('buildSitemap', () => {
     expect(urls).toContain('https://support-b.com/signup/buyer');
     expect(urls).toContain('https://support-b.com/llms.txt');
     expect(urls).toContain('https://support-b.com/llms-full.txt');
+    expect(urls).toContain('https://support-b.com/developers/agents.md');
     expect(urls).not.toContain('https://support-b.com/signup/pg');
   });
 

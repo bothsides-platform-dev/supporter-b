@@ -35,7 +35,7 @@ export const siteConfig = {
   },
   title: '서포트비 — 맞춤 PG 견적 플랫폼',
   description:
-    'PG도입을 고려 중이신가요? 서포트비에서 여러 PG사의 견적을 한 번에 비교해 최적의 수수료 조건으로 계약하세요.',
+    'PG 도입이나 변경을 준비하고 있나요? 서포트비에서 업종에 맞는 PG사에 상담을 요청하고 수수료와 정산 조건을 확인해요.',
   // 오리진 폴백 사슬의 단일 출처는 lib/site-routing.ts 의 baseUrl() 이다 —
   // appOrigins(호스트 라우팅)·baseUrlFor(이메일 링크)와 같은 답을 내야 한다.
   url: baseUrl(),

@@ -1,6 +1,6 @@
 {
   "name": "supporter-b",
-  "version": "0.46.3",
+  "version": "0.48.0",
   "private": true,
   "engines": {
     "node": "^22.23.4"
@@ -36,6 +36,8 @@
     "@axiomhq/react": "0.4.1",
     "@base-ui/react": "^1.4.1",
     "@channel.io/channel-web-sdk-loader": "^2.0.2",
+    "@modelcontextprotocol/server": "2",
+    "@node-oauth/oauth2-server": "5.3.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "@radix-ui/react-slider": "^1.3.6",
     "@react-email/render": "^2.0.8",
@@ -79,6 +81,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.13",
+    "@modelcontextprotocol/client": "2.4.0",
     "@tailwindcss/postcss": "^4.2.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

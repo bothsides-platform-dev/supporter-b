@@ -28,6 +28,7 @@ buyer 정보만 저장하고 platform 정보와 도장 원본은 서버가 결�
 | 온라인 presence (누가 접속 중 + **누가 누구를 보는가**) | 중간 — 관찰자 축이 경쟁사-집합 신호로 승격될 수 있음 (§2.3) | 관계 게이트 subscribe-proxy (§2.3, 2026-07-23 전환) |
 | 워크스페이스 디렉터리 (name↔UUID 맵) | 중간 — presence·기타 UUID 키 표면의 비익명화 오라클 | buyer 세션 + type=pg 한정 게이트 (§2.7) |
 | 관측 데이터셋 (Axiom web-vitals) | 낮음 — 비밀은 없고 무결성(오염)·수집 비용만 문제 | 비인증 릴레이의 크기·형태 상한 + web-vitals 전용 데이터셋 (§4.1) |
+| B2A 공개 조회와 운영 관측 | 공개 제품 정보 — 호출 비용·관측 오염 방어 필요 | buyer Host/Origin·본문/호출 상한 + 정형 이벤트 화이트리스트 (아래 B2A 경계·AR-7) |
 
 ## 2. Realtime (Centrifugo)
 
@@ -352,3 +353,44 @@ assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·
 ### AR-6 — 비회원 추천 조건·등급별 요율의 반복 조회 (수용, 2026-11-02)
 
 가입 전 예상 수수료 확인을 위해 초안 증명 보유자에게 해당 매출 등급의 요율·추천 이유·적용 조건·업종 상태를 공개한다. 매출을 바꾸어 여러 등급의 요율을 수집할 수 있는 잔여 위험을 수용한다. 전체 요율표를 한 응답에 싣지 않으며 동일 출처·HttpOnly 증명·요청 제한을 유지한다. 잠정 등급은 승인 등급을 변경하지 않고 실제 접수 시 서버가 PG 자격을 다시 확인한다. 공개 대상 확대나 수집 악용이 확인되면 재검토한다. 가드: `lib/server/services/__tests__/guest-requests.test.ts`의 공개 필드·5개 구간·소유권·revision·예약 동결 검증.
+
+## B2A 공개 조회 경계 (2026-11-08, 로컬 구현 첫 단계)
+
+`GET /developers/agents.md`, `GET /api/agent/v1/services`, `GET /api/agent/v1/services/[serviceId]/requirements?contractType=new|renewal`, `POST /api/agent/mcp`는 비인증 공개 조회다. 공식 MCP SDK의 상태 없는 HTTP 전송으로 최신 요청 방식과 기존 초기화 흐름을 지원한다. 도구는 `list_services`, `get_requirements`, `get_integration_guide`만 제공한다. 이는 현재 브랜치의 로컬 구현 범위이며 운영 배포·디렉터리 등록·인증된 신청 기능의 완료를 의미하지 않는다.
+
+- **데이터 경계**: `lib/server/agent/catalog.ts`의 공개 제품 설명과 기존 신청 준비 규칙만 사용한다. 고객 DB·워크스페이스·PG 정책·견적·추천 결과를 읽지 않으며 신청·선정·서명·서비스 개통을 실행하지 않는다. 임의 입력 URL이나 원격 메타데이터를 가져오지 않는다. 링크는 설정된 buyer origin과 명시된 공개 문서에서 만든다. PG 서비스 이용계약과 노온–구매사 합의서의 기존 권한·당사자 구분은 유지한다.
+- **요청 경계**: `/api`는 인증 프록시 매처 밖이므로 각 라우트와 Markdown에 `guardPublicAgentRequest`를 적용한다. 설정된 buyer Host를 포트까지 정확히 비교하고 partner·알 수 없는 호스트는 `404`와 `X-Robots-Tag: noindex, nofollow`로 거부한다. Origin이 있으면 buyer origin과 정확히 비교하며 Origin 없는 CLI·문서 탐색은 허용한다. 전달된 Host/Origin은 사용자 신원이 아니며 인증된 업무 권한을 주지 않는다. 부분·잘못된 origin 설정은 `503`으로 닫고 거부 응답에 입력 URL을 반향하지 않는다.
+- **자원 상한**: 프로세스당 1분에 IP별 120회·전체 1,200회, IP 키는 최대 512개다. Caddy가 지정한 마지막 `X-Forwarded-For`의 유효 IP를 쓰고 없거나 유효하지 않으면 하나의 `unknown` 예산을 공유한다. 원본 IP는 메모리 예산 키로만 사용하고 이벤트에 기록하지 않는다. MCP 본문은 스트리밍 중 64KiB·3초 상한을 적용한다. SDK 처리와 응답 관측은 5초를 넘으면 중단하며 `503`을 반환한다. 스스로 요청을 취소해 SSE가 끝나지 않을 수 있는 JSON-RPC batch는 `400`으로 거부한다. 초과 호출은 `429`와 `Retry-After`, 본문 초과·지연은 `413`·`408`로 거부한다.
+- **관측 경계**: `discovery-events.ts`의 strict schema v1만 기존 운영 로거의 `agent.discovery`에 전달한다. 서버 생성 event ID·시각, 알려진 surface/operation/outcome, 허용된 service ID·카탈로그 판본, 유한한 처리 시간과 클라이언트 분류만 허용한다. MCP의 알려진 도구는 `catalog`/`requirements`/`guide`, 알 수 없는 도구는 `tool_call`, 알 수 없는 메서드는 `unknown`으로 정규화하며 임의 서비스 ID는 기록하지 않는다. 요청 본문·사용자 자유 입력·원본 헤더/쿼리/URL·`clientInfo`·IP는 저장하지 않는다. 스키마는 `unknown`/`claude_code`/`codex` 분류와 신뢰도 `reported`를 허용하지만 현재 HTTP 요청에서 클라이언트 신원을 수집하지 않아 모두 `unknown`으로 기록한다. 이 필드는 인증된 신원이 아니다. 프로세스당 분당 최대 2,400건이며 스키마 위반·상한·로거 실패는 원본 입력을 남기지 않고 관측만 생략한다.
+
+가드: `lib/server/agent/__tests__/public-guard.test.ts`(Host·포트·Origin·설정 실패·IP/전체/메모리 예산), `lib/server/agent/__tests__/discovery-events.test.ts`(추가 키·비유한 수·임의 식별자 배제, 서버 메타데이터·기록 상한·로거 실패), `lib/server/agent/__tests__/public-routes.test.ts`(공개 응답·준비 규칙·정확한 공개 경로·실패 입력 비반향), `lib/server/agent/__tests__/mcp.test.ts`(SDK 전송·공개 도구·본문 제한·프로토콜 오류 관측), `lib/server/agent/__tests__/mcp-timeout.test.ts`(처리·응답 지연 중단과 단일 실패 기록).
+
+### AR-7 — 공개 B2A 조회의 호출 제한·관측 정확도 (로컬 첫 단계, 2026-11-08)
+
+공개 제품 정보를 에이전트와 개발자가 읽을 수 있도록 비인증 조회를 연다. 요청 제한은 한 프로세스의 메모리에서만 동작하여 재시작하면 초기화되고 여러 인스턴스 사이에서 합산되지 않는다. 같은 NAT 또는 `unknown` 호출자는 예산을 공유하므로 정상 조회도 제한될 수 있다. Caddy를 통하지 않는 앱 직접 노출이나 신뢰 프록시 변경은 IP 기준을 무너뜨릴 수 있다.
+
+서버 이벤트는 요청 처리의 관측이다. 반복 호출과 클라이언트 분류는 위조할 수 있고, 기록 상한·프로세스 중단·로거 실패로 누락될 수 있다. 기존 운영 로그의 저장 설정을 따르며 별도 지속 분석 저장소·사용자 여정 연결·서버 확정 전환 집계는 아직 없다. 조회 수를 실제 추천 노출·고유 사용자·신청·계약 수로 사용하지 않는다.
+
+재검토 시점은 운영 공개 전 인입 프록시·로그 보관 설정 확인, 다중 인스턴스 전환, 호출/로그 비용 증가, 고객별 정보 또는 인증된 쓰기 추가다. 분산 호출 제한과 지속 분석·전환 계측은 후속 범위로 남긴다. OAuth·고객 DB·신청·계약 기능을 추가할 때는 현재 공개 가드나 클라이언트 분류를 권한 근거로 재사용하지 않고 별도 위협 모델과 검증을 추가한다.
+
+
+## B2A 계정 채널 경계 (2026-11-08)
+
+공개 조회와 별도로 OAuth 계정 채널을 둔다. 기본 비활성이고 DDL 선행 후 `AGENT_ACCOUNT_CHANNEL_ENABLED=true`에서 연다. 공개 가드의 Host·Origin·예산은 보조 경계다. 실제 권한은 해시로 찾은 만료 전 토큰, 철회 전 연결, 현재 활성 사용자·이메일 인증·승인된 buyer 멤버십·활성 워크스페이스·sessionVersion 일치로 판정한다. 호출자가 workspaceId·사업자·등급·테스트 PG를 지정하지 못한다.
+
+- **위임**: 검증된 OAuth 라이브러리의 authorization code + S256 PKCE, exact redirect, exact resource, `iss`로 issuer를 확인한다. public DCR은 HTTPS 또는 HTTP loopback callback만 받으며 이름은 자칭 값으로 화면에 안내한다. 원격 client metadata를 가져오지 않는다. 코드 2분·access 15분·연결 30일이며 원문은 DB에 저장하지 않는다. 코드와 refresh를 행 잠금으로 소비하고 refresh 재사용 시 연결 전체를 철회한다.
+- **인증 오류 구분**: 코드 교환·refresh 모델에서 확인한 연결 철회·만료·현재 권한 상실만 OAuth `invalid_grant`(400)로 변환한다. MCP 리소스는 `invalid_token`(401)로 차단하며, DB 등 미분류 인프라 오류는 성공·권한 거절로 위장하지 않고 503으로 유지한다.
+- **동의와 발송**: 연결 동의와 최종 상담 확인은 별개다. 브라우저 서버 액션이 Host·필수 Origin·세션·현재 DB 멤버십을 확인한다. 동의 화면의 워크스페이스를 바꿔 승인할 수 없다. 발송은 연결 소유자·워크스페이스·쓰기 권한·요청 판본을 다시 확인한다. 에이전트 MCP에 최종 발송·선정·서명 도구는 없다.
+- **주소 복귀**: 다른 Host의 페이지는 비공개 데이터를 읽지 않고 서버 설정 origin·고정 페이지 경로로 복귀 링크만 만든다. OAuth 쿼리는 중복까지 그대로 전달하고 정상 주소에서 다시 검증한다. Host·forwarded 헤더·callback으로 목적지를 만들거나 복귀만으로 동의하지 않는다.
+- **범위와 무결성**: 요청은 해당 연결의 데이터만 조회한다. 기존 견적·첨부·계약 원문을 가져오지 않는다. 연결 행 잠금과 고유 requestKey, 초안 revision을 사용한다. 기존 `RfpService`의 정책·마감·한 PG 비공개 상담 검증과 outbox를 재사용하고 요청 연결·발송 이벤트도 같은 트랜잭션에 저장한다. 시간 초과 뒤에도 완료될 수 있으므로 같은 키로 재시도한다.
+- **관측**: 연결·철회·갱신·초안·발송·조회 이벤트에는 서버 식별자·시각·판본만 쓴다. 초안 본문은 별도 업무 테이블에 저장한다. 계정 연결 이벤트는 익명 데이터가 아니며 raw 대화·토큰·비밀값·사업자번호는 이벤트에 넣지 않는다. PG 계약 완료를 노온 합의서 상태로 추정하지 않는다.
+
+가드: `agent-account.test.ts`(실제 OAuth/DB, 토큰·멤버십·연결 격리, 공식 MCP 양 전송), `agent-submit.test.ts`(기존 상담 생성·재시도·정책 변경·트랜잭션 롤백), `agent/__tests__/browser.test.ts`(Origin·workspace 변경), `components/agent/__tests__/review.test.tsx`(확인·누락·판본 충돌), `scripts/migrations/__tests__/agent-channel.test.ts`(추가 DDL·제약·cascade).
+
+### AR-8 — B2A 계정 연결과 확인 발송 (2026-11-08)
+
+현재는 내부 검증용 로컬 구현이다. DCR은 자칭 클라이언트를 허용하며 이름으로 신뢰를 인증하지 않는다. 발급 권한은 화면에 표시한 범위로 제한한다. DCR 시간당 100건과 전체 인입 제한은 프로세스별 메모리이므로 다중 프로세스/재시작을 합산하지 못한다. 일반 공개 전에 분산 제한·행 보관/정리·프록시/로그 설정을 검토한다.
+
+인증 순간 뒤 진행 중인 호출을 즉시 취소하는 것은 보장하지 않는다. 철회/정지/비밀번호 변경 이후의 다음 요청에서 차단한다. 토큰 갱신의 동일 refresh 동시 재사용도 연결 철회로 처리하므로 클라이언트는 갱신을 직렬화해야 한다. CIMD, 임의 기존 OAuth client, machine-to-machine grant는 지원하지 않는다. 격리 개발 환경에서 Claude Code·Codex의 사용자 동의와 실제 도구 호출을 검증했으며, 운영 HTTPS·인입 프록시 환경의 왕복은 배포 전 별도 검증 대상이다. 개발 미리보기의 포트 재매핑도 Host·Origin 예외로 허용하지 않으며, 복귀 링크는 올바른 주소로의 이동을 돕는 기능일 뿐 승인이나 권한을 부여하지 않는다.
+
+자동 보관 정리는 아직 없고 만료와 삭제는 별개다. 물리 회원/워크스페이스 삭제는 연결·초안·이벤트를 cascade 삭제한다. 원문 토큰을 로그에 쓰지 않더라도 인입 프록시/인증/오류 추적의 헤더 수집은 운영 설정에서 확인한다. 연결 차단 플래그는 읽기·쓰기를 함께 중단하며 기존 웹 상담은 유지한다. 구현과 운영 순서는 [계정 채널](B2A_ACCOUNT_CHANNEL.md)을 따른다.

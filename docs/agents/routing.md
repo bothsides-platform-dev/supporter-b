@@ -9,8 +9,12 @@ app/
 ├─ quote-start/ # 공개 실작성 — 로컬 작성·가입 시 서버 저장 후 구매사 인증 복귀, noindex
 ├─ demo/        # 공개 구매사 데모 — 요청·메시지·견적 수정·선정·가상 서명·계약 보관. 세션 메모리만 사용, 실제 업무 API 미호출
 ├─ legal/       # 공개 법적 고지: /legal 및 terms·privacy·marketing (판 번호 없는 URL. 가입 증빙 판본은 terms v2·privacy v4·marketing v3 — `lib/auth/signup-documents.ts`; 사용자 요청·운영 동의 0건 확인 후 v1 삭제)
+├─ developers/agents.md/ # GET — 코딩 에이전트용 공개 Markdown 안내, 설정된 buyer 호스트만 허용
+├─ api/agent/    # 공개 /mcp·/v1/services, 계정 /account/mcp·/oauth/*·/v1/requests
+├─ .well-known/ # OAuth 서버·계정 MCP 리소스 메타데이터, 정확한 두 경로만 공개
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
+│  ├─ agent/                   # buyer — authorize 연결 동의, requests/[requestId] 확인·발송
 │  ├─ home/
 │  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음), /rfp/@modal/(.)[id] (인터셉트 딜룸 모달)
 │  ├─ rfp-create/             # /rfp-create — RFP 작성 플로우 (AppShell 공유, 인터셉트 라우트)
@@ -23,7 +27,7 @@ app/
 │  ├─ quote-templates/        # 폐지 — 404. 기존 데이터·스키마·내부 저장소는 보존
 │  ├─ contract-templates/     # 폐지 — 404
 │  ├─ workspace/new/          # 워크스페이스 생성
-│  └─ settings/{profile,members,notifications,audit-log}/
+│  └─ settings/{profile,members,notifications,audit-log,agents}/
 ├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
 └─ (루트 proxy.ts)            # 요청 라우팅은 proxy.ts(decideProxyRoute), 화면 접근은 app/(app)/layout.tsx의 resolveShellAccess
 ```
@@ -54,8 +58,47 @@ Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown
 
 **SEO / AI(GEO) 텍스트 엔드포인트**: `/llms.txt`(큐레이션 인덱스)·`/llms-full.txt`(전체 마크다운)는 host-aware route handler(`app/llms.txt`·`app/llms-full.txt`)로 buyer/PG 청중별 사실을 `text/plain`으로 제공한다. `app/robots.ts`·`app/sitemap.ts`도 host-aware로 전환 — buyer 호스트는 자기 origin 참조 + 주요 AI 크롤러 명시 허용하지만, **partner(PG) 호스트는 전면 비색인**(`buildRobots(origin, 'pg')`가 모든 크롤러에 `disallow: ['/']` 반환, `buildSitemap`도 빈 배열, `proxy.ts`가 응답에 `X-Robots-Tag: noindex, nofollow` 헤더까지 얹어 이미 색인된 페이지도 제거 유도 — `lib/site-routing.ts`의 `shouldNoindexHost`). 콘텐츠 SSOT는 `lib/seo/{host,product-facts,llms,robots,sitemap,jsonld}.ts`이며 FAQ는 랜딩 상수(`faq-data`·`pg-faq-data`)를 재사용해 드리프트가 없다. 공식 표기는 '서포트비'이며 그 단일 출처는 `lib/site-config.ts`의 `siteConfig.name` 하나다 — `lib/seo/product-facts.ts`의 `PRODUCT_NAME`은 두 번째 출처가 아니라 거기서 파생하는 재export다(v0.4.3.0). 2026-10-03 사용자 결정에 따라 화면·검색 메타데이터·AI 안내는 '서포트비'만 사용하며 별칭 배열·키워드·JSON-LD alternateName은 제거했다. 명칭을 정정한 이용약관·개인정보 처리방침과 마케팅 문서는 v2로 게시했고, 2026-10-08 문의 주소 정정으로 개인정보 처리방침·마케팅 문서는 v3가 됐고, 2026-10-10 보호책임자 주소 정정으로 개인정보 처리방침은 v4다(이용약관은 v2 유지, 판본 단일 출처는 `lib/auth/signup-documents.ts`). 후속 사용자 요청에 따라 운영 가입 동의 0건을 확인한 뒤 v1 공개 페이지 3개를 삭제했다. JSON-LD 스키마 빌더는 `lib/seo/jsonld.ts`에 있고, `buildOrganizationJsonLd`는 buyer 랜딩(`app/page.tsx`)·PG 랜딩(`pg-landing-data.ts`, description 오버라이드)이 공유하며 `buildSoftwareApplicationJsonLd`는 buyer 랜딩 전용, `<script type="application/ld+json">` 인라인 직렬화는 반드시 같은 파일의 `serializeJsonLd`(`<`·`>`·U+2028/U+2029 유니코드 이스케이프 — `</script>` 태그 탈출 방지)를 쓴다(raw `JSON.stringify` 금지). 랜딩 히어로 지표(`HERO_METRICS`)는 `components/landing/hero-metrics.ts`에 단일 출처로 추출돼 `LandingHero.tsx`와 `product-facts.ts`(BUYER_FACTS.metrics)가 공유하며, `lib/seo/__tests__/product-facts.test.ts` 드리프트 가드 테스트가 양쪽 캡션 일치를 보장한다. 두 txt 경로는 `proxy.ts`/`lib/auth/proxy-matcher.ts` 매처에서 robots/sitemap과 함께 제외해 비인증 크롤러가 접근한다. `app/layout.tsx` metadata의 `alternates.types['text/plain'] = '/llms.txt'` 선언으로 ChatGPT·Perplexity 등 AI 크롤러가 `<head>`에서 자동발견 가능하다. **매처 제외 목록에 항목을 추가할 때 지켜야 할 규칙 두 가지**(v0.4.9.0): ① 세그먼트의 점(`.`)은 `\\.`으로 이스케이프해 파일명이 리터럴 점으로만 매칭된다(`llmsXtxt` 같은 경로가 의도치 않게 제외되는 것을 방지). ② 모든 항목은 세그먼트 경계(`SEGMENT_END` = `/` 또는 경로 끝)에 고정된다 — 맨 접두어로 두면 미래에 그 단어로 시작하는 실제 보호 라우트(`/landing-editor`·`/api-docs`)가 인증 프록시를 통째로 건너뛴다. **유일한 예외는 Next.js 메타데이터 이미지 규약**(`opengraph-image`·`twitter-image`·`apple-icon`)으로, 확장자가 붙어 도착하므로(`app/opengraph-image.png` → `/opengraph-image.png`, 동반 alt 는 `/opengraph-image.alt.txt`) `ASSET_SUFFIX`(`.`/`-` 뒤에만 접미사 허용)를 쓰되 `PATH_END`(`$`)로 고정해 하위 경로(`/apple-icon.png/admin`)까지 새지 않게 한다. 이 규칙은 `lib/auth/__tests__/proxy-matcher.test.ts`가 못박으며, 매처를 바꾸면 `proxy.ts`의 인라인 리터럴도 함께 갱신하고(드리프트 가드가 둘을 byte-equal 로 고정) **반드시 `next build`로 확인해야 한다** — Next 는 `config.matcher`를 모듈 실행 없이 정적 분석하므로 유닛 green 이 build green 을 보장하지 않는다.
 
+## B2A 공개 조회 채널 (2026-11-08, 로컬 구현 첫 단계)
+
+코딩 에이전트가 국내 PG 도입·변경 상담의 지원 범위와 준비 사항을 읽는 채널이다. 아래는 현재 브랜치의 구현 범위이며 운영 배포·외부 디렉터리 등록·에이전트의 자동 추천 완료를 뜻하지 않는다. 실제 상담 신청은 기존 웹 `/quote-start`로 연결한다. 고객 DB 조회, 에이전트의 신청·선정·서명, 클라우드 서비스와 공통 SDK 패키지는 이 단계에 포함하지 않는다.
+
+| 메서드·경로 | 제공 내용 |
+|---|---|
+| `GET /developers/agents.md` | Markdown 안내·지원 범위·Claude Code/Codex 연결 방법 |
+| `GET /api/agent/v1/services` | 공개 서비스 목록. 현재 `pg-consultation` 한 항목 |
+| `GET /api/agent/v1/services/[serviceId]/requirements` | 신청 준비 사항. `contractType=new` 또는 `renewal`, 생략하면 `new` |
+| `POST /api/agent/mcp` | 공식 `@modelcontextprotocol/server` SDK의 상태 없는 HTTP 전송. 최신 요청 방식과 기존 `initialize` 기반 클라이언트 호환 |
+
+MCP 도구는 `list_services`, `get_requirements`, `get_integration_guide` 세 가지이며, `support-b://guides/pg-onboarding` 리소스로 같은 공개 안내도 읽을 수 있다. 서비스 설명·준비 사항은 `lib/server/agent/catalog.ts`, Markdown은 이를 사용하는 `guide.ts`가 제공한다. PG별 요율·고객 견적·사업자 정보·인증키를 반환하거나 입력 URL을 방문하지 않는다. PG 서비스 이용계약과 노온–구매사 할인 합의서는 구분하며, 기존 웹의 신청·계약 권한을 바꾸지 않는다.
+
+`/api`는 인증 프록시 매처 밖이므로 라우트의 `guardPublicAgentRequest`가 직접 경계를 지킨다. Markdown도 정확한 `/developers/agents.md` 경로만 공개하고 같은 가드를 적용한다. `appOrigins().buyer`의 Host를 포트까지 정확히 비교하며 partner·알 수 없는 호스트는 `404`와 `noindex`로 거부한다. `Origin`이 있으면 설정된 buyer origin과 정확히 같아야 하고, 없는 CLI 요청은 허용한다. Origin 검사는 사용자 인증이 아니다. 부분·잘못된 origin 설정은 fail-closed로 처리한다.
+
+공개 요청 예산은 프로세스당 1분 동안 IP별 120회·전체 1,200회이고 IP 키를 최대 512개만 보관한다. MCP 본문은 읽는 동안 64KiB·3초로 제한하고, SDK 처리와 응답 관측은 5초를 넘으면 중단한다. JSON-RPC batch는 거부한다. 주소는 Caddy가 지정하는 마지막 `X-Forwarded-For` IP를 기준으로 하므로 앱 포트의 직접 공개와 신뢰 프록시 변경 때 이 전제를 다시 검토한다. 분산 호출 제한과 지속적인 전환 분석은 후속 작업이다.
+
+`agent.discovery`는 엄격한 스키마의 알려진 이벤트 종류·결과·서비스·클라이언트 분류와 서버 시각·처리 시간만 기존 운영 로거에 기록한다. 요청 본문·자유 입력·원본 IP·임의 헤더/쿼리를 기록하지 않는다. 현재 클라이언트 식별 정보를 수집하지 않아 `clientKind`는 모두 `unknown`이다. 스키마의 분류 신뢰도 `reported`는 본인 확인을 뜻하지 않는다. 분당 기록 상한·누락 가능성이 있는 서버 조회 관측이므로 추천·가입·계약 전환으로 계산하지 않는다. 잔여 위험은 [위협 모델 AR-7](../THREAT_MODEL.md#ar-7--공개-b2a-조회의-호출-제한관측-정확도-로컬-첫-단계-2026-11-08)을 따른다.
+
 ## 별도 레포
 
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
 **PG 용어 사전(docs)은 별도 레포**: `github.com/bothsides-platform-dev/docs-supporter-b` 가 `docs.support-b.com`(Next.js 정적 export, Cloudflare Pages)을 서빙한다. 이 레포는 docs 링크와 [docs 경유 수신부](../DOCS_ATTRIBUTION.md)를 가진다 — URL 단일 출처 `DOCS_URL`(`lib/site-config.ts`, 사이트 루트)을 양쪽 랜딩 헤더의 `인사이트` 메뉴·공용 푸터(`components/shell/Footer.tsx`)·buyer llms 링크(`product-facts.ts`; 절대 URL 은 `renderLink` 가 origin 없이 그대로 출력)가 소비한다. 공용 푸터와 buyer llms는 같은 파일의 `DOCS_GUIDES`로 docs의 결제 운영 가이드 3편에도 발행된 글 제목으로 직접 링크한다. 제목·주소는 docs 레포와 맞추고, 글을 변경하거나 삭제하면 함께 갱신한다. 랜딩 헤더의 `인사이트`는 섹션 메뉴와 분리해 PC(1200px 이상)에서는 양쪽 모두 로고 바로 옆에 구분선·↗ 아이콘·도메인 툴팁과 함께, 모바일에서는 메뉴 맨 아래에 둔다(2026-10-25, `LandingInsightLink` 공유). PC·모바일과 로그인 여부에 관계없이 같은 탭으로 이동하며, 모바일 클릭은 메뉴를 닫는다. 외부 링크이므로 현재 섹션 강조 대상에는 포함하지 않는다. Organization 의 별칭(`siteConfig.alternateNames`)과 `sameAs`(`siteConfig.sameAs`)는 docs 레포의 같은 @id 노드와 같은 값을 유지한다. docs 쪽 JSON-LD 가 `publisher: { '@id': '<siteConfig.url>/#organization' }` 로 이 레포의 Organization 을 참조하므로, `buildOrganizationJsonLd` 의 `@id` 를 바꾸면 docs 레포도 함께 고친다.
+
+
+## B2A 계정 채널 (2026-11-08)
+
+`AGENT_ACCOUNT_CHANNEL_ENABLED=true`인 환경에서만 사용한다. [계정 채널 운영 문서](../B2A_ACCOUNT_CHANNEL.md)와 [위협 모델 AR-8](../THREAT_MODEL.md#ar-8--b2a-계정-연결과-확인-발송-2026-11-08)을 따른다.
+
+| 경로 | 권한·역할 |
+|---|---|
+| `GET /.well-known/oauth-authorization-server` | 공개 OAuth 서버 메타데이터 |
+| `GET /.well-known/oauth-protected-resource/api/agent/account/mcp` | 공개 리소스 메타데이터 |
+| `POST /api/agent/oauth/{register,token,revoke}` | DCR·PKCE 교환/회전·철회, 브라우저 쿠키 권한을 쓰지 않음 |
+| `POST /api/agent/account/mcp` | Bearer 권한으로 연결·후보·초안·진행 조회 |
+| `POST /api/agent/v1/requests`, `GET /api/agent/v1/requests/[requestId]` | 같은 서비스·권한 경계를 쓰는 JSON API |
+| `/agent/authorize` | 구매사 브라우저 동의, 표시한 워크스페이스와 액션 대상 일치 |
+| `/agent/requests/[requestId]` | 연결 소유자의 초안 확인·직접 발송 |
+| `/settings/agents` | 현재 구매사에서 본인이 연결한 권한 조회·철회, 프로필 설정에서 진입 |
+
+API는 buyer Host와 선택적 Origin 검사에 더해 Bearer 토큰·실제 DB 멤버십을 확인한다. 브라우저 쓰기는 buyer Host·필수 same-origin·서버 세션·DB 멤버십을 확인한다. 메타데이터 두 경로만 `decideRoute`의 exact pass-through이며 다른 `.well-known` 경로는 공개하지 않는다. 계정 화면은 noindex다. 인증된 MCP에는 발송·선정·서명 도구가 없다.
+
+계정 페이지는 설정된 buyer Host·포트가 다르면 데이터 조회 전에 `접속 주소가 달라요`와 현재·설정된 주소, 해당 화면의 복귀 링크·복사를 표시한다. 복귀 주소는 서버 설정 origin과 고정 페이지 경로로만 만들고 OAuth 쿼리(중복 포함)를 유지한다. 요청 Host·forwarded 헤더·callback을 복귀 목적지로 사용하지 않는다. 계정 채널 비활성은 `notFound`, 승인되지 않은 구매사 접근은 권한 안내로 처리한다. 쓰기 액션은 같은 Host·Origin 가드에서 계속 거부한다.

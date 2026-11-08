@@ -23,17 +23,19 @@ describe('buildLlmsTxt', () => {
     expect(out).toContain('## Optional'); // spec's de-prioritizable section
   });
 
-  it('buyer file carries buyer facts (free policy, savings stat, sealed bid)', () => {
+  it('buyer file carries the current one-PG consultation flow and existing facts', () => {
     const out = buildLlmsTxt(BUYER);
     expect(out).toContain('무료'); // 2026 무료 정책
     expect(out).toContain('0.89'); // PoC 평균 수수료 절감 통계
-    expect(out).toContain('봉인'); // 봉인 입찰 차별점
+    expect(out).toContain('한 번에 한 PG사에 맞춤 상담');
+    expect(out).toContain('PG사 검토');
   });
 
   it('buyer file uses buyer absolute URLs and links the full + signup pages', () => {
     const out = buildLlmsTxt(BUYER);
     expect(out).toContain('https://support-b.com/signup/buyer');
     expect(out).toContain('https://support-b.com/llms-full.txt');
+    expect(out).toContain('https://support-b.com/developers/agents.md');
     expect(out).toContain('맞춤 PG 견적 무료로 받기');
     // no foreign origin leaks
     expect(out).not.toContain('partner.support-b.com');
@@ -109,6 +111,18 @@ describe('official brand name (GEO)', () => {
 });
 
 describe('buildLlmsFullTxt', () => {
+  it('describes current consultation and the two separate agreements on both hosts', () => {
+    for (const build of [buildLlmsTxt, buildLlmsFullTxt]) {
+      for (const host of [BUYER, PG]) {
+        const out = build(host);
+        expect(out).toContain('한 PG사');
+        expect(out).toContain('PG 서비스 이용계약은 구매사와 선정 PG사가');
+        expect(out).toContain('주식회사 노온과 구매사');
+        expect(out).not.toMatch(/복수의 PG사|공개 게시판|봉인 입찰|여러 PG사의 조건|한 번에 비교|우선 RFP 매칭/);
+      }
+    }
+  });
+
   it('limits buyer PG availability to recommendations by industry and PG review', () => {
     for (const out of [buildLlmsTxt(BUYER), buildLlmsFullTxt(BUYER)]) {
       expect(out).not.toContain('국내 모든 PG사');

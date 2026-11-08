@@ -22,5 +22,6 @@ export function buildSitemap(ctx: SeoHostContext, lastModified: Date): MetadataR
     { url: `${origin}/login`, lastModified, changeFrequency: 'monthly', priority: PRIORITY_UTILITY },
     { url: `${origin}/llms.txt`, lastModified, changeFrequency: 'weekly', priority: PRIORITY_AI_ENDPOINT },
     { url: `${origin}/llms-full.txt`, lastModified, changeFrequency: 'weekly', priority: PRIORITY_AI_ENDPOINT },
+    { url: `${origin}/developers/agents.md`, lastModified, changeFrequency: 'weekly', priority: PRIORITY_AI_ENDPOINT },
   ];
 }

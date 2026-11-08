@@ -405,3 +405,8 @@ export async function getBidDraftRepo() {
   const { DrizzleBidDraftRepository } = await import('./drizzle/bid-draft');
   return new DrizzleBidDraftRepository((await getBundle()).db);
 }
+
+export async function getAgentRepo() {
+  const { DrizzleAgentRepository } = await import('./drizzle/agent');
+  return new DrizzleAgentRepository((await getBundle()).db);
+}

@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { agentChannelEnabled } from '@/lib/server/agent/account-contract';
 import { Chip } from '@/components/primitives/Chip';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { PageEnter } from '@/components/primitives/PageEnter';
@@ -188,6 +190,7 @@ export default async function ProfilePage({ searchParams }: Props) {
             <h2 className="text-[16px] font-semibold">계정 관리</h2>
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
+          {ws.type === 'buyer' && agentChannelEnabled() && <p className="mb-4"><Link className="underline" href="/settings/agents">개발 에이전트 연결 관리</Link></p>}
           <DeleteAccountSection />
         </section>
       </SettingsPage>

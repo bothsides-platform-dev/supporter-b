@@ -67,6 +67,13 @@
 
 ```
 Public
+├─ /developers/agents.md         (GET Markdown — B2A 공개 안내, buyer 호스트만 허용)
+├─ /agent/authorize              (구매사 연결 동의 — 계정 채널 활성 환경)
+├─ /agent/requests/[requestId]    (구매사 초안 확인·직접 발송)
+├─ /settings/agents              (구매사 연결 조회·해제)
+├─ /api/agent/v1/services         (GET JSON — 공개 서비스 목록)
+├─ /api/agent/v1/services/:serviceId/requirements (GET JSON — contractType=new 또는 renewal)
+├─ /api/agent/mcp                 (POST — 공개 조회 전용 MCP)
 ├─ /quote-start                  (로그인 전 실작성, noindex; 로그인 후 /rfp-create?resume=guest)
 ├─ /demo                         (비로그인 구매사 체험: 요청·메시지·견적 수정·선정·서명·계약 보관)
 ├─ /legal                        (법적 고지 목록, 별도 넓은 읽기 레이아웃)
@@ -148,6 +155,21 @@ Admin console (별도 저장소 `admin-supporter-b`, admin.support-b.com, app/(p
 | Q2 | `/rfp-create?resume=guest` | 활성 구매사만 초안 선택·첨부 업로드·사업자 확인·유효성 재확인·최종 요청. PG는 기존 구매사 전용 게이트 적용 | `GuestQuoteResume`, `RfpCreateWizard` |
 
 운영 솔루션 질문의 320·390·768·1440px 라이트·다크 화면은 [공개 견적 작성 미리보기](docs/previews/public-quote-ui/README.md)에서 확인한다.
+
+### 0.1b 코딩 에이전트 공개 조회 채널 (2026-11-08)
+
+현재 브랜치의 첫 B2A 구현은 코딩 에이전트가 서비스 범위와 신청 준비 사항을 읽는 채널이다. 아래 경로는 Markdown·JSON·MCP 응답이며 새로운 앱 화면은 없다. 운영 배포나 외부 마켓플레이스 등록 완료를 뜻하지 않는다.
+
+| ID | 메서드·경로 | 동작 | 구현 |
+|---|---|---|---|
+| A1 | `GET /developers/agents.md` | 국내 PG 상담에 적합한 상황·지원 범위·Claude Code/Codex 연결·웹 신청 경로 안내 | `buildAgentGuide` |
+| A2 | `GET /api/agent/v1/services` | 현재 제공하는 `pg-consultation`과 적용 범위·계약 구분 조회 | `getPublicServiceCatalog` |
+| A3 | `GET /api/agent/v1/services/:serviceId/requirements` | `contractType=new` 또는 `renewal`의 준비 사항 조회, 생략하면 `new` | `getPublicRequirements` |
+| A4 | `POST /api/agent/mcp` | `list_services`, `get_requirements`, `get_integration_guide` 공개 조회 | 공식 MCP 서버 SDK, 상태 없는 HTTP 전송 |
+
+설정된 buyer 호스트에서 비로그인으로 읽을 수 있고 partner·미등록 호스트는 `404`와 `noindex`로 거부한다. 에이전트는 필요한 정보를 정리한 뒤 기존 `/quote-start`로 안내한다. 연결만으로 신청·선정·계약을 실행하지 않는다. 고객·견적 정보 조회, 클라우드, PG별 실행 예제, 공통 SDK 패키지는 아직 제공하지 않는다. PG 서비스 이용계약과 노온–구매사 합의서의 기존 구분도 유지한다.
+
+이 단계의 분석은 서버가 확인한 조회 종류·결과·처리 시간이다. 사용자에게 실제로 추천했는지, 가입·신청·계약으로 이어졌는지는 이 기록으로 확정하지 않는다. 인증·신청 기능과 지속적인 전환 분석을 추가할 때 별도 흐름과 권한을 설계한다. 경계와 전송 규칙은 [라우팅](docs/agents/routing.md#b2a-공개-조회-채널-2026-11-08-로컬-구현-첫-단계)을 따른다.
 
 ### 0.2 Buyer Workspace Screens
 
@@ -606,3 +628,16 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 회원과 `MatchingCandidates`, `MatchingReviewLayout`, `RequestSummary`, 영업일 기간 버튼을 공유한다. 1024px 이상은 왼쪽 PG 추천·오른쪽 응답 기간과 요약, 미만은 PG 선택 → 요청 확인을 한 화면씩 표시한다. PG 기본 선택은 없고 조회 중·조회 실패·접수 불가·미선택은 진행을 막는다. 이전·다음·최종 요청은 하단에 유지하고 화면 전환 시 스크롤·초점을 옮긴다. 좁은 확인 화면의 이전은 PG 선택으로, 선택 화면의 이전은 답변으로 돌아간다. Shift+Enter도 같은 규칙이다.
 
 요약은 제목·업종·결제수단·첨부 수를 먼저 표시하고 전체 답변·파일 목록은 ‘요청 내용 전체 보기’에서 확인한다. 답변 수정 후 추천을 다시 조회한다. 최초 추천은 회원 로딩 연출과 비로그인 안내 문구를 사용하고 매출 변경에는 반복하지 않는다. 응답 기간은 3·5·10영업일, 기본 5영업일이며 실제 발송 다음 날부터 계산하고 오후 6시 마감임을 알린다. 추천 조회는 답변만 저장하며 가입 연결이나 자동 요청을 예약하지 않는다. 최종 확정에서 최신 답변·첨부 저장과 PG 재검증을 마치고 예약한다. 기능이 꺼져 있으면 가입·로그인 후 수동 이어쓰기로 연결한다.
+
+
+## B2A 계정 채널 화면 (2026-11-08)
+
+| 화면 | 내용과 행동 |
+|---|---|
+| `/agent/authorize` | 연결 앱이 입력한 이름·돌아갈 주소·구매사·허용 기능·기간을 표시한다. 닫기/연결해요로 선택한다. 동의 뒤 워크스페이스가 바뀌면 연결을 중단한다. |
+| `/agent/requests/[requestId]` | 실제 전달할 상담 내용, 추천 PG 한 곳, 누락 정보·오류를 보여준다. 고객이 직접 발송한다. 초안 판본이 바뀌면 갱신한 내용을 재확인하고, 이미 보냈으면 상담 상세로 연결한다. |
+| `/settings/agents` | 프로필 설정에서 진입한다. 본인·현재 구매사의 연결과 읽기/쓰기 권한을 표시하고 철회한다. 철회는 기존 상담을 삭제하지 않는다. |
+
+세 화면은 기존 구매사 셸·디자인 토큰·Button을 사용하고 noindex다. 모바일은 내용 행을 세로로 표시한다. 초안 수정은 에이전트에서 하고 확인 화면을 다시 연다. 계약 서명이나 결제 수단 자동 등록은 이 흐름에 포함하지 않는다. 세부 구현·활성화는 [계정 채널](docs/B2A_ACCOUNT_CHANNEL.md)을 따른다.
+
+B2A 동의·확인·관리 화면은 주소가 설정된 buyer origin과 다를 때 `접속 주소가 달라요`와 현재 접속 주소·설정된 주소를 나란히 설명한다. 해당 화면을 올바른 주소에서 여는 링크와 복사를 제공하고, 복사 실패 시 직접 선택할 수 있는 전체 링크를 표시한다. 인증 링크의 state·PKCE 등 쿼리를 유지하며 승인·발송이나 비공개 데이터 조회는 실행하지 않는다. 브라우저 종류를 원인으로 단정하거나 설정 안내를 오류에 섞지 않는다. 연결 관리의 빈 상태는 에이전트에서 인증을 시작하도록 안내한다.

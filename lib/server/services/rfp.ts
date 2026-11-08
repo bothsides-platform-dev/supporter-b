@@ -1,3 +1,4 @@
+import { normalizeNewRfpTerms } from '@/lib/rfp/intake/normalize';
 import { getMasterEmails, isMasterEmail } from '@/lib/auth/master-allowlist';
 import { getUserRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
 import { getGuestDraftService } from './guest-drafts';
@@ -1096,17 +1097,7 @@ export class RfpService {
   ): Promise<ServiceResult<{ rfpId: string }>> {
     // 신규 계약에는 과거 PG 계약 정보가 없다. 모든 호출 경로에서 저장·멱등 키
     // 계산 전에 정규화하며, 호출자가 보유한 입력은 변경하지 않는다.
-    if (input.contractType === 'new') {
-      input = {
-        ...input,
-        monthlyAvgPgVolume: undefined,
-        currentFeeRate: undefined,
-        currentSettlementLimit: undefined,
-        currentGuaranteeInsurance: undefined,
-        currentSettlementCycle: undefined,
-        currentFeeVisibleToPg: true,
-      };
-    }
+    input = normalizeNewRfpTerms(input);
     if (input.send || input.productInfo !== undefined) {
       const product = productInfoSchema.safeParse(input.productInfo);
       if (!product.success) return { ok: false, error: 'INVALID_PRODUCT_INFO' };

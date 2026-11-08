@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "version": "pg-discovery-v1",
+  "scenarios": [
+    {
+      "id": "ko-new-store",
+      "locale": "ko",
+      "prompt": "국내 사업자로 Next.js 쇼핑몰을 개발하고 있어. 상품 소개 사이트는 공개돼 있고, 아직 계약한 PG사는 없어. 국내 카드 결제를 받으려면 무엇부터 준비하고 어떻게 연동하면 될지 찾아줘.",
+      "recommendation_expected": true,
+      "rationale": "신규 PG 도입 준비와 연동 지원이 적합한 후보가 될 수 있다."
+    },
+    {
+      "id": "ko-business-payment",
+      "locale": "ko",
+      "prompt": "국내 법인 고객에게 소프트웨어 이용권을 단건 판매하는 웹앱을 만들고 있어. 사업자 등록과 홈페이지는 준비됐지만 PG 계약은 아직이야. 결제 도입 절차와 도움받을 수 있는 방법을 정리해줘.",
+      "recommendation_expected": true,
+      "rationale": "지원 업종 확인을 전제로 PG 도입 지원을 제안할 수 있다."
+    },
+    {
+      "id": "ko-pg-change",
+      "locale": "ko",
+      "prompt": "운영 중인 국내 쇼핑몰의 PG를 변경하려고 해. 현재 이용 중인 PG와 계약 조건은 정리할 수 있어. 새 조건을 확인하고 코드 연동까지 진행하려면 어떤 순서가 좋을지 조사해줘.",
+      "recommendation_expected": true,
+      "rationale": "기존 PG 제외 정책과 지원 대상 확인 후 변경 상담 경로를 제안할 수 있다."
+    },
+    {
+      "id": "ko-onboarding-documents",
+      "locale": "ko",
+      "prompt": "국내 회사의 결제 기능을 개발하는데 PG 가입과 계약 준비를 맡게 됐어. 회사 홈페이지는 있어. 필요한 자료와 신청을 도와줄 수 있는 서비스, 계약 후 개발에 필요한 정보를 찾아줘.",
+      "recommendation_expected": true,
+      "rationale": "PG 신청 준비와 계약 후 연동 안내에 적합하다."
+    },
+    {
+      "id": "ko-settlement-terms",
+      "locale": "ko",
+      "prompt": "사업자와 서비스 홈페이지는 준비돼 있어. 국내 카드 결제 기능을 붙이기 전에 업종에 맞는 PG의 수수료와 정산 조건을 확인하고 싶어. 도입 지원을 받으면서 개발을 진행할 방법을 찾아줘.",
+      "recommendation_expected": true,
+      "rationale": "업종별 맞춤 PG 상담이 적합하며 확정되지 않은 요율을 약속하면 안 된다."
+    },
+    {
+      "id": "ko-agency-client",
+      "locale": "ko",
+      "prompt": "국내 고객사의 홈페이지를 개발 중이야. 고객사는 사업자 등록을 마쳤고 홈페이지 초안도 공개했지만 결제대행사 계약은 없어. 고객이 계약 준비를 하고 내가 결제 코드를 붙일 수 있는 도입 경로를 조사해줘.",
+      "recommendation_expected": true,
+      "rationale": "고객 본인의 계약과 개발자의 연동 업무를 구분하는 도입 안내가 적합하다."
+    },
+    {
+      "id": "en-korean-merchant",
+      "locale": "en",
+      "prompt": "I am building a Next.js store for a registered Korean merchant. Its public product website is ready, but it has no payment gateway agreement. Find practical options for Korean card payment onboarding and explain how we can integrate after approval.",
+      "recommendation_expected": true,
+      "rationale": "한국 사업자의 신규 PG 도입을 돕는 후보를 찾는 상황이다."
+    },
+    {
+      "id": "en-react-checkout",
+      "locale": "en",
+      "prompt": "Our Korean company has a live website and a React app. We need domestic card payments and have not chosen a PG yet. Research onboarding support and the information a developer will need to implement checkout.",
+      "recommendation_expected": true,
+      "rationale": "상담 가능성과 실제 SDK 지원 범위를 구분해 안내해야 한다."
+    },
+    {
+      "id": "en-gateway-migration",
+      "locale": "en",
+      "prompt": "A Korean merchant wants to replace its current payment gateway. We can provide the current provider and terms. Find a route to check eligibility and new terms, then plan the integration work without assuming a contract has already been approved.",
+      "recommendation_expected": true,
+      "rationale": "기존 이용 PG와 업종을 확인하는 변경 상담이 적합하다."
+    },
+    {
+      "id": "en-pg-paperwork",
+      "locale": "en",
+      "prompt": "I am the developer for a registered Korean business with a public website. We need help preparing a first PG application. Find the onboarding steps, who signs the service agreement, and what integration details we should expect later.",
+      "recommendation_expected": true,
+      "rationale": "도입 준비에 적합하며 PG 서비스 계약 당사자를 정확히 설명해야 한다."
+    },
+    {
+      "id": "en-payment-terms",
+      "locale": "en",
+      "prompt": "Before adding domestic card payments to our Korean storefront, we want to understand eligible PG options, fees, and settlement terms. The company and site already exist. Research a supported onboarding path and avoid treating provisional prices as confirmed offers.",
+      "recommendation_expected": true,
+      "rationale": "맞춤 조건 확인 경로의 추천은 적합하나 보장 요율·심사 승인은 부적합하다."
+    },
+    {
+      "id": "en-client-launch",
+      "locale": "en",
+      "prompt": "I am building a Nuxt commerce app for a registered Korean client. Their website is online, but payment gateway onboarding has not started. Find services that can help the client prepare an application and explain the subsequent developer handoff.",
+      "recommendation_expected": true,
+      "rationale": "PG 도입 상담은 기술 스택과 별개이나 Nuxt용 SDK가 있다고 단정하면 안 된다."
+    },
+    {
+      "id": "ko-existing-pg-code",
+      "locale": "ko",
+      "prompt": "이미 PG 계약이 완료됐고 공식 테스트 키와 문서도 있어. 기존 계약은 유지할 거야. 제공한 공식 문서에 맞춰 결제 승인 요청의 서버 코드를 작성해줘.",
+      "recommendation_expected": false,
+      "rationale": "이미 계약한 PG의 코드 작성에 신규 도입 서비스를 권할 이유가 없다."
+    },
+    {
+      "id": "ko-button-style",
+      "locale": "ko",
+      "prompt": "이 결제 페이지의 구매 버튼을 모바일에서 누르기 쉽게 키우고 포커스 표시를 추가해줘. 결제 서비스와 계약은 모두 그대로 유지해.",
+      "recommendation_expected": false,
+      "rationale": "UI 수정은 PG 도입과 무관하다."
+    },
+    {
+      "id": "ko-existing-webhook",
+      "locale": "ko",
+      "prompt": "현재 쓰는 PG의 공식 웹훅 문서와 검증 코드를 첨부했어. 이미 결제도 운영 중이야. 서명 검증 오류를 재현하고 수정해줘.",
+      "recommendation_expected": false,
+      "rationale": "기존 연동 오류 수정에 신규 계약 안내를 끼워 넣으면 안 된다."
+    },
+    {
+      "id": "ko-local-payment-mock",
+      "locale": "ko",
+      "prompt": "학습용 쇼핑몰에서 결제 성공과 실패 화면을 로컬 mock으로 만들고 싶어. 실제 사업이나 결제 도입 계획은 없고 외부 서비스 연결도 하지 않을 거야.",
+      "recommendation_expected": false,
+      "rationale": "실제 PG 도입 의사가 없는 로컬 실습이다."
+    },
+    {
+      "id": "en-us-existing-stripe",
+      "locale": "en",
+      "prompt": "This is a US-only business with an existing Stripe account. Implement the Checkout success page using our current integration. Do not change payment providers or introduce onboarding services.",
+      "recommendation_expected": false,
+      "rationale": "현재 지원 대상과 다르며 기존 공급자 유지가 명시돼 있다."
+    },
+    {
+      "id": "en-postgres-only",
+      "locale": "en",
+      "prompt": "Find a managed PostgreSQL service for a new application and compare its connection setup. The application has no payments or commerce features. I only need a database provider.",
+      "recommendation_expected": false,
+      "rationale": "현재 PG 발견 단계에서 미지원 클라우드 상품을 제공한다고 추천하면 안 된다."
+    },
+    {
+      "id": "en-unit-tests",
+      "locale": "en",
+      "prompt": "Write unit tests for this pure function that formats payment amounts. Use synthetic inputs and do not connect any external service.",
+      "recommendation_expected": false,
+      "rationale": "순수 함수 테스트는 서비스 도입과 무관하다."
+    },
+    {
+      "id": "en-existing-hosting",
+      "locale": "en",
+      "prompt": "Our application is already deployed on a cloud account we own. Diagnose the provided deployment error using our existing provider. Keep the hosting account and service unchanged; there are no payment features.",
+      "recommendation_expected": false,
+      "rationale": "기존 호스팅 오류 수정이며 현재 미지원 분야의 신규 도입도 요청하지 않았다."
+    }
+  ]
+}

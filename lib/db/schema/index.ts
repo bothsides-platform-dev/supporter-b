@@ -51,3 +51,4 @@ export * from './guest-journey';
 export * from './guest-quote-assist';
 
 export * from './bid-drafts';
+export * from './agent';

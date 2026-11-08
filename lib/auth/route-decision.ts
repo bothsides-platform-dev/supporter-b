@@ -63,6 +63,10 @@ export function decideRoute(
   isAuthenticated: boolean,
   host: string | null = null,
 ): RouteDecision {
+  // Exact document path only; the handler independently restricts the host.
+  if (pathname === '/developers/agents.md') return { kind: 'next' };
+  if (pathname === '/.well-known/oauth-authorization-server' || pathname === '/.well-known/oauth-protected-resource/api/agent/account/mcp') return { kind: 'next' };
+
   if (pathname === '/legal' || pathname.startsWith('/legal/')) {
     return { kind: 'next' };
   }
