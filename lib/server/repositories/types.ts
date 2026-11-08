@@ -1305,6 +1305,18 @@ export interface VerificationTokenRepo {
     tx?: Tx,
   ): Promise<void>;
   /**
+   * `since` 이후 같은 (email, purpose) 로 발급한 토큰 수. 소비·무효화 여부와 관계없이
+   * 발급 1건 = 메일 1통으로 센다 — 비로그인 발송 경로의 이메일별 한도 판정용.
+   */
+  countIssuedSince(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      since: Date;
+    },
+    tx?: Tx,
+  ): Promise<number>;
+  /**
    * 이메일 재전송 시 이전 토큰을 expire(expiresAt=now)만 하고 consumedAt은 NULL
    * 유지. 불변식: consumedAt IS NOT NULL ⟺ 사용자가 직접 인증 완료.
    * invalidatePending(consumedAt 스탬프)과 달리 폴링/게이트에서 미인증 상태를 구분 가능.

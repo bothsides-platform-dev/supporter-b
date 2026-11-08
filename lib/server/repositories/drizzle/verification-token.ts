@@ -85,6 +85,28 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
     return row ? rowToToken(row) : undefined;
   }
 
+  async countIssuedSince(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      since: Date;
+    },
+    tx?: Tx,
+  ): Promise<number> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(verificationTokens)
+      .where(
+        and(
+          eq(verificationTokens.email, params.email),
+          eq(verificationTokens.purpose, params.purpose),
+          gt(verificationTokens.issuedAt, params.since),
+        ),
+      );
+    return Number(row?.n ?? 0);
+  }
+
   async invalidatePending(
     params: {
       email: string;

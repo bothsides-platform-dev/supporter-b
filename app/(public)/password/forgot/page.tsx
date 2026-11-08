@@ -23,6 +23,16 @@ export default function ForgotPasswordPage() {
     setSent(true);
   };
 
+  // 발송 여부·한도는 서버가 정한다(같은 1분 dedupe, 이메일별 시간당 한도). 결과도
+  // 가입 여부를 숨기려 늘 같으므로, 실패해도 확인 화면과 다시 시작된 대기 시간을 유지한다.
+  const handleResend = async () => {
+    try {
+      await passwordForgotAction({ email });
+    } catch {
+      // 다음 대기 시간이 끝나면 다시 누를 수 있다.
+    }
+  };
+
   if (sent) {
     return (
       <div className="space-y-8 text-center">
@@ -32,7 +42,7 @@ export default function ForgotPasswordPage() {
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]"><span className="md-numeric">{email}</span></p>
           <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">30분 내 만료됩니다.</p>
         </div>
-        <ResendCountdown onResend={() => {}} />
+        <ResendCountdown onResend={() => void handleResend()} />
       </div>
     );
   }
