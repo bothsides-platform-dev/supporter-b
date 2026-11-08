@@ -38,9 +38,9 @@
     "@channel.io/channel-web-sdk-loader": "^2.0.2",
     "@pdf-lib/fontkit": "^1.1.1",
     "@radix-ui/react-slider": "^1.3.6",
-    "@react-email/render": "^2.0.8",
-    "@sentry/core": "10.51.0",
-    "@sentry/nextjs": "^10.51.0",
+    "@react-email/render": "^2.2.0",
+    "@sentry/core": "10.78.0",
+    "@sentry/nextjs": "10.78.0",
     "bcryptjs": "^3.0.2",
     "canvas-confetti": "^1.9.4",
     "centrifuge": "^5.6.0",
@@ -56,7 +56,7 @@
     "ky": "^2.0.2",
     "lucide-react": "^1.14.0",
     "motion": "^12.38.0",
-    "next": "16.4.3",
+    "next": "16.4.5",
     "next-auth": "5.0.0-beta.32",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
@@ -67,14 +67,13 @@
     "react-dom": "19.2.4",
     "react-number-format": "^5.4.5",
     "react-rnd": "^10.5.3",
-    "resend": "^6.4.0",
-    "shadcn": "^4.6.0",
+    "resend": "^6.37.0",
     "swr": "^2.4.2",
     "tailwind-merge": "^3.5.0",
     "tldts": "^7.4.2",
     "tw-animate-css": "^1.4.0",
-    "undici": "7.29.0",
-    "zod": "^4.4.3",
+    "undici": "7.30.2",
+    "zod": "^4.6.7",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
@@ -93,7 +92,7 @@
     "drizzle-kit": "^0.31.10",
     "esbuild": "0.28.1",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.5",
     "eslint-plugin-unused-imports": "^4.4.1",
     "jsdom": "^29.1.1",
     "knip": "^6.14.1",
@@ -104,28 +103,36 @@
     "tailwindcss": "^4.2.4",
     "tsx": "^4.20.6",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.11"
+    "vite": "~8.1.6",
+    "vitest": "~4.1.12"
   },
   "pnpm": {
     "overrides": {
-      "undici": ">=7.28.0 <8.0.0",
-      "hono": ">=4.13.5",
-      "vite": ">=8.0.16",
-      "vitest": ">=4.1.11 <5.0.0",
-      "js-yaml": ">=4.2.0",
+      "undici": ">=7.30.2 <8.0.0",
+      "hono": ">=4.13.11 <5.0.0",
+      "vite": ">=8.1.6 <8.2.0",
+      "vitest": ">=4.1.12 <4.2.0",
+      "js-yaml": ">=4.3.2 <5.0.0",
       "protobufjs": ">=7.6.3",
       "@opentelemetry/core": ">=2.8.0",
       "postcss": ">=8.5.10",
       "esbuild": ">=0.28.1",
       "sharp": "0.35.5",
       "uuid": ">=11.1.1 <12.0.0",
-      "fast-uri": ">=3.1.6 <4.0.0",
-      "qs": ">=6.16.0 <7.0.0",
-      "nanoid": ">=3.3.18 <4.0.0"
+      "fast-uri": ">=3.1.9 <4.0.0",
+      "qs": ">=6.16.1 <7.0.0",
+      "nanoid": ">=3.3.18 <4.0.0",
+      "minimatch@>=7.0.0 <11.0.1": "11.0.1",
+      "glob@>=9.0.0 <14.0.2": "14.0.2",
+      "brace-expansion@<2.0.0": "1.1.21",
+      "brace-expansion@>=4.0.0 <5.0.12": "5.0.12",
+      "fast-copy": ">=4.1.0 <5.0.0",
+      "smol-toml": ">=1.9.0 <2.0.0",
+      "source-map-js": ">=1.2.2 <2.0.0"
     },
     "patchedDependencies": {
-      "next@16.4.3": "patches/next@16.4.3.patch"
+      "next@16.4.5": "patches/next@16.4.5.patch"
     }
-  }
+  },
+  "packageManager": "pnpm@10.34.9"
 }

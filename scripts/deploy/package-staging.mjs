@@ -5,11 +5,13 @@ import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeF
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { nodeFileTrace } from '@vercel/nft';
+import runtimePolicy from './node-runtime.cjs';
 
 const [output, sha, run, attempt] = process.argv.slice(2);
 if (!output || !/^[0-9a-f]{40}$/.test(sha) || !/^[1-9][0-9]*$/.test(run) || !/^[1-9][0-9]*$/.test(attempt)) {
   throw new Error('Expected output directory, commit SHA, run number and attempt.');
 }
+runtimePolicy.checkBuildRuntime(process.cwd());
 const releaseId = `${sha}-${run}-${attempt}`;
 if (execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== sha) {
   throw new Error('The artifact revision must match the checked out commit.');
@@ -45,6 +47,8 @@ try {
     cpSync(file, target, { recursive: true, verbatimSymlinks: true });
   }
   cpSync('docker-compose.prod.yml', join(stage, '.ops/docker-compose.yml'));
+  cpSync('mise.toml', join(stage, '.ops/mise.toml'));
+  cpSync(new URL('./node-runtime.cjs', import.meta.url), join(stage, '.ops/node-runtime.cjs'));
   cpSync('deploy/centrifugo', join(stage, '.ops/deploy/centrifugo'), { recursive: true });
   writeFileSync(join(stage, '.release.json'), `${JSON.stringify(metadata)}\n`);
   const archive = `${releaseId}.tar.gz`;

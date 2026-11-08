@@ -17,6 +17,7 @@ function fixture() {
   };
   put('.gitignore', '.next/\n.staging-ops/\noutput/\n');
   put('lib/db/schema/example.ts', 'export const version = 1;');
+  put('mise.toml', `[tools]\nnode = "${process.versions.node}"\n`);
   put('docker-compose.prod.yml', 'services: {}\n');
   put('deploy/centrifugo/config.yaml', 'test: true\n');
   put('public/example.txt', 'public asset');
@@ -52,8 +53,10 @@ it('packages the standalone runtime, static assets and compiled operations witho
   expect(readFileSync(join(unpacked, 'public/example.txt'), 'utf8')).toBe('public asset');
   expect(readFileSync(join(unpacked, '.next/static/app.js'), 'utf8')).toBe('built client');
   expect(readFileSync(join(unpacked, '.ops/check.cjs'), 'utf8')).toBe('compiled check');
+  expect(readFileSync(join(unpacked, '.ops/mise.toml'), 'utf8')).toContain(`node = "${process.versions.node}"`);
+  expect(existsSync(join(unpacked, '.ops/node-runtime.cjs'))).toBe(true);
   expect(existsSync(join(unpacked, '.env.production'))).toBe(false);
-  expect(JSON.parse(readFileSync(join(unpacked, '.release.json'), 'utf8'))).toMatchObject({ sha, schema: expect.stringMatching(/^[0-9a-f]{64}$/) });
+  expect(JSON.parse(readFileSync(join(unpacked, '.release.json'), 'utf8'))).toMatchObject({ sha, schema: expect.stringMatching(/^[0-9a-f]{64}$/), nodeVersion: process.versions.node });
 });
 
 it('keeps runtime dependency symlinks portable after the build machine is removed', () => {
@@ -90,4 +93,12 @@ it('refuses to label a build with another commit or package a build from another
   expect(run('a'.repeat(40)).status).not.toBe(0);
   put('.next/standalone/.next/BUILD_ID', 'old-build');
   expect(run().status).not.toBe(0);
+});
+
+it('refuses to package a build from a Node version different from mise.toml', () => {
+  const { run, put } = fixture();
+  put('mise.toml', '[tools]\nnode = "22.0.0"\n');
+  const result = run();
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain('Build Node must match mise.toml');
 });

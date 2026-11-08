@@ -7,7 +7,9 @@
 # Reads POSTGRES_PASSWORD from .env.production (keep it strong).
 services:
   pg:
-    image: postgres:16-alpine
+    # Docker Hub OCI index: body SHA-256 and linux/amd64 verified on 2026-11-08.
+    # https://registry-1.docker.io/v2/library/postgres/manifests/16.15-alpine
+    image: postgres:16.15-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     container_name: bidit-pg-prod
     restart: always
     ports:
@@ -37,7 +39,9 @@ services:
   #   app CENTRIFUGO_TOKEN_HMAC_SECRET -> CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
   #   app CENTRIFUGO_API_KEY           -> CENTRIFUGO_HTTP_API_KEY
   centrifugo:
-    image: centrifugo/centrifugo:v6
+    # Docker Hub manifest list: body SHA-256 and linux/amd64 verified on 2026-11-08.
+    # https://registry-1.docker.io/v2/centrifugo/centrifugo/manifests/v6.10.2
+    image: centrifugo/centrifugo:v6.10.2@sha256:34b84f823515927266ce3abfb840fd9e0acabb58805e7e896f5de731217a627d
     container_name: bidit-centrifugo-prod
     restart: always
     command: centrifugo -c /centrifugo/config.yaml

@@ -352,3 +352,15 @@ assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·
 ### AR-6 — 비회원 추천 조건·등급별 요율의 반복 조회 (수용, 2026-11-02)
 
 가입 전 예상 수수료 확인을 위해 초안 증명 보유자에게 해당 매출 등급의 요율·추천 이유·적용 조건·업종 상태를 공개한다. 매출을 바꾸어 여러 등급의 요율을 수집할 수 있는 잔여 위험을 수용한다. 전체 요율표를 한 응답에 싣지 않으며 동일 출처·HttpOnly 증명·요청 제한을 유지한다. 잠정 등급은 승인 등급을 변경하지 않고 실제 접수 시 서버가 PG 자격을 다시 확인한다. 공개 대상 확대나 수집 악용이 확인되면 재검토한다. 가드: `lib/server/services/__tests__/guest-requests.test.ts`의 공개 필드·5개 구간·소유권·revision·예약 동결 검증.
+
+## 의존성 설치·배포 실행 경계 (2026-11-08)
+
+`packageManager`는 보안 수정된 pnpm 버전을 고정하고 CI·bootstrap이 함께 읽는다. 잠금 파일은 패키지 무결성을 검증하며 `pnpm-workspace.yaml`은 의존성 lifecycle 스크립트를 기본 차단한다. 현재 네이티브 도구는 optional npm 패키지에서 로드하며 fallback 다운로드·MSW 안내 스크립트는 실행하지 않는다. 새 스크립트는 `strictDepBuilds`에 따라 검토 전 설치를 실패시킨다. 루트의 기존 `prepare`는 개발용 Git 훅 등록이며 별도다.
+
+CI Actions는 커밋 SHA, Node·Postgres·Centrifugo 이미지는 digest에 고정한다. 신규 Node·Compose·Caddy 다운로드는 저장소에 검토한 공식 체크섬과 일치할 때만 설치한다. 모든 범위의 npm 감사는 Low부터 실패시키며 registry 오류를 성공으로 취급하지 않는다. 정기 감사는 유지 브랜치 main·dev를 각각 확인하고, PR/push CI의 감사 실패는 스테이징 배포를 차단한다. GitHub의 필수 검사·Dependabot 알림 활성화 여부는 이 코드만으로 보장되지 않는다.
+
+스테이징 산출물의 Node 기준을 함께 배포하고 systemd의 실제 `ExecStart` 실행 파일로 canary와 서버를 실행한다. 기준 미달·다른 major·잘못된 실행 경로는 서비스 전환 전에 거부한다. 기존 운영 Node와 PM2는 암묵적으로 갱신하지 않는다. 가드: `scripts/deploy/__tests__/node-runtime.test.ts`, `staging-package.test.ts`, `staging-release.test.ts`, `lib/__tests__/node-version-source.test.ts`.
+
+### AR-7 — 공개 보안 공지·운영 반영 간격 (미해소, 2026-11-08)
+
+감사 0건은 알려진 npm 공지와 해당 시점의 잠금 파일에 대한 결과이며 공급자 침해·미공개 취약점·OS 패키지·실제 운영 바이너리의 안전성을 증명하지 않는다. Node의 11월 11일 예정 보안 릴리스, ESLint 9 지원 종료, 운영 Node·Caddy·Postgres·Centrifugo·PM2의 실제 설치 버전과 컨테이너 재생성은 별도 확인이 남는다. 이 항목은 위험 수용 승인을 뜻하지 않는다. 보안 릴리스 발표·새 audit 경고·배포 또는 런타임 변경 때 재검토하고 [의존성 검토 기록](security/DEPENDENCY_REVIEW_2026-11-08.md)에 결과를 갱신한다.

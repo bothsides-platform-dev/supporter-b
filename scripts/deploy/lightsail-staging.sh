@@ -10,15 +10,33 @@ RELEASE_ID="$2"
 ARCHIVE="$ROOT/incoming/$RELEASE_ID.tar.gz"
 RELEASE="$ROOT/releases/$RELEASE_ID"
 ENV_FILE="$ROOT/shared/.env.production"
+# Use the executable configured in the loaded systemd unit, not SSH's PATH.
+# Require the direct Node + this deployment's server.js command; wrappers and
+# different entry points would make the canary run differ from the service.
+SERVICE_EXEC="$(systemctl show supporter-b-staging --property=ExecStart --value)"
+NODE_BIN="$(printf '%s\n' "$SERVICE_EXEC" | sed -nE 's/^\{ path=(\/[^ ;]+) ; argv\[\]=.*$/\1/p')"
+if [[ ! "$NODE_BIN" =~ ^/[a-zA-Z0-9_./+-]+$ ]] || [ ! -x "$NODE_BIN" ] ||
+   [[ "$SERVICE_EXEC" != "{ path=$NODE_BIN ; argv[]=$NODE_BIN $ROOT/current/server.js ; "* ]] ||
+   [[ "$SERVICE_EXEC" == *'} {'* ]]; then
+  echo 'ERROR: systemd ExecStart must run an absolute Node executable and this deployment current/server.js directly.' >&2
+  exit 1
+fi
+"$NODE_BIN" - "$NODE_BIN" <<'NODE'
+const { realpathSync } = require('node:fs');
+if (realpathSync(process.argv[2]) !== realpathSync(process.execPath)) {
+  console.error('ERROR: systemd Node executable differs from the runtime it starts.');
+  process.exit(1);
+}
+NODE
 exec 9>"$ROOT/deploy.lock"
 flock -n 9 || { echo 'ERROR: another deployment is running.' >&2; exit 1; }
-node - "$ENV_FILE" <<'NODE'
+"$NODE_BIN" - "$ENV_FILE" <<'NODE'
 const env = require('node:util').parseEnv(require('node:fs').readFileSync(process.argv[2], 'utf8'));
 if (env.APP_ENV !== 'staging' || env.APP_DOMAIN !== 'dev.support-b.com') {
   throw new Error('Only the isolated dev.support-b.com environment can be deployed here.');
 }
 NODE
-node - "$ARCHIVE" "$3" <<'NODE'
+"$NODE_BIN" - "$ARCHIVE" "$3" <<'NODE'
 const { createHash } = require('node:crypto');
 const { readFileSync } = require('node:fs');
 if (createHash('sha256').update(readFileSync(process.argv[2])).digest('hex') !== process.argv[3]) {
@@ -28,7 +46,7 @@ if (createHash('sha256').update(readFileSync(process.argv[2])).digest('hex') !==
 NODE
 
 link_current() {
-  node - "$ROOT" "$1" <<'NODE'
+  "$NODE_BIN" - "$ROOT" "$1" <<'NODE'
 const fs = require('node:fs');
 const [root, release] = process.argv.slice(2);
 const temporary = `${root}/.current-${process.pid}`;
@@ -90,7 +108,8 @@ else
   mv "$UNPACKED" "$RELEASE"
   UNPACKED=''
 fi
-ACTION="$(node - "$ROOT" "$RELEASE_ID" <<'NODE'
+"$NODE_BIN" "$RELEASE/.ops/node-runtime.cjs" release "$RELEASE"
+ACTION="$("$NODE_BIN" - "$ROOT" "$RELEASE_ID" <<'NODE'
 const fs = require('node:fs');
 const [root, id] = process.argv.slice(2);
 const candidate = JSON.parse(fs.readFileSync(`${root}/releases/${id}/.release.json`, 'utf8'));
@@ -120,10 +139,10 @@ if [ "$ACTION" = skip ]; then
 fi
 INFRA_CHANGED=1
 compose "$RELEASE"
-NODE_ENV=production node --env-file="$ENV_FILE" "$RELEASE/.ops/sync.cjs" || echo 'WARN: calendar sync failed; checking existing coverage.' >&2
-NODE_ENV=production node --env-file="$ENV_FILE" "$RELEASE/.ops/check.cjs"
+NODE_ENV=production "$NODE_BIN" --env-file="$ENV_FILE" "$RELEASE/.ops/sync.cjs" || echo 'WARN: calendar sync failed; checking existing coverage.' >&2
+NODE_ENV=production "$NODE_BIN" --env-file="$ENV_FILE" "$RELEASE/.ops/check.cjs"
 # Smoke-test the candidate before changing the running service.
-NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3100 node --env-file="$ENV_FILE" "$RELEASE/server.js" \
+NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3100 "$NODE_BIN" --env-file="$ENV_FILE" "$RELEASE/server.js" \
   9>&- >"$ROOT/shared/candidate.log" 2>&1 &
 CANARY_PID=$!
 curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 \
@@ -136,7 +155,7 @@ sudo systemctl restart supporter-b-staging
 curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 \
   --max-time 10 --output /dev/null http://127.0.0.1:3000/api/auth/session
 # Keep five recent releases and always preserve the immediate rollback target.
-node - "$ROOT" "$PREVIOUS" <<'NODE'
+"$NODE_BIN" - "$ROOT" "$PREVIOUS" <<'NODE'
 const fs = require('node:fs');
 const [root, previous] = process.argv.slice(2);
 const entries = fs.readdirSync(`${root}/releases`).filter(id => /^[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$/.test(id));

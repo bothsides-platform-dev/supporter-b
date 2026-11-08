@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # One-time provisioning for a fresh AWS Lightsail "Amazon Linux 2023" instance.
 # Run as the default `ec2-user` (has passwordless sudo). Idempotent-ish:
-# safe to re-run; existing installs are skipped.
+# safe to re-run; supported existing installs are skipped. Runtime upgrades are manual.
 #
 #   bash scripts/deploy/lightsail-bootstrap.sh
 #
 # Installs: 2GB swap, Node 22 (official binary — AL2023 has glibc 2.34, so no
-# workaround needed), pnpm 9 (corepack), Docker + compose v2, PM2, Caddy
+# workaround needed), packageManager-pinned pnpm (corepack), Docker + compose v2, PM2, Caddy
 # (static binary + systemd unit).
 #
 # ── NO host firewall by design ──────────────────────────────────────────────
@@ -21,11 +21,28 @@
 #  OCI needed iptables surgery; Lightsail needs a console click. See the runbook.)
 set -euo pipefail
 
-NODE_VERSION="${NODE_VERSION:-22.23.4}"
-COMPOSE_VERSION="${COMPOSE_VERSION:-v2.29.7}"
+COMPOSE_VERSION="${COMPOSE_VERSION:-v2.40.3}"
+CADDY_VERSION="${CADDY_VERSION:-v2.11.8}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+
+# Read the pin without Node: a fresh host may not have a runtime yet.
+NODE_PIN="$(sed -nE 's/^node[[:space:]]*=[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)"[[:space:]]*$/\1/p' "$REPO_ROOT/mise.toml")"
+if [[ ! "$NODE_PIN" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo 'ERROR: mise.toml must contain one exact Node version.' >&2
+  exit 1
+fi
+NODE_VERSION="${NODE_VERSION:-$NODE_PIN}"
+if [ "$NODE_VERSION" != "$NODE_PIN" ]; then
+  echo 'ERROR: new installations must use the reviewed mise.toml Node pin.' >&2
+  exit 1
+fi
+if command -v node >/dev/null 2>&1; then
+  # Refuse an outdated runtime before any swap/package/systemd mutation. Never
+  # replace a running server's Node/PM2 daemon implicitly during bootstrap.
+  node "$REPO_ROOT/scripts/deploy/node-runtime.cjs" check "$NODE_PIN"
+fi
 
 # --- 1. Swap 4GB (next build peaks >1GB and OOM-kills on a 2GB box; give the
 #        build room to spill to disk instead of getting killed) -------------
@@ -50,28 +67,31 @@ sudo dnf -y update
 sudo dnf -y install git tar xz gzip shadow-utils
 
 # --- 3. Node 22 (official linux-x64 binary; AL2023 glibc 2.34 is fine) -------
-if ! command -v node >/dev/null 2>&1 || [ "$(node -v 2>/dev/null | cut -d. -f1)" != "v22" ]; then
+if ! command -v node >/dev/null 2>&1; then
   log "Installing Node ${NODE_VERSION} (official binary) to /usr/local"
   tmp="$(mktemp -d)"
   url="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"
-  curl -fsSL "$url" -o "$tmp/node.tar.xz"
+  bash "$REPO_ROOT/scripts/deploy/download-verified.sh" "$url" \
+    "node-v${NODE_VERSION}-linux-x64.tar.xz" "$tmp/node.tar.xz"
   sudo tar -xJf "$tmp/node.tar.xz" -C /usr/local --strip-components=1
   rm -rf "$tmp"
   hash -r
 else
   log "Node already installed: $(node -v)"
 fi
+node "$REPO_ROOT/scripts/deploy/node-runtime.cjs" check "$NODE_PIN"
 log "node $(node -v), npm $(npm -v)"
 
-# --- 4. pnpm 9 via corepack -------------------------------------------------
-log "Enabling corepack + pnpm 9"
+# --- 4. Reviewed package manager via corepack ------------------------------
+PNPM_SPEC="$(node "$REPO_ROOT/scripts/deploy/node-runtime.cjs" pnpm "$REPO_ROOT/package.json")"
+log "Enabling corepack + ${PNPM_SPEC}"
 sudo corepack enable
-corepack prepare pnpm@9 --activate
+corepack prepare "$PNPM_SPEC" --activate
 
 # --- 5. PM2 (supervises the native `next start`) ----------------------------
 if ! command -v pm2 >/dev/null 2>&1; then
-  log "Installing PM2"
-  sudo npm install -g pm2
+  log "Installing PM2 7.1.2"
+  sudo npm install -g pm2@7.1.2
 else
   log "PM2 already installed: $(pm2 --version)"
 fi
@@ -89,11 +109,13 @@ else
 fi
 if ! sudo docker compose version >/dev/null 2>&1; then
   log "Installing docker compose v2 plugin (${COMPOSE_VERSION})"
-  sudo mkdir -p /usr/libexec/docker/cli-plugins
-  sudo curl -fsSL \
+  tmp="$(mktemp -d)"
+  bash "$REPO_ROOT/scripts/deploy/download-verified.sh" \
     "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64" \
-    -o /usr/libexec/docker/cli-plugins/docker-compose
-  sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+    "docker-compose-${COMPOSE_VERSION}-linux-x86_64" "$tmp/docker-compose"
+  sudo mkdir -p /usr/libexec/docker/cli-plugins
+  sudo install -m 0755 "$tmp/docker-compose" /usr/libexec/docker/cli-plugins/docker-compose
+  rm -rf "$tmp"
 else
   log "docker compose already present"
 fi
@@ -103,9 +125,13 @@ fi
 # unit. CAP_NET_BIND_SERVICE lets the non-root caddy user bind 80/443.
 # {$APP_DOMAIN} in the Caddyfile is read from caddy.env.
 if ! command -v caddy >/dev/null 2>&1; then
-  log "Installing Caddy (static binary)"
+  log "Installing Caddy ${CADDY_VERSION} (official release archive)"
   tmp="$(mktemp -d)"
-  curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o "$tmp/caddy"
+  caddy_archive="caddy_${CADDY_VERSION#v}_linux_amd64.tar.gz"
+  bash "$REPO_ROOT/scripts/deploy/download-verified.sh" \
+    "https://github.com/caddyserver/caddy/releases/download/${CADDY_VERSION}/${caddy_archive}" \
+    "$caddy_archive" "$tmp/caddy.tar.gz"
+  tar -xzf "$tmp/caddy.tar.gz" -C "$tmp" caddy
   sudo install -m 0755 "$tmp/caddy" /usr/local/bin/caddy
   rm -rf "$tmp"
 else

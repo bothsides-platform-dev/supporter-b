@@ -1,0 +1,57 @@
+name: dependency security
+
+on:
+  workflow_call:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Scheduled workflows start on the default branch. Audit both maintained
+        # branches even when neither receives a push after a new advisory.
+        # Empty ref preserves checkout's PR merge / push / manual ref behavior.
+        ref: ${{ github.event_name == 'schedule' && fromJSON('["main","dev"]') || fromJSON('[""]') }}
+    steps:
+      - name: Checkout audit target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ matrix.ref }}
+          persist-credentials: false
+      - name: Set up Node from mise.toml
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: mise.toml
+          package-manager-cache: false
+      - name: Set up pinned pnpm from package.json
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          run_install: false
+      - name: Install the frozen lockfile without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      # Default scope includes runtime, development and optional dependencies.
+      # No ignored advisories, severity exceptions or successful registry errors.
+      - name: Audit all dependencies including low severity
+        id: audit
+        run: pnpm audit --audit-level low
+      - name: Report audit outcome
+        if: always()
+        env:
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          AUDIT_TARGET: ${{ matrix.ref || github.ref }}
+        run: |
+          printf 'Dependency audit target: `%s`\n\n' "$AUDIT_TARGET" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$AUDIT_OUTCOME" = success ]; then
+            printf 'No known vulnerabilities reported across runtime, development and optional dependencies.\n' >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'Audit did not pass (%s). Check the failed setup, install or audit step; vulnerabilities and registry errors both fail this check.\n' "$AUDIT_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          fi

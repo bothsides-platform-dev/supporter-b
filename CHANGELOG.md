@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.3.6] - 2026-11-08
+
+### Security
+
+- Next.js·Sentry·Undici·입력 검증·메일 및 개발 도구의 알려진 취약점을 수정하고, 사용하지 않는 shadcn CLI와 수정판이 없는 deepmerge 의존성을 제거했어요.
+- pnpm을 보안 수정된 10.34.9로 고정하고, 의존성 설치 스크립트는 명시적으로 검토한 정책에 따라 차단해요. 모든 범위의 의존성 보안 검사를 PR·배포 브랜치 push·매일 실행하도록 추가했어요.
+- Postgres·Centrifugo 이미지를 검토한 버전과 digest로 고정하고, 신규 서버 설치 파일·CI Actions·성능 테스트 실행 파일의 무결성을 확인해요. 감사가 실패하면 스테이징 배포를 차단하고, 배포 전 실제 서비스가 사용할 Node 버전을 검사해요. Node 버전과 운영 서버 갱신은 [보안 검토 기록](docs/security/DEPENDENCY_REVIEW_2026-11-08.md)을 따라 별도로 확인해요.
+
 ## [0.46.3.5] - 2026-11-04
 
 ### Fixed

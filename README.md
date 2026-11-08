@@ -172,14 +172,17 @@ app/                       ← action / server component만 허용
 
 ## 로컬 개발 환경
 
-Node 버전의 단일 출처는 `mise.toml`입니다. 로컬은 [mise](https://mise.jdx.dev/)가, CI는 `actions/setup-node`의 `node-version-file`이 이 값을 읽습니다. 이 파일을 읽지 못하는 성능 CI 컨테이너(`perf.yml`)와 Lightsail bootstrap 기본값은 `lib/__tests__/node-version-source.test.ts`가 같은 값인지 검사합니다. `package.json`의 `engines.node`는 그 버전을 하한으로 두고 `.npmrc`의 `engine-strict=true`가 이를 강제하므로, 더 낮거나 메이저가 다른 Node에서는 `pnpm install`·`pnpm run`이 `ERR_PNPM_UNSUPPORTED_ENGINE`으로 멈춥니다.
+Node 버전의 단일 출처는 `mise.toml`입니다. 로컬은 [mise](https://mise.jdx.dev/)가, CI는 `actions/setup-node`의 `node-version-file`이, Lightsail bootstrap은 배포 helper가 이 값을 읽습니다. 이 파일을 읽지 못하는 성능 CI 컨테이너(`perf.yml`)의 버전은 `lib/__tests__/node-version-source.test.ts`가 검사합니다. `package.json`의 `engines.node`는 그 버전을 하한으로 두고 `.npmrc`의 `engine-strict=true`가 이를 강제하므로, 더 낮거나 메이저가 다른 Node에서는 `pnpm install`·`pnpm run`이 `ERR_PNPM_UNSUPPORTED_ENGINE`으로 멈춥니다. 스테이징 배포도 systemd에 설정된 실제 실행 파일을 검사합니다. 버전 변경만으로 기존 서버의 Node가 갱신되지는 않습니다.
+
+pnpm 버전은 `package.json`의 `packageManager`에 고정합니다. Corepack을 활성화한 뒤 저장소에서 실행하면 이 버전을 사용하며 CI와 bootstrap도 같은 필드를 읽습니다. `pnpm-workspace.yaml`은 의존성 설치 스크립트를 차단하고, 새 스크립트가 생기면 검토 전 설치를 실패시킵니다. esbuild·Sentry CLI·unrs-resolver는 lockfile 무결성 검사를 받는 플랫폼별 optional 패키지를 사용하므로 `--no-optional`로 설치하지 않습니다. MSW 설치 안내 스크립트도 실행하지 않습니다. 취약점 예외 없이 `pnpm audit --audit-level low`로 개발·운영 의존성을 함께 검사합니다. [검토 근거와 남은 운영 확인](docs/security/DEPENDENCY_REVIEW_2026-11-08.md)을 참고하세요.
 
 ```sh
 brew install mise
 mise install                                     # 저장소 루트에서 한 번
 echo 'eval "$(mise activate zsh)"' >> ~/.zshrc   # 이후 열리는 셸
 eval "$(mise activate zsh)"                      # 지금 셸에도 적용
-pnpm install && pnpm dev
+corepack enable pnpm
+pnpm install --frozen-lockfile && pnpm dev
 ```
 
 `mise.toml`에는 버전만 둡니다. 템플릿·`[env]`·hooks를 넣으면 mise가 `mise trust`를 요구하고, 신뢰하지 않은 워크트리는 경고 한 줄 뒤 시스템 Node로 돌아갑니다(같은 테스트가 막습니다). 개인 설정은 git이 무시하는 `mise.local.toml`에 둡니다.

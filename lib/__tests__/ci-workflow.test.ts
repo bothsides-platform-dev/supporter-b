@@ -138,8 +138,32 @@ describe('unit shard gate', () => {
     expect(shards).toContain('shard: [1, 2]');
     expect(shards).toContain('pnpm test -- --shard=${{ matrix.shard }}/2');
     expect(job('deploy-staging')).toContain(
-      'needs: [lint, unit-test, build-staging]',
+      'needs: [audit, lint, unit-test, build-staging]',
     );
+  });
+
+  it('requires the reusable dependency audit to pass before staging deployment', () => {
+    const audit = job('audit');
+    expect(audit).toContain('uses: ./.github/workflows/dependency-security.yml');
+    expect(audit).not.toContain('continue-on-error:');
+    expect(audit).not.toMatch(/^    if:/m);
+    // A status function would override GitHub's implicit success() on needs.
+    expect(job('deploy-staging')).not.toMatch(/^    if:[^\n]*(?:always|failure|cancelled)\(\)/m);
+    expect(job('deploy-staging')).not.toContain('continue-on-error:');
+    const reusable = readFileSync(resolve('.github/workflows/dependency-security.yml'), 'utf8');
+    expect(reusable).toContain('  workflow_call:');
+    expect(reusable).not.toMatch(/^  (?:pull_request|push):/m);
+    expect(reusable).not.toContain('continue-on-error:');
+  });
+
+  it.each([0, 1, 42])('preserves dependency audit exit code %s, including registry failures', exitCode => {
+    const reusable = readFileSync(resolve('.github/workflows/dependency-security.yml'), 'utf8');
+    const command = reusable.match(/^        run: (pnpm audit .+)$/m)?.[1];
+    expect(command).toBeDefined();
+    const run = spawnSync('bash', ['-eo', 'pipefail', '-c',
+      `pnpm() { test "$*" = "audit --audit-level low" || return 99; return "$AUDIT_EXIT"; }; ${command}`,
+    ], { env: { ...process.env, AUDIT_EXIT: String(exitCode) } });
+    expect(run.status).toBe(exitCode);
   });
 });
 

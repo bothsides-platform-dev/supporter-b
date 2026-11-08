@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // mise.toml is the only Node version file: local shells read it through mise
-// and CI through setup-node's node-version-file. The perf container and the
-// server bootstrap cannot read it, so their pins must match. engine-strict=true
+// and CI through setup-node's node-version-file. Bootstrap also reads it before
+// installing Node; the perf container keeps a matching pin. engine-strict=true
 // makes pnpm refuse anything below the package.json engines floor, which is
 // kept at the pin.
 const read = (path: string) => readFileSync(resolve(path), 'utf8');
@@ -46,8 +46,8 @@ describe('node version source', () => {
 
   it('has every CI setup-node step read mise.toml', () => {
     const ci = read('.github/workflows/ci.yml');
-    const majors = [...ci.matchAll(/uses: actions\/setup-node@v(\d+)/g)].map(
-      (match) => Number(match[1]),
+    const majors = [...ci.matchAll(/uses: actions\/setup-node@(?:v(\d+)|[0-9a-f]{40}[ \t]+#[ \t]*v(\d+))/g)].map(
+      (match) => Number(match[1] ?? match[2]),
     );
     expect(majors.length).toBeGreaterThan(0);
     // setup-node reads mise.toml from 7.1.0.
@@ -58,16 +58,16 @@ describe('node version source', () => {
     expect(ci).not.toMatch(/^\s*node-version:/m);
   });
 
-  it('keeps the perf container and server bootstrap on the mise.toml pin', () => {
+  it('keeps the perf container pinned and makes bootstrap read mise.toml', () => {
     const perf = read('.github/workflows/perf.yml');
     expect(
       perf.match(/image:\s*node:(\d+\.\d+\.\d+)-/)?.[1],
       'perf.yml runs pnpm install under engine-strict',
     ).toBe(pin);
     const bootstrap = read('scripts/deploy/lightsail-bootstrap.sh');
-    expect(
-      bootstrap.match(/NODE_VERSION="\$\{NODE_VERSION:-(\d+\.\d+\.\d+)\}"/)?.[1],
-      'the bootstrap installs this version on a new server',
-    ).toBe(pin);
+    expect(bootstrap).toContain('"$REPO_ROOT/mise.toml"');
+    expect(bootstrap).toContain('NODE_VERSION="${NODE_VERSION:-$NODE_PIN}"');
+    expect(bootstrap).toContain('node-runtime.cjs" check "$NODE_PIN"');
+    expect(read('scripts/deploy/release-checksums.txt')).toContain(`node-v${pin}-linux-x64.tar.xz`);
   });
 });

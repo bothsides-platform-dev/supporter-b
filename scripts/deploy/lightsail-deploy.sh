@@ -31,7 +31,10 @@ PREVIOUS_REV="$(git rev-parse HEAD)"
 log "Pulling latest"
 git pull --ff-only
 
-log "Installing dependencies (frozen lockfile, pnpm 9)"
+log "Checking the actual Node and pnpm versions against the reviewed checkout"
+node scripts/deploy/node-runtime.cjs deployment .
+
+log "Installing dependencies (frozen lockfile, packageManager-pinned pnpm)"
 pnpm install --frozen-lockfile
 
 log "Ensuring Postgres container is up"

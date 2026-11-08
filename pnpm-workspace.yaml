@@ -1,0 +1,9 @@
+# Native executables are supplied by integrity-checked optional npm packages.
+# Do not run fallback downloaders or MSW's interactive setup during install.
+# Review any new lifecycle script explicitly; never enable all scripts at once.
+strictDepBuilds: true
+allowBuilds:
+  '@sentry/cli': false
+  esbuild: false
+  msw: false
+  unrs-resolver: false

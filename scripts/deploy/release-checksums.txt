@@ -1,0 +1,7 @@
+# Reviewed official release checksums, 2026-11-08. Format: algorithm digest artifact-key.
+# Node: https://nodejs.org/en/blog/release/v22.23.4 (SHASUMS, linux-x64 tar.xz)
+sha256 1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce node-v22.23.4-linux-x64.tar.xz
+# Compose: https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64.sha256
+sha256 dba9d98e1ba5bfe11d88c99b9bd32fc4a0624a30fafe68eea34d61a3e42fd372 docker-compose-v2.40.3-linux-x86_64
+# Caddy: https://github.com/caddyserver/caddy/releases/download/v2.11.8/caddy_2.11.8_checksums.txt
+sha512 c863699eee84c6b410573de2ec67af81d07eb054f9020bb98f3c6cb256fea4be2fd1acfbd39110c649c3338282593bba3d3ed6424d91b7f5675e8b877a8999e9 caddy_2.11.8_linux_amd64.tar.gz

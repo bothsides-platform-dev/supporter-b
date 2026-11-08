@@ -1,0 +1,40 @@
+version: 2
+
+updates:
+  # The repository default branch is dev. Omitting target-branch keeps this
+  # configuration applicable to security updates as well as routine updates.
+  # Major updates stay separate; a security fix may require one.
+  # Repository Dependabot alerts/security updates must also be enabled on GitHub.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:37'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      runtime-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:47'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '03:57'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5

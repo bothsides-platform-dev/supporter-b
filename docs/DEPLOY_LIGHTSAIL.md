@@ -883,13 +883,20 @@ pm2 restart supporter-b
 
 ## Node 설치 (Amazon Linux 2023)
 
-운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. 로컬은 mise가, CI는 `setup-node`의 `node-version-file`이 이 파일을 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 고정 버전을 바꿀 때는 `mise.toml`·`engines.node`·`perf.yml` 컨테이너 이미지·이 bootstrap 의 `NODE_VERSION` 기본값을 같은 PR 에서 함께 바꾸고(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다), 이 절의 "현재" 표기도 고친다. 관리자 앱도 같은 서버 런타임을 공유한다.
+운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. 로컬은 mise가, CI는 `setup-node`의 `node-version-file`이 이 파일을 읽는다. bootstrap도 설치 버전을 이 파일에서 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 고정 버전을 바꿀 때는 `mise.toml`·`engines.node`·`perf.yml` 컨테이너 이미지를 같은 PR에서 맞추고(`lib/__tests__/node-version-source.test.ts`가 검사한다), 이 절의 "현재" 표기도 고친다. 관리자 앱도 같은 서버 런타임을 공유한다.
 
 AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며 신규 설치 기본값은 22.23.4다.
 
-- 신규 설치 버전 지정: `NODE_VERSION=22.23.4 bash scripts/deploy/lightsail-bootstrap.sh`. 이미 Node 22가 있으면 설치를 건너뛰므로 기존 서버의 패치 업그레이드 명령으로 사용하지 않는다.
+신규 Node·Docker Compose·Caddy 다운로드는 `scripts/deploy/download-verified.sh`가 공식 HTTPS 경로에서 임시 파일로 받고, 저장소의 `release-checksums.txt`에 검토해 고정한 공식 체크섬과 일치할 때만 설치 단계로 넘긴다. 누락·중복·손상된 체크섬, 다운로드 실패·파일 불일치는 추출·실행·설치 경로 덮어쓰기 전에 실패한다. Node와 Compose는 SHA-256, Caddy는 공식 파일의 SHA-512를 사용한다. 버전을 바꿀 때는 공식 릴리스 출처와 체크섬도 함께 검토한다. Caddy 신규 설치는 버전 없는 다운로드 API 대신 공식 2.11.8 아카이브를, Compose 신규 설치는 같은 2계열의 2.40.3을 사용한다. 기존 설치는 자동 교체하지 않는다. 이 검증은 바이트 무결성 검사이며 별도 PGP/Sigstore 서명 검증이나 설치된 도구의 전체 취약점 검사를 대체하지 않는다. Compose 2.40.3은 변경 범위를 제한한 선택이며, 현재 upstream이 유지하는 최신 5계열로의 이전 검토는 남아 있다([지원 정책](https://github.com/docker/compose/security/policy)).
+
+- 신규 설치는 `bash scripts/deploy/lightsail-bootstrap.sh`로 실행한다. `NODE_VERSION`을 지정해도 검토된 `mise.toml` 값과 같아야 한다. 다른 버전을 환경변수만으로 설치하지 않는다.
+- 기존 Node가 있으면 `node-runtime.cjs`가 실제 프로세스 버전을 검사한다. 같은 메이저에서 기준 이상의 버전만 유지하며, 낮은 패치·다른 메이저·시험판은 swap·패키지·서비스 변경 전에 실패한다. 기존 실행기를 자동 교체하지 않으므로 별도로 검토한 런타임 업그레이드 후 다시 실행한다.
+- pnpm은 `package.json`의 정확한 `packageManager` 버전을 Corepack으로 준비한다. 범위·`latest`·버전 누락은 거부하며, 서명 검사 실패를 피하기 위해 검증을 끄지 않는다. Corepack의 키나 버전 문제라면 신뢰된 배포본으로 별도 갱신한 뒤 재시도한다.
+- 신규 PM2 설치는 검토한 `pm2@7.1.2`로 고정한다. 기존 PM2와 실행 중인 데몬은 자동 업그레이드하지 않는다. 운영 설치 버전·전이 의존성·실행 중인 Node는 서버에서 별도 확인한다([PM2 7.1.2 릴리스](https://github.com/Unitech/pm2/releases/tag/v7.1.2)).
+- 운영 배포 스크립트는 `git pull --ff-only` 후 새 checkout의 Node 기준과 실제 `pnpm --version`을 설치 전에 대조한다. Node는 같은 메이저의 기준 이상, pnpm은 `packageManager`의 정확한 버전이어야 한다. 오래된 pnpm 직접 실행이나 다른 Node로는 의존성 설치·컨테이너 변경·PM2 reload를 진행하지 않는다. 이 검사도 Node·PM2를 자동 교체하지 않는다.
 - 기존 서버의 Node 교체 후에는 PM2 데몬과 두 앱을 새 바이너리로 다시 시작하고, 재부팅용 PM2 systemd 설정·프로세스 저장을 갱신한다. `node -v`뿐 아니라 `/proc/<pid>/exe`와 해당 실행 파일의 버전, 두 앱의 HTTP 응답을 확인한다. 저장소의 버전 설정만으로 실행 중인 프로세스가 교체되지는 않는다.
 - 참고: AL2023 기본 저장소의 `nodejs20` 패키지는 Node 20 이라 쓰지 않는다 (이 앱은 Node 22 기준).
+- 2026-11-08 확인: Node 프로젝트는 22.x를 포함한 HIGH 보안 수정을 **11월 11일 또는 직후**로 예고했지만 해당 패치는 아직 출시되지 않았다. 이번 변경은 22.23.4를 유지하며 실행 버전 검사를 보강한다. 배포 전에 [공식 보안 공지](https://github.com/nodejs/nodejs.org/blob/main/apps/site/pages/en/blog/vulnerability/november-2026-security-releases.md)와 실제 출시 버전을 다시 확인한다. 10월 보안 수정 적용을 현재 무취약 보장으로 해석하지 않는다.
 - 만약 인스턴스를 구형 **Amazon Linux 2**(glibc 2.26)로 만들었다면 공식 바이너리는 실행 안 되니, AL2023 으로 재생성하거나 bootstrap §3 을 nodejs.org **비공식 `glibc-217` 빌드** URL 로 바꿔야 한다.
 
 ## 트러블슈팅

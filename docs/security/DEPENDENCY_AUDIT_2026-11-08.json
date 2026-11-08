@@ -1,0 +1,1801 @@
+{
+  "reviewDate": "2026-11-08",
+  "branch": "codex/security-dependencies",
+  "baseCommit": "232c07e4849f0e92b695f9067807e28da9d3ec1c",
+  "scope": "Existing service: all runtime, development and optional npm dependencies. B2A additions excluded. Audit is not proof of exploitability or absence of unknown vulnerabilities.",
+  "tools": {
+    "node": "22.23.4",
+    "pnpm": "10.34.9"
+  },
+  "before": {
+    "lockSha256": "7a7e82632f220288a8c52760e74a5167e894fd08f7c9dcbf4cb1669a06f02958",
+    "lockPackageVersions": 1271,
+    "auditMetadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 8,
+        "moderate": 41,
+        "high": 20,
+        "critical": 2
+      },
+      "dependencies": 1273,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 1273
+    },
+    "advisoryRecords": 70,
+    "uniqueGHSA": 62
+  },
+  "after": {
+    "lockSha256": "db58ab9826b95f741582d864bcf1be163c8ca390bb8b24828b7b92af8b32fa0b",
+    "lockPackageVersions": 1043,
+    "uniquePackageNames": 967,
+    "allHaveIntegrity": true,
+    "auditMetadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "dependencies": 1047,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 1047
+    },
+    "productionAuditMetadata": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "dependencies": 485,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 485
+    },
+    "muted": []
+  },
+  "directDependencies": [
+    {
+      "name": "@aws-sdk/client-s3",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.1079.0",
+      "afterSpecifier": "^3.1079.0",
+      "afterResolvedVersions": [
+        "3.1079.0"
+      ]
+    },
+    {
+      "name": "@aws-sdk/s3-request-presigner",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.1079.0",
+      "afterSpecifier": "^3.1079.0",
+      "afterResolvedVersions": [
+        "3.1079.0"
+      ]
+    },
+    {
+      "name": "@axiomhq/js",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.6.1",
+      "afterSpecifier": "^1.6.1",
+      "afterResolvedVersions": [
+        "1.6.1"
+      ]
+    },
+    {
+      "name": "@axiomhq/logging",
+      "scope": "dependencies",
+      "beforeSpecifier": "0.4.1",
+      "afterSpecifier": "0.4.1",
+      "afterResolvedVersions": [
+        "0.4.1"
+      ]
+    },
+    {
+      "name": "@axiomhq/pino",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.6.1",
+      "afterSpecifier": "^1.6.1",
+      "afterResolvedVersions": [
+        "1.6.1"
+      ]
+    },
+    {
+      "name": "@axiomhq/react",
+      "scope": "dependencies",
+      "beforeSpecifier": "0.4.1",
+      "afterSpecifier": "0.4.1",
+      "afterResolvedVersions": [
+        "0.4.1"
+      ]
+    },
+    {
+      "name": "@base-ui/react",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.4.1",
+      "afterSpecifier": "^1.4.1",
+      "afterResolvedVersions": [
+        "1.4.1"
+      ]
+    },
+    {
+      "name": "@channel.io/channel-web-sdk-loader",
+      "scope": "dependencies",
+      "beforeSpecifier": "^2.0.2",
+      "afterSpecifier": "^2.0.2",
+      "afterResolvedVersions": [
+        "2.0.2"
+      ]
+    },
+    {
+      "name": "@pdf-lib/fontkit",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.1.1",
+      "afterSpecifier": "^1.1.1",
+      "afterResolvedVersions": [
+        "1.1.1"
+      ]
+    },
+    {
+      "name": "@radix-ui/react-slider",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.3.6",
+      "afterSpecifier": "^1.3.6",
+      "afterResolvedVersions": [
+        "1.3.6"
+      ]
+    },
+    {
+      "name": "@react-email/render",
+      "scope": "dependencies",
+      "beforeSpecifier": "^2.0.8",
+      "afterSpecifier": "^2.2.0",
+      "afterResolvedVersions": [
+        "2.2.0"
+      ]
+    },
+    {
+      "name": "@sentry/core",
+      "scope": "dependencies",
+      "beforeSpecifier": "10.51.0",
+      "afterSpecifier": "10.78.0",
+      "afterResolvedVersions": [
+        "10.78.0"
+      ]
+    },
+    {
+      "name": "@sentry/nextjs",
+      "scope": "dependencies",
+      "beforeSpecifier": "^10.51.0",
+      "afterSpecifier": "10.78.0",
+      "afterResolvedVersions": [
+        "10.78.0"
+      ]
+    },
+    {
+      "name": "bcryptjs",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.0.2",
+      "afterSpecifier": "^3.0.2",
+      "afterResolvedVersions": [
+        "3.0.2"
+      ]
+    },
+    {
+      "name": "canvas-confetti",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.9.4",
+      "afterSpecifier": "^1.9.4",
+      "afterResolvedVersions": [
+        "1.9.4"
+      ]
+    },
+    {
+      "name": "centrifuge",
+      "scope": "dependencies",
+      "beforeSpecifier": "^5.6.0",
+      "afterSpecifier": "^5.6.0",
+      "afterResolvedVersions": [
+        "5.6.0"
+      ]
+    },
+    {
+      "name": "class-variance-authority",
+      "scope": "dependencies",
+      "beforeSpecifier": "^0.7.1",
+      "afterSpecifier": "^0.7.1",
+      "afterResolvedVersions": [
+        "0.7.1"
+      ]
+    },
+    {
+      "name": "clsx",
+      "scope": "dependencies",
+      "beforeSpecifier": "^2.1.1",
+      "afterSpecifier": "^2.1.1",
+      "afterResolvedVersions": [
+        "2.1.1"
+      ]
+    },
+    {
+      "name": "cmdk",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.1.1",
+      "afterSpecifier": "^1.1.1",
+      "afterResolvedVersions": [
+        "1.1.1"
+      ]
+    },
+    {
+      "name": "date-fns-tz",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.2.0",
+      "afterSpecifier": "^3.2.0",
+      "afterResolvedVersions": [
+        "3.2.0"
+      ]
+    },
+    {
+      "name": "dotenv",
+      "scope": "dependencies",
+      "beforeSpecifier": "^17.2.4",
+      "afterSpecifier": "^17.2.4",
+      "afterResolvedVersions": [
+        "17.2.4",
+        "17.4.2"
+      ]
+    },
+    {
+      "name": "drizzle-orm",
+      "scope": "dependencies",
+      "beforeSpecifier": "^0.45.2",
+      "afterSpecifier": "^0.45.2",
+      "afterResolvedVersions": [
+        "0.45.2"
+      ]
+    },
+    {
+      "name": "es-hangul",
+      "scope": "dependencies",
+      "beforeSpecifier": "^2.3.8",
+      "afterSpecifier": "^2.3.8",
+      "afterResolvedVersions": [
+        "2.3.8"
+      ]
+    },
+    {
+      "name": "fractional-indexing",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.2.0",
+      "afterSpecifier": "^3.2.0",
+      "afterResolvedVersions": [
+        "3.2.0"
+      ]
+    },
+    {
+      "name": "jose",
+      "scope": "dependencies",
+      "beforeSpecifier": "6",
+      "afterSpecifier": "6",
+      "afterResolvedVersions": [
+        "6.0.0",
+        "6.2.7"
+      ]
+    },
+    {
+      "name": "ky",
+      "scope": "dependencies",
+      "beforeSpecifier": "^2.0.2",
+      "afterSpecifier": "^2.0.2",
+      "afterResolvedVersions": [
+        "2.0.2"
+      ]
+    },
+    {
+      "name": "lucide-react",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.14.0",
+      "afterSpecifier": "^1.14.0",
+      "afterResolvedVersions": [
+        "1.14.0"
+      ]
+    },
+    {
+      "name": "motion",
+      "scope": "dependencies",
+      "beforeSpecifier": "^12.38.0",
+      "afterSpecifier": "^12.38.0",
+      "afterResolvedVersions": [
+        "12.38.0"
+      ]
+    },
+    {
+      "name": "next",
+      "scope": "dependencies",
+      "beforeSpecifier": "16.4.3",
+      "afterSpecifier": "16.4.5",
+      "afterResolvedVersions": [
+        "16.4.5"
+      ]
+    },
+    {
+      "name": "next-auth",
+      "scope": "dependencies",
+      "beforeSpecifier": "5.0.0-beta.32",
+      "afterSpecifier": "5.0.0-beta.32",
+      "afterResolvedVersions": [
+        "5.0.0-beta.32"
+      ]
+    },
+    {
+      "name": "pdf-lib",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.17.1",
+      "afterSpecifier": "^1.17.1",
+      "afterResolvedVersions": [
+        "1.17.1"
+      ]
+    },
+    {
+      "name": "pdfjs-dist",
+      "scope": "dependencies",
+      "beforeSpecifier": "^6.2.108",
+      "afterSpecifier": "^6.2.108",
+      "afterResolvedVersions": [
+        "6.2.108"
+      ]
+    },
+    {
+      "name": "pino",
+      "scope": "dependencies",
+      "beforeSpecifier": "^10.3.1",
+      "afterSpecifier": "^10.3.1",
+      "afterResolvedVersions": [
+        "10.3.1"
+      ]
+    },
+    {
+      "name": "postgres",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.4.7",
+      "afterSpecifier": "^3.4.7",
+      "afterResolvedVersions": [
+        "3.4.7"
+      ]
+    },
+    {
+      "name": "react",
+      "scope": "dependencies",
+      "beforeSpecifier": "19.2.4",
+      "afterSpecifier": "19.2.4",
+      "afterResolvedVersions": [
+        "19.2.4"
+      ]
+    },
+    {
+      "name": "react-day-picker",
+      "scope": "dependencies",
+      "beforeSpecifier": "^9.14.0",
+      "afterSpecifier": "^9.14.0",
+      "afterResolvedVersions": [
+        "9.14.0"
+      ]
+    },
+    {
+      "name": "react-dom",
+      "scope": "dependencies",
+      "beforeSpecifier": "19.2.4",
+      "afterSpecifier": "19.2.4",
+      "afterResolvedVersions": [
+        "19.2.4"
+      ]
+    },
+    {
+      "name": "react-number-format",
+      "scope": "dependencies",
+      "beforeSpecifier": "^5.4.5",
+      "afterSpecifier": "^5.4.5",
+      "afterResolvedVersions": [
+        "5.4.5"
+      ]
+    },
+    {
+      "name": "react-rnd",
+      "scope": "dependencies",
+      "beforeSpecifier": "^10.5.3",
+      "afterSpecifier": "^10.5.3",
+      "afterResolvedVersions": [
+        "10.5.3"
+      ]
+    },
+    {
+      "name": "resend",
+      "scope": "dependencies",
+      "beforeSpecifier": "^6.4.0",
+      "afterSpecifier": "^6.37.0",
+      "afterResolvedVersions": [
+        "6.37.0"
+      ]
+    },
+    {
+      "name": "shadcn",
+      "scope": "dependencies",
+      "beforeSpecifier": "^4.6.0",
+      "afterSpecifier": null,
+      "afterResolvedVersions": []
+    },
+    {
+      "name": "swr",
+      "scope": "dependencies",
+      "beforeSpecifier": "^2.4.2",
+      "afterSpecifier": "^2.4.2",
+      "afterResolvedVersions": [
+        "2.4.2"
+      ]
+    },
+    {
+      "name": "tailwind-merge",
+      "scope": "dependencies",
+      "beforeSpecifier": "^3.5.0",
+      "afterSpecifier": "^3.5.0",
+      "afterResolvedVersions": [
+        "3.5.0"
+      ]
+    },
+    {
+      "name": "tldts",
+      "scope": "dependencies",
+      "beforeSpecifier": "^7.4.2",
+      "afterSpecifier": "^7.4.2",
+      "afterResolvedVersions": [
+        "7.4.2"
+      ]
+    },
+    {
+      "name": "tw-animate-css",
+      "scope": "dependencies",
+      "beforeSpecifier": "^1.4.0",
+      "afterSpecifier": "^1.4.0",
+      "afterResolvedVersions": [
+        "1.4.0"
+      ]
+    },
+    {
+      "name": "undici",
+      "scope": "dependencies",
+      "beforeSpecifier": "7.29.0",
+      "afterSpecifier": "7.30.2",
+      "afterResolvedVersions": [
+        "7.30.2"
+      ]
+    },
+    {
+      "name": "zod",
+      "scope": "dependencies",
+      "beforeSpecifier": "^4.4.3",
+      "afterSpecifier": "^4.6.7",
+      "afterResolvedVersions": [
+        "4.6.7"
+      ]
+    },
+    {
+      "name": "zustand",
+      "scope": "dependencies",
+      "beforeSpecifier": "^5.0.13",
+      "afterSpecifier": "^5.0.13",
+      "afterResolvedVersions": [
+        "5.0.13"
+      ]
+    },
+    {
+      "name": "@electric-sql/pglite",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^0.3.13",
+      "afterSpecifier": "^0.3.13",
+      "afterResolvedVersions": [
+        "0.3.13"
+      ]
+    },
+    {
+      "name": "@tailwindcss/postcss",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^4.2.4",
+      "afterSpecifier": "^4.2.4",
+      "afterResolvedVersions": [
+        "4.2.4"
+      ]
+    },
+    {
+      "name": "@testing-library/jest-dom",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^6.9.1",
+      "afterSpecifier": "^6.9.1",
+      "afterResolvedVersions": [
+        "6.9.1"
+      ]
+    },
+    {
+      "name": "@testing-library/react",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^16.3.2",
+      "afterSpecifier": "^16.3.2",
+      "afterResolvedVersions": [
+        "16.3.2"
+      ]
+    },
+    {
+      "name": "@testing-library/user-event",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^14.6.1",
+      "afterSpecifier": "^14.6.1",
+      "afterResolvedVersions": [
+        "14.6.1"
+      ]
+    },
+    {
+      "name": "@types/bcryptjs",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^3.0.0",
+      "afterSpecifier": "^3.0.0",
+      "afterResolvedVersions": [
+        "3.0.0"
+      ]
+    },
+    {
+      "name": "@types/canvas-confetti",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^1.9.0",
+      "afterSpecifier": "^1.9.0",
+      "afterResolvedVersions": [
+        "1.9.0"
+      ]
+    },
+    {
+      "name": "@types/node",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^22.13.0",
+      "afterSpecifier": "^22.13.0",
+      "afterResolvedVersions": [
+        "22.13.0"
+      ]
+    },
+    {
+      "name": "@types/react",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^19",
+      "afterSpecifier": "^19",
+      "afterResolvedVersions": [
+        "19.0.0"
+      ]
+    },
+    {
+      "name": "@types/react-dom",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^19",
+      "afterSpecifier": "^19",
+      "afterResolvedVersions": [
+        "19.0.0"
+      ]
+    },
+    {
+      "name": "@vercel/nft",
+      "scope": "devDependencies",
+      "beforeSpecifier": "1.11.0",
+      "afterSpecifier": "1.11.0",
+      "afterResolvedVersions": [
+        "1.11.0"
+      ]
+    },
+    {
+      "name": "@vitejs/plugin-react",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^6.0.1",
+      "afterSpecifier": "^6.0.1",
+      "afterResolvedVersions": [
+        "6.0.1"
+      ]
+    },
+    {
+      "name": "drizzle-kit",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^0.31.10",
+      "afterSpecifier": "^0.31.10",
+      "afterResolvedVersions": [
+        "0.31.10"
+      ]
+    },
+    {
+      "name": "esbuild",
+      "scope": "devDependencies",
+      "beforeSpecifier": "0.28.1",
+      "afterSpecifier": "0.28.1",
+      "afterResolvedVersions": [
+        "0.28.1"
+      ]
+    },
+    {
+      "name": "eslint",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^9.39.4",
+      "afterSpecifier": "^9.39.4",
+      "afterResolvedVersions": [
+        "9.39.4"
+      ]
+    },
+    {
+      "name": "eslint-config-next",
+      "scope": "devDependencies",
+      "beforeSpecifier": "16.4.3",
+      "afterSpecifier": "16.4.5",
+      "afterResolvedVersions": [
+        "16.4.5"
+      ]
+    },
+    {
+      "name": "eslint-plugin-unused-imports",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^4.4.1",
+      "afterSpecifier": "^4.4.1",
+      "afterResolvedVersions": [
+        "4.4.1"
+      ]
+    },
+    {
+      "name": "jsdom",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^29.1.1",
+      "afterSpecifier": "^29.1.1",
+      "afterResolvedVersions": [
+        "29.1.1"
+      ]
+    },
+    {
+      "name": "knip",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^6.14.1",
+      "afterSpecifier": "^6.14.1",
+      "afterResolvedVersions": [
+        "6.14.1"
+      ]
+    },
+    {
+      "name": "pino-pretty",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^13.1.3",
+      "afterSpecifier": "^13.1.3",
+      "afterResolvedVersions": [
+        "13.1.3"
+      ]
+    },
+    {
+      "name": "playwright",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^1.59.1",
+      "afterSpecifier": "^1.59.1",
+      "afterResolvedVersions": [
+        "1.59.1"
+      ]
+    },
+    {
+      "name": "prettier",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^3.8.3",
+      "afterSpecifier": "^3.8.3",
+      "afterResolvedVersions": [
+        "3.8.3"
+      ]
+    },
+    {
+      "name": "prettier-plugin-tailwindcss",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^0.8.0",
+      "afterSpecifier": "^0.8.0",
+      "afterResolvedVersions": [
+        "0.8.0"
+      ]
+    },
+    {
+      "name": "tailwindcss",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^4.2.4",
+      "afterSpecifier": "^4.2.4",
+      "afterResolvedVersions": [
+        "4.2.4"
+      ]
+    },
+    {
+      "name": "tsx",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^4.20.6",
+      "afterSpecifier": "^4.20.6",
+      "afterResolvedVersions": [
+        "4.20.6",
+        "4.23.5"
+      ]
+    },
+    {
+      "name": "typescript",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^6.0.3",
+      "afterSpecifier": "^6.0.3",
+      "afterResolvedVersions": [
+        "6.0.3"
+      ]
+    },
+    {
+      "name": "vite",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^8.0.16",
+      "afterSpecifier": "~8.1.6",
+      "afterResolvedVersions": [
+        "8.1.6"
+      ]
+    },
+    {
+      "name": "vitest",
+      "scope": "devDependencies",
+      "beforeSpecifier": "^4.1.11",
+      "afterSpecifier": "~4.1.12",
+      "afterResolvedVersions": [
+        "4.1.12"
+      ]
+    }
+  ],
+  "baselineAdvisoryDisposition": [
+    {
+      "ghsa": "GHSA-rmxm-3fg6-px4f",
+      "npmAdvisoryId": 1243661,
+      "package": "@hono/node-server",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=1.19.10 <2.1.3",
+      "beforeVersions": [
+        "2.0.12"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-rmxm-3fg6-px4f"
+    },
+    {
+      "ghsa": "GHSA-22jm-h49p-29qw",
+      "npmAdvisoryId": 1242628,
+      "package": "@modelcontextprotocol/sdk",
+      "auditSeverity": "high",
+      "affectedRange": ">=1.24.0 <1.32.0",
+      "beforeVersions": [
+        "1.30.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-22jm-h49p-29qw"
+    },
+    {
+      "ghsa": "GHSA-46jr-4wx8-v453",
+      "npmAdvisoryId": 1242649,
+      "package": "@modelcontextprotocol/sdk",
+      "auditSeverity": "high",
+      "affectedRange": ">=1.3.0 <1.32.0",
+      "beforeVersions": [
+        "1.30.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-46jr-4wx8-v453"
+    },
+    {
+      "ghsa": "GHSA-6prh-2h8m-c8cw",
+      "npmAdvisoryId": 1244498,
+      "package": "@modelcontextprotocol/sdk",
+      "auditSeverity": "moderate",
+      "affectedRange": "<1.32.0",
+      "beforeVersions": [
+        "1.30.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-6prh-2h8m-c8cw"
+    },
+    {
+      "ghsa": "GHSA-6qxp-vccf-f47h",
+      "npmAdvisoryId": 1241339,
+      "package": "@modelcontextprotocol/sdk",
+      "auditSeverity": "high",
+      "affectedRange": ">=1.12.0 <1.31.0",
+      "beforeVersions": [
+        "1.30.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-6qxp-vccf-f47h"
+    },
+    {
+      "ghsa": "GHSA-f897-62hf-6gxq",
+      "npmAdvisoryId": 1243488,
+      "package": "@modelcontextprotocol/sdk",
+      "auditSeverity": "high",
+      "affectedRange": ">=1.10.0 <1.30.1",
+      "beforeVersions": [
+        "1.30.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-f897-62hf-6gxq"
+    },
+    {
+      "ghsa": "GHSA-rvq5-wwqv-78pq",
+      "npmAdvisoryId": 1242667,
+      "package": "@modelcontextprotocol/sdk",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=1.6.0 <1.32.0",
+      "beforeVersions": [
+        "1.30.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-rvq5-wwqv-78pq"
+    },
+    {
+      "ghsa": "GHSA-qqmp-wf37-98f9",
+      "npmAdvisoryId": 1241249,
+      "package": "@opentelemetry/instrumentation-knex",
+      "auditSeverity": "moderate",
+      "affectedRange": "<0.65.0",
+      "beforeVersions": [
+        "0.58.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9"
+    },
+    {
+      "ghsa": "GHSA-qqmp-wf37-98f9",
+      "npmAdvisoryId": 1241251,
+      "package": "@opentelemetry/instrumentation-mongoose",
+      "auditSeverity": "moderate",
+      "affectedRange": "<0.67.0",
+      "beforeVersions": [
+        "0.60.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9"
+    },
+    {
+      "ghsa": "GHSA-qqmp-wf37-98f9",
+      "npmAdvisoryId": 1241250,
+      "package": "@opentelemetry/instrumentation-mysql",
+      "auditSeverity": "moderate",
+      "affectedRange": "<0.67.0",
+      "beforeVersions": [
+        "0.60.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9"
+    },
+    {
+      "ghsa": "GHSA-qqmp-wf37-98f9",
+      "npmAdvisoryId": 1241248,
+      "package": "@opentelemetry/instrumentation-mysql2",
+      "auditSeverity": "moderate",
+      "affectedRange": "<0.67.0",
+      "beforeVersions": [
+        "0.60.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9"
+    },
+    {
+      "ghsa": "GHSA-qqmp-wf37-98f9",
+      "npmAdvisoryId": 1241247,
+      "package": "@opentelemetry/instrumentation-pg",
+      "auditSeverity": "moderate",
+      "affectedRange": "<0.73.0",
+      "beforeVersions": [
+        "0.66.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9"
+    },
+    {
+      "ghsa": "GHSA-qqmp-wf37-98f9",
+      "npmAdvisoryId": 1241253,
+      "package": "@opentelemetry/instrumentation-tedious",
+      "auditSeverity": "moderate",
+      "affectedRange": "<0.40.0",
+      "beforeVersions": [
+        "0.33.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-qqmp-wf37-98f9"
+    },
+    {
+      "ghsa": "GHSA-mchm-gjx6-7h55",
+      "npmAdvisoryId": 1242814,
+      "package": "@sentry/nextjs",
+      "auditSeverity": "critical",
+      "affectedRange": ">=10.0.0-alpha.0 <10.75.2",
+      "beforeVersions": [
+        "10.51.0"
+      ],
+      "afterVersions": [
+        "10.78.0"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-mchm-gjx6-7h55"
+    },
+    {
+      "ghsa": "GHSA-qxg6-89mg-rqv8",
+      "npmAdvisoryId": 1242767,
+      "package": "@vitest/mocker",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=2.1.0-beta.7 <4.1.12",
+      "beforeVersions": [
+        "4.1.11"
+      ],
+      "afterVersions": [
+        "4.1.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-qxg6-89mg-rqv8"
+    },
+    {
+      "ghsa": "GHSA-xp26-3454-mjgp",
+      "npmAdvisoryId": 1242769,
+      "package": "@vitest/mocker",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=4.1.11 <4.1.12",
+      "beforeVersions": [
+        "4.1.11"
+      ],
+      "afterVersions": [
+        "4.1.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-xp26-3454-mjgp"
+    },
+    {
+      "ghsa": "GHSA-27r3-jxmh-p828",
+      "npmAdvisoryId": 1243074,
+      "package": "body-parser",
+      "auditSeverity": "high",
+      "affectedRange": ">=2.0.0 <2.4.0",
+      "beforeVersions": [
+        "2.3.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-27r3-jxmh-p828"
+    },
+    {
+      "ghsa": "GHSA-6j4f-fj2g-mc7p",
+      "npmAdvisoryId": 1240108,
+      "package": "brace-expansion",
+      "auditSeverity": "high",
+      "affectedRange": "<1.1.19",
+      "beforeVersions": [
+        "1.1.18"
+      ],
+      "afterVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p"
+    },
+    {
+      "ghsa": "GHSA-6j4f-fj2g-mc7p",
+      "npmAdvisoryId": 1240111,
+      "package": "brace-expansion",
+      "auditSeverity": "high",
+      "affectedRange": ">=4.0.0 <5.0.10",
+      "beforeVersions": [
+        "5.0.9"
+      ],
+      "afterVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p"
+    },
+    {
+      "ghsa": "GHSA-q2hr-2g5m-vwhr",
+      "npmAdvisoryId": 1240100,
+      "package": "brace-expansion",
+      "auditSeverity": "moderate",
+      "affectedRange": "<1.1.21",
+      "beforeVersions": [
+        "1.1.18"
+      ],
+      "afterVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr"
+    },
+    {
+      "ghsa": "GHSA-q2hr-2g5m-vwhr",
+      "npmAdvisoryId": 1240103,
+      "package": "brace-expansion",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=4.0.0 <5.0.12",
+      "beforeVersions": [
+        "5.0.9"
+      ],
+      "afterVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr"
+    },
+    {
+      "ghsa": "GHSA-qhr7-859c-m2p7",
+      "npmAdvisoryId": 1240104,
+      "package": "brace-expansion",
+      "auditSeverity": "high",
+      "affectedRange": "<1.1.20",
+      "beforeVersions": [
+        "1.1.18"
+      ],
+      "afterVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7"
+    },
+    {
+      "ghsa": "GHSA-qhr7-859c-m2p7",
+      "npmAdvisoryId": 1240107,
+      "package": "brace-expansion",
+      "auditSeverity": "high",
+      "affectedRange": ">=4.0.0 <5.0.11",
+      "beforeVersions": [
+        "5.0.9"
+      ],
+      "afterVersions": [
+        "1.1.21",
+        "5.0.12"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-qhr7-859c-m2p7"
+    },
+    {
+      "ghsa": "GHSA-gcqx-w48m-w2h4",
+      "npmAdvisoryId": 1243505,
+      "package": "deepmerge",
+      "auditSeverity": "low",
+      "affectedRange": ">=4.2.0 <=4.3.1",
+      "beforeVersions": [
+        "4.3.1"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4"
+    },
+    {
+      "ghsa": "GHSA-jggr-w7fw-pc2j",
+      "npmAdvisoryId": 1241257,
+      "package": "fast-copy",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=4.0.0 <4.1.0",
+      "beforeVersions": [
+        "4.0.4"
+      ],
+      "afterVersions": [
+        "4.3.1"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-jggr-w7fw-pc2j"
+    },
+    {
+      "ghsa": "GHSA-333x-w4r6-6crp",
+      "npmAdvisoryId": 1243107,
+      "package": "fast-uri",
+      "auditSeverity": "low",
+      "affectedRange": ">=3.0.0 <3.1.9",
+      "beforeVersions": [
+        "3.1.8"
+      ],
+      "afterVersions": [
+        "3.1.9"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-333x-w4r6-6crp"
+    },
+    {
+      "ghsa": "GHSA-w74x-v6f9-j3xg",
+      "npmAdvisoryId": 1243098,
+      "package": "fast-uri",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=3.0.0 <3.1.9",
+      "beforeVersions": [
+        "3.1.8"
+      ],
+      "afterVersions": [
+        "3.1.9"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-w74x-v6f9-j3xg"
+    },
+    {
+      "ghsa": "GHSA-wjr9-j795-jxcr",
+      "npmAdvisoryId": 1243104,
+      "package": "fast-uri",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=3.1.3 <3.1.9",
+      "beforeVersions": [
+        "3.1.8"
+      ],
+      "afterVersions": [
+        "3.1.9"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-wjr9-j795-jxcr"
+    },
+    {
+      "ghsa": "GHSA-xhq7-xmqj-769h",
+      "npmAdvisoryId": 1243101,
+      "package": "fast-uri",
+      "auditSeverity": "low",
+      "affectedRange": ">=3.0.0 <3.1.9",
+      "beforeVersions": [
+        "3.1.8"
+      ],
+      "afterVersions": [
+        "3.1.9"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-xhq7-xmqj-769h"
+    },
+    {
+      "ghsa": "GHSA-3g3m-2fjr-6pw4",
+      "npmAdvisoryId": 1244013,
+      "package": "glob",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=9.0.0 <=14.0.1",
+      "beforeVersions": [
+        "13.0.6"
+      ],
+      "afterVersions": [
+        "14.0.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-3g3m-2fjr-6pw4"
+    },
+    {
+      "ghsa": "GHSA-5r4p-p66f-jhc7",
+      "npmAdvisoryId": 1242595,
+      "package": "hono",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=4.12.4 <4.13.11",
+      "beforeVersions": [
+        "4.13.8"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-5r4p-p66f-jhc7"
+    },
+    {
+      "ghsa": "GHSA-2vr4-cq9g-pvrc",
+      "npmAdvisoryId": 1239949,
+      "package": "ip-address",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=10.2.0 <=10.5.0",
+      "beforeVersions": [
+        "10.4.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-2vr4-cq9g-pvrc"
+    },
+    {
+      "ghsa": "GHSA-h3mg-xc3c-68pw",
+      "npmAdvisoryId": 1240098,
+      "package": "ip-address",
+      "auditSeverity": "moderate",
+      "affectedRange": "<=10.7.0",
+      "beforeVersions": [
+        "10.4.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-h3mg-xc3c-68pw"
+    },
+    {
+      "ghsa": "GHSA-j6r3-76f7-8jcv",
+      "npmAdvisoryId": 1240097,
+      "package": "ip-address",
+      "auditSeverity": "moderate",
+      "affectedRange": "<=10.7.0",
+      "beforeVersions": [
+        "10.4.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-j6r3-76f7-8jcv"
+    },
+    {
+      "ghsa": "GHSA-rpw4-54j3-4h4q",
+      "npmAdvisoryId": 1239948,
+      "package": "ip-address",
+      "auditSeverity": "moderate",
+      "affectedRange": "<=10.5.0",
+      "beforeVersions": [
+        "10.4.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-rpw4-54j3-4h4q"
+    },
+    {
+      "ghsa": "GHSA-rxp7-6hxx-x8q5",
+      "npmAdvisoryId": 1242883,
+      "package": "ip-address",
+      "auditSeverity": "moderate",
+      "affectedRange": "<=10.7.3",
+      "beforeVersions": [
+        "10.4.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-rxp7-6hxx-x8q5"
+    },
+    {
+      "ghsa": "GHSA-r3ph-w7gj-g6xm",
+      "npmAdvisoryId": 1239991,
+      "package": "js-yaml",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=5.0.0 <=5.4.0",
+      "beforeVersions": [
+        "5.2.3"
+      ],
+      "afterVersions": [
+        "4.3.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-r3ph-w7gj-g6xm"
+    },
+    {
+      "ghsa": "GHSA-g3hv-75wg-m249",
+      "npmAdvisoryId": 1244623,
+      "package": "minimatch",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.0.0 <11.0.1",
+      "beforeVersions": [
+        "10.2.6"
+      ],
+      "afterVersions": [
+        "11.0.1",
+        "3.1.5"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-g3hv-75wg-m249"
+    },
+    {
+      "ghsa": "GHSA-rj75-hqrm-r3gf",
+      "npmAdvisoryId": 1243380,
+      "package": "postcss-selector-parser",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.0.0 <7.1.6",
+      "beforeVersions": [
+        "7.1.4"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-rj75-hqrm-r3gf"
+    },
+    {
+      "ghsa": "GHSA-jqcg-44mw-7w3h",
+      "npmAdvisoryId": 1241210,
+      "package": "proxy-addr",
+      "auditSeverity": "critical",
+      "affectedRange": ">=1.1.0 <2.0.8",
+      "beforeVersions": [
+        "2.0.7"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-jqcg-44mw-7w3h"
+    },
+    {
+      "ghsa": "GHSA-6pq8-jhm2-2vcw",
+      "npmAdvisoryId": 1243687,
+      "package": "qs",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=6.7.0 <=6.16.0",
+      "beforeVersions": [
+        "6.16.0"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-6pq8-jhm2-2vcw"
+    },
+    {
+      "ghsa": "GHSA-r4xh-jqrq-34v2",
+      "npmAdvisoryId": 1241205,
+      "package": "smol-toml",
+      "auditSeverity": "moderate",
+      "affectedRange": "<=1.8.0",
+      "beforeVersions": [
+        "1.7.1"
+      ],
+      "afterVersions": [
+        "1.9.1"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-r4xh-jqrq-34v2"
+    },
+    {
+      "ghsa": "GHSA-68fv-2mgg-jv7q",
+      "npmAdvisoryId": 1241209,
+      "package": "source-map-js",
+      "auditSeverity": "high",
+      "affectedRange": ">=1.0.0 <1.2.2",
+      "beforeVersions": [
+        "1.2.1"
+      ],
+      "afterVersions": [
+        "1.2.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q"
+    },
+    {
+      "ghsa": "GHSA-3f7j-7jwc-fxfj",
+      "npmAdvisoryId": 1243663,
+      "package": "systeminformation",
+      "auditSeverity": "high",
+      "affectedRange": "<5.33.16",
+      "beforeVersions": [
+        "5.33.1"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-3f7j-7jwc-fxfj"
+    },
+    {
+      "ghsa": "GHSA-4vjg-vx72-qq4g",
+      "npmAdvisoryId": 1243616,
+      "package": "systeminformation",
+      "auditSeverity": "low",
+      "affectedRange": "<5.33.14",
+      "beforeVersions": [
+        "5.33.1"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-4vjg-vx72-qq4g"
+    },
+    {
+      "ghsa": "GHSA-7648-jmwf-vw7j",
+      "npmAdvisoryId": 1243617,
+      "package": "systeminformation",
+      "auditSeverity": "moderate",
+      "affectedRange": "<5.33.13",
+      "beforeVersions": [
+        "5.33.1"
+      ],
+      "afterVersions": [],
+      "treatment": "removed dependency path",
+      "url": "https://github.com/advisories/GHSA-7648-jmwf-vw7j"
+    },
+    {
+      "ghsa": "GHSA-2gqq-gqf2-x968",
+      "npmAdvisoryId": 1240048,
+      "package": "undici",
+      "auditSeverity": "low",
+      "affectedRange": ">=7.1.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-2gqq-gqf2-x968"
+    },
+    {
+      "ghsa": "GHSA-2jfj-6hjv-fm6j",
+      "npmAdvisoryId": 1240046,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.0.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-2jfj-6hjv-fm6j"
+    },
+    {
+      "ghsa": "GHSA-2m5v-pch6-74hx",
+      "npmAdvisoryId": 1243475,
+      "package": "undici",
+      "auditSeverity": "high",
+      "affectedRange": ">=7.0.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-2m5v-pch6-74hx"
+    },
+    {
+      "ghsa": "GHSA-3wwx-pv8p-q78v",
+      "npmAdvisoryId": 1239933,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.28.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-3wwx-pv8p-q78v"
+    },
+    {
+      "ghsa": "GHSA-3xpg-4rpp-hhhm",
+      "npmAdvisoryId": 1240044,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.15.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-3xpg-4rpp-hhhm"
+    },
+    {
+      "ghsa": "GHSA-4qv8-2p9j-2685",
+      "npmAdvisoryId": 1243078,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.0.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-4qv8-2p9j-2685"
+    },
+    {
+      "ghsa": "GHSA-4w7w-5xrc-9h26",
+      "npmAdvisoryId": 1243473,
+      "package": "undici",
+      "auditSeverity": "high",
+      "affectedRange": ">=7.0.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-4w7w-5xrc-9h26"
+    },
+    {
+      "ghsa": "GHSA-55wc-3pg8-jfw6",
+      "npmAdvisoryId": 1243484,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.15.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-55wc-3pg8-jfw6"
+    },
+    {
+      "ghsa": "GHSA-8436-99hf-9mmv",
+      "npmAdvisoryId": 1240052,
+      "package": "undici",
+      "auditSeverity": "low",
+      "affectedRange": ">=7.0.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-8436-99hf-9mmv"
+    },
+    {
+      "ghsa": "GHSA-9fm3-97px-rjf6",
+      "npmAdvisoryId": 1243481,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.0.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-9fm3-97px-rjf6"
+    },
+    {
+      "ghsa": "GHSA-f72v-6w45-q472",
+      "npmAdvisoryId": 1243081,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.15.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-f72v-6w45-q472"
+    },
+    {
+      "ghsa": "GHSA-pmjh-fq2x-6v4x",
+      "npmAdvisoryId": 1240036,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.11.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-pmjh-fq2x-6v4x"
+    },
+    {
+      "ghsa": "GHSA-qrxm-fqhp-jwvm",
+      "npmAdvisoryId": 1243478,
+      "package": "undici",
+      "auditSeverity": "high",
+      "affectedRange": ">=7.0.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-qrxm-fqhp-jwvm"
+    },
+    {
+      "ghsa": "GHSA-r53p-7pc4-xj5r",
+      "npmAdvisoryId": 1240038,
+      "package": "undici",
+      "auditSeverity": "low",
+      "affectedRange": ">=7.0.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-r53p-7pc4-xj5r"
+    },
+    {
+      "ghsa": "GHSA-rfgv-xxqx-mfg5",
+      "npmAdvisoryId": 1240041,
+      "package": "undici",
+      "auditSeverity": "high",
+      "affectedRange": ">=7.0.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-rfgv-xxqx-mfg5"
+    },
+    {
+      "ghsa": "GHSA-rx4f-c7p8-82vq",
+      "npmAdvisoryId": 1240055,
+      "package": "undici",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=7.0.0 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-rx4f-c7p8-82vq"
+    },
+    {
+      "ghsa": "GHSA-w293-vg96-wgc3",
+      "npmAdvisoryId": 1240050,
+      "package": "undici",
+      "auditSeverity": "high",
+      "affectedRange": ">=7.24.1 <7.29.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-w293-vg96-wgc3"
+    },
+    {
+      "ghsa": "GHSA-xjj6-f33q-929c",
+      "npmAdvisoryId": 1243113,
+      "package": "undici",
+      "auditSeverity": "high",
+      "affectedRange": ">=7.18.0 <7.30.1",
+      "beforeVersions": [
+        "7.29.0"
+      ],
+      "afterVersions": [
+        "7.30.2"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-xjj6-f33q-929c"
+    },
+    {
+      "ghsa": "GHSA-587h-7wmj-h5pm",
+      "npmAdvisoryId": 1242660,
+      "package": "vite",
+      "auditSeverity": "high",
+      "affectedRange": ">=8.0.0 <=8.1.5",
+      "beforeVersions": [
+        "8.0.16"
+      ],
+      "afterVersions": [
+        "8.1.6"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-587h-7wmj-h5pm"
+    },
+    {
+      "ghsa": "GHSA-698v-4r3x-3vcv",
+      "npmAdvisoryId": 1242624,
+      "package": "vite",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=8.0.0 <=8.1.5",
+      "beforeVersions": [
+        "8.0.16"
+      ],
+      "afterVersions": [
+        "8.1.6"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-698v-4r3x-3vcv"
+    },
+    {
+      "ghsa": "GHSA-9jrq-w75r-8gcw",
+      "npmAdvisoryId": 1242726,
+      "package": "vite",
+      "auditSeverity": "low",
+      "affectedRange": ">=8.0.0 <=8.1.5",
+      "beforeVersions": [
+        "8.0.16"
+      ],
+      "afterVersions": [
+        "8.1.6"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-9jrq-w75r-8gcw"
+    },
+    {
+      "ghsa": "GHSA-r825-w8mm-5pxw",
+      "npmAdvisoryId": 1242653,
+      "package": "vite",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=8.0.0 <=8.1.5",
+      "beforeVersions": [
+        "8.0.16"
+      ],
+      "afterVersions": [
+        "8.1.6"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-r825-w8mm-5pxw"
+    },
+    {
+      "ghsa": "GHSA-rq7h-c2jc-7f22",
+      "npmAdvisoryId": 1242732,
+      "package": "vite",
+      "auditSeverity": "moderate",
+      "affectedRange": ">=8.0.0 <=8.1.5",
+      "beforeVersions": [
+        "8.0.16"
+      ],
+      "afterVersions": [
+        "8.1.6"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-rq7h-c2jc-7f22"
+    },
+    {
+      "ghsa": "GHSA-mrhx-c7xc-m3w5",
+      "npmAdvisoryId": 1243066,
+      "package": "zod",
+      "auditSeverity": "high",
+      "affectedRange": "<4.6.6",
+      "beforeVersions": [
+        "3.25.76",
+        "4.4.3"
+      ],
+      "afterVersions": [
+        "4.6.7"
+      ],
+      "treatment": "updated dependency graph",
+      "url": "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5"
+    }
+  ],
+  "manualAdvisoriesOutsideInitialNpmAudit": {
+    "next": {
+      "selectedVersion": "16.4.5",
+      "advisories": [
+        "GHSA-pc58-hwjq-p385",
+        "GHSA-rhh4-g77r-r9qj",
+        "GHSA-vvgp-ww4w-46vf",
+        "GHSA-7qx7-33qx-rqx2",
+        "GHSA-mfr8-8qww-v76h",
+        "GHSA-vc7v-qv4w-wrv8",
+        "GHSA-f3mh-rxg3-f5g2"
+      ],
+      "source": "https://github.com/vercel/next.js/security/advisories/"
+    },
+    "undici": {
+      "selectedVersion": "7.30.2",
+      "advisories": [
+        "GHSA-7xg3-fphp-28hg",
+        "GHSA-3g9m-rv3r-w5w2",
+        "GHSA-5rm8-gv32-r954",
+        "GHSA-9v6h-8rgp-m69f"
+      ],
+      "source": "https://github.com/nodejs/undici/security/advisories/"
+    },
+    "pnpm": {
+      "selectedVersion": "10.34.9",
+      "advisories": [
+        "GHSA-vq4v-j7r6-jq4m",
+        "GHSA-c59q-g84q-2gj5"
+      ],
+      "source": "https://github.com/pnpm/pnpm/security/advisories/"
+    }
+  },
+  "runtimeImagePins": {
+    "postgres": "postgres:16.15-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139",
+    "centrifugo": "centrifugo/centrifugo:v6.10.2@sha256:34b84f823515927266ce3abfb840fd9e0acabb58805e7e896f5de731217a627d",
+    "nodePerf": "node:22.23.4-bookworm-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d"
+  },
+  "limitations": [
+    "No production deployment or inspection of running VM/process/container versions.",
+    "No full operating-system or container-image CVE scan.",
+    "OSV batch upload blocked by automatic approval review; no upload performed.",
+    "Node security release expected on or shortly after 2026-11-11 requires follow-up.",
+    "ESLint 9 and Compose 2 are outside upstream support; supported-major migrations require compatibility review.",
+    "Local E2E and remote CI were not run."
+  ]
+}

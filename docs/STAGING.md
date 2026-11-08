@@ -25,15 +25,16 @@ dev PR / push
   └─ unit tests
        ↓ 모두 성공한 dev push만
   최신 dev SHA 확인 → GitHub Artifact 다운로드 → SSH 전송
-  SHA-256·빌드 SHA·환경·DB 준비 확인
+  systemd 실행기·SHA-256·빌드 SHA·Node 기준·환경·DB 준비 확인
   달력 적재/coverage 검사 → 3100 후보 기동 검사
   current 링크 전환 → systemd 재시작 → 3000 HTTP 검사
        └─ 실패: 직전 릴리스 복구
 ```
 
 - 빌드는 Ubuntu 24.04 x86_64에서 `mise.toml`의 Node 버전과 frozen pnpm lockfile로 수행한다. Next의 타입 검사를 건너뛰지 않는다. 빌드에는 운영 DB/서비스 키가 필요 없다. PG 가입의 회사 목록은 요청 시점에 DB에서 조회한다.
-- `.next/standalone`의 런타임 의존성, `public`, `.next/static`, PDF 폰트, 컴파일한 달력 명령과 Compose 설정을 tar로 묶는다. pnpm 심볼릭 링크를 상대 경로 그대로 보존한다. `.env*`는 제외한다.
+- `.next/standalone`의 런타임 의존성, `public`, `.next/static`, PDF 폰트, 컴파일한 달력 명령과 Compose 설정을 tar로 묶는다. Node 기준 `mise.toml`과 외부 패키지가 필요 없는 `node-runtime.cjs` 검사기도 `.ops`에 포함한다. pnpm 심볼릭 링크를 상대 경로 그대로 보존한다. `.env*`는 제외한다.
 - 산출물 이름은 `<commit SHA>-<workflow run number>-<attempt>`다. GitHub Artifact는 14일 보관한다. SHA-256와 내부 manifest/BUILD_ID를 서버에서 대조하며 같은 릴리스를 덮어쓰지 않는다.
+- 패키징은 빌드 Node가 `mise.toml`과 정확히 같아야 성공한다. 서버는 manifest의 `nodeVersion`과 동봉된 pin이 같은지 확인하고, 실제 실행기가 같은 메이저에서 pin 이상인지 검사한다. 낮은 패치·다른 메이저·시험판·버전 정보 누락은 Compose·달력 작업·`current` 전환 전에 실패한다. 런타임 검증 정보가 없는 예전 산출물은 이 배포기로 새로 활성화하지 않는다.
 - 배포는 GitHub `staging` Environment의 `dev` 브랜치만 허용한다. CI concurrency와 서버 `flock`이 중복 실행을 막고, 이미 배포된 것보다 오래된 실행은 건너뛴다.
 - 전환 전 후보를 별도 포트에서 확인한다. 전환 후 실패하면 이전 `current`와 Compose 설정을 복구하고 재시작한다. 첫 배포에는 복구할 이전 버전이 없다. 단일 앱 프로세스 재시작 동안 짧은 접속 중단이 있으므로 무중단 배포는 아니다.
 - 성공 시 서버에 최근 5개 릴리스를 남기고 직전 버전은 항상 추가 보존한다. 전송한 tar는 삭제한다. 공유 환경 파일과 DB 볼륨은 정리 대상이 아니다.
@@ -65,7 +66,9 @@ sudo systemctl enable supporter-b-staging
 # current가 준비되면 배포 스크립트가 시작한다.
 ```
 
-`deploy/supporter-b-staging.service`는 `ec2-user`와 위 경로를 사용한다. 다른 사용자/경로라면 함께 수정한다. `/usr/local/bin/node`의 버전은 `mise.toml`과 맞춘다. 서비스는 `.env.production`을 읽어 `node current/server.js`만 실행한다. `NEXT_PUBLIC_*`는 CI 빌드 시 고정되므로 주소를 바꾸면 workflow의 빌드 환경도 고치고 다시 빌드한다.
+`deploy/supporter-b-staging.service`는 `ec2-user`와 위 경로를 사용한다. 다른 사용자/경로라면 함께 수정한다. `/usr/local/bin/node`의 버전은 `mise.toml`과 맞춘다. 서비스는 `.env.production`을 읽어 `node current/server.js`만 실행한다. 배포기는 로드된 systemd `ExecStart`에서 절대 Node 경로를 읽고 같은 실행기로 검증·달력 명령·후보를 실행한다. SSH의 PATH에 다른 Node가 있어도 사용하지 않는다. 실행기를 감싸는 스크립트, 다른 진입점·추가 인수, 존재하지 않는 실행기는 거부한다. 단위 파일을 바꿨으면 `daemon-reload`를 먼저 실행한다. `NEXT_PUBLIC_*`는 CI 빌드 시 고정되므로 주소를 바꾸면 workflow의 빌드 환경도 고치고 다시 빌드한다.
+
+이 검사는 서버 런타임을 설치하거나 업그레이드하지 않는다. 기준 미달이면 실행기를 별도로 교체·검증한 뒤 배포를 다시 실행한다. 2026-11-08 현재 pin은 22.23.4이며, 11월 11일 예정 보안 패치가 출시되면 배포 전에 [Node 설치·보안 확인](DEPLOY_LIGHTSAIL.md#node-설치-amazon-linux-2023)의 공지와 기준 버전을 재검토한다.
 
 실시간 `/connection/*`는 브라우저의 호스트별 Basic Auth 캐시와 분리해 Centrifugo JWT·구독 ACL로 보호한다. 토큰 발급 앱 API는 Basic Auth와 앱 로그인을 모두 요구한다. 유효한 토큰 없이 연결할 수 없다.
 
