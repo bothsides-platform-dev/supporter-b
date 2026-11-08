@@ -22,7 +22,7 @@ seedThread(demoPgConversationId, demoPgThread);
 
 export function PgMessagesPageHost() {
   return (
-    <PageEnter className="flex h-full min-h-0 flex-col">
+    <PageEnter motionPolicy="always" className="flex h-full min-h-0 flex-col">
       <PageHeader title="메시지" count={demoPgMessageUnread} countKind="unread" />
       <MessageInbox
         items={demoPgMessageItems}

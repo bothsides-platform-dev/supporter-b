@@ -1,0 +1,8 @@
+﻿매개변수,의미,판정·값
+funnel_id,흐름,acquisition / signup / questions / request
+step_id,흐름 안의 단계,"이메일: email, 계약 유형: contract, 최종 요청: submitted 등"
+entry_path,진입 경로,guest / member / direct
+contract_type,계약 유형,초안의 신규 선택: new / 갱신 선택: renewal / 미선택·값 미전달: unknown
+mode,작성·수정 구분,명시적인 비회원 수정 흐름: edit / 그 외 기본값: write
+progression,질문 진행,다음: next / 건너뛰기: skip
+error_code,오류 종류,허용된 고정 코드 / 허용 목록 밖: UNKNOWN

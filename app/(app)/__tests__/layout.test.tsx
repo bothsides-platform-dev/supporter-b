@@ -56,9 +56,6 @@ vi.mock('@/components/shell/Toaster', () => ({
 vi.mock('@/components/shell/CommandPalette', () => ({
   CommandPalette: () => null,
 }));
-vi.mock('@/components/shell/GlobalShortcuts', () => ({
-  GlobalShortcuts: () => null,
-}));
 vi.mock('@/components/observability/SentryUserContext', () => ({
   SentryUserContext: () => null,
 }));

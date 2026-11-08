@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 
-// Shared by both public email probes. Bounded memory for the single PM2 fork;
+// Shared by the public email entry points (availability probe, signup email,
+// password forgot). Bounded memory for the single PM2 fork;
 // successful lookups never reset the budget. Caddy owns the final XFF hop.
 let windowStart = 0;
 let total = 0;

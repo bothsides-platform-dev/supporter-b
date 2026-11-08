@@ -51,7 +51,7 @@ export function AccordionItem({
       className="border-b border-[var(--md-sys-color-outline-variant)]"
     >
       <BaseAccordion.Header>
-        <BaseAccordion.Trigger className="group flex w-full items-center justify-between gap-3 py-3 text-left outline-none">
+        <BaseAccordion.Trigger className="group flex w-full items-center justify-between gap-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50">
           <span className="flex items-center gap-2 text-[13px] font-[500] text-[var(--md-sys-color-on-surface)]">
             {title}
           </span>
@@ -59,12 +59,12 @@ export function AccordionItem({
             {badge}
             <ChevronDownIcon
               size={16}
-              className="text-[var(--md-sys-color-on-surface-variant)] transition-transform duration-150 group-data-[panel-open]:rotate-180"
+              className="text-[var(--md-sys-color-on-surface-variant)] transition-transform duration-150 motion-reduce:transition-none group-data-[panel-open]:rotate-180"
             />
           </span>
         </BaseAccordion.Trigger>
       </BaseAccordion.Header>
-      <BaseAccordion.Panel className="overflow-hidden data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0">
+      <BaseAccordion.Panel className="overflow-hidden motion-safe:data-open:animate-in data-open:fade-in-0 motion-safe:data-closed:animate-out data-closed:fade-out-0">
         <div className="pb-4">{children}</div>
       </BaseAccordion.Panel>
     </BaseAccordion.Item>

@@ -5,7 +5,7 @@ import { resolveBuyerBusiness } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
 
-import { normalizeEmail, bucket15Min } from './_service-utils';
+import { normalizeEmail, bucket15Min, bucket1Min } from './_service-utils';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { classifyAccountDeletion } from '@/lib/auth/account-deletion';
 import type { BlockingWorkspace } from '@/lib/auth/account-deletion';
@@ -39,6 +39,10 @@ function generateEmailCode(): string {
 
 // 코드 오입력 허용 횟수 (전화 OTP verifyPhoneOtpAction 과 동일).
 const MAX_CODE_ATTEMPTS = 5;
+
+// 비밀번호 재설정 메일 이메일별 발송 한도 — 최근 1시간 5통.
+const PASSWORD_RESET_MAX_PER_WINDOW = 5;
+const PASSWORD_RESET_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * `users.email` unique violation(23505)이면 EMAIL_TAKEN 으로 매핑, 아니면 재던진다.
@@ -428,11 +432,27 @@ export class AuthService {
     const rawToken = generateToken();
     const resetUrl = `${baseUrl()}/password/reset?token=${rawToken}`;
     const html = await renderAuthReset({ resetUrl, expiresMinutes: 30 });
-    const dedupeKey = `password-reset:${input.email}:${bucket15Min()}`;
     const now = new Date();
+    // 비로그인 엔드포인트라 클라이언트의 "재발송" 표시는 믿지 않고 모든 요청에 같은
+    // 서버 정책을 건다. ① 1분 버킷 dedupe(유니크 인덱스라 원자적) = 최소 간격.
+    // 재발송 대기 60초가 끝난 클릭은 항상 다음 버킷에 떨어진다. ② 최근 1시간 발급
+    // 수 한도 = 특정 주소로의 메일 폭탄 차단. 분 경계의 동시 요청은 둘 다 한도 검사를
+    // 통과할 수 있어 상한은 +1까지 느슨하다.
+    const dedupeKey = `password-reset:${input.email}:${bucket1Min(now)}`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
+      const recent = await this.verificationTokenRepo.countIssuedSince(
+        {
+          email: input.email,
+          purpose: 'password_reset',
+          since: new Date(now.getTime() - PASSWORD_RESET_WINDOW_MS),
+        },
+        tx,
+      );
+      // 한도 초과 — 새 메일을 보내지 않으므로 이전 링크도 그대로 둔다.
+      if (recent >= PASSWORD_RESET_MAX_PER_WINDOW) return;
+
       const entry = await this.outboxRepo.enqueue(
         {
           event: 'auth.reset',
