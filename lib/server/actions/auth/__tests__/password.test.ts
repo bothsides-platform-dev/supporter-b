@@ -80,77 +80,102 @@ describe('passwordForgotAction', () => {
     expect(out[0].event).toBe('auth.reset');
   });
 
-  it('두 번째 forgot 가 같은 15분 버킷이면 이전 토큰을 burn 하지 않는다 (UX 함정 회귀 가드)', async () => {
-    await seedUser('kim@example.com');
-
-    await passwordForgotAction({ email: 'kim@example.com' });
-    const rows1 = await db
-      .select({ html: outboxEntries.html })
-      .from(outboxEntries)
-      .where(eq(outboxEntries.event, 'auth.reset'))
-      .limit(1);
-    const firstToken = tokenFromOutbox(rows1[0].html);
-
-    // 같은 버킷 내 두 번째 호출 — outbox dedupe 가 enqueue 를 막아야 함
-    await passwordForgotAction({ email: 'kim@example.com' });
-
-    // outbox row 는 여전히 1개
-    const outboxRows = await db
-      .select()
-      .from(outboxEntries)
-      .where(eq(outboxEntries.event, 'auth.reset'));
-    expect(outboxRows).toHaveLength(1);
-
-    // verification_tokens 도 1개여야 함 — 두 번째 save 가 skip 되었어야
-    const tokenRows = await db
-      .select()
-      .from(verificationTokens)
-      .where(eq(verificationTokens.email, 'kim@example.com'));
-    expect(tokenRows).toHaveLength(1);
-
-    // 첫 토큰으로 reset 이 성공해야 함 (burn 되지 않았다는 증거)
-    const r = await passwordResetAction({
-      rawToken: firstToken,
-      password: 'NewPassword2@',
-    });
-    expect(r.ok).toBe(true);
-  });
-
-  it('두 번째 forgot 가 다른 15분 버킷이면 이전 토큰이 무효화된다', async () => {
-    await seedUser('kim@example.com');
-
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(new Date('2026-05-19T10:00:00Z'));
-      await passwordForgotAction({ email: 'kim@example.com' });
-      const rows1 = await db
-        .select({ html: outboxEntries.html, scheduledAt: outboxEntries.scheduledAt })
+  // 재발송 버튼의 대기 시간(ResendCountdown 기본 60초)과 서버의 1분 단위 중복 방지가
+  // 맞물리는지, 그리고 비로그인 엔드포인트가 메일 폭탄 통로가 되지 않는지를 고정한다.
+  describe('재발송과 발송 한도', () => {
+    async function resetRows() {
+      return db
+        .select({ html: outboxEntries.html })
         .from(outboxEntries)
         .where(eq(outboxEntries.event, 'auth.reset'))
         .orderBy(outboxEntries.scheduledAt);
-      expect(rows1).toHaveLength(1);
-      const firstToken = tokenFromOutbox(rows1[0].html);
-
-      // 20분 뒤 → 다른 15분 버킷
-      vi.setSystemTime(new Date('2026-05-19T10:20:00Z'));
-      await passwordForgotAction({ email: 'kim@example.com' });
-
-      // outbox 에 두 번째 row 가 추가
-      const outboxRows = await db
-        .select()
-        .from(outboxEntries)
-        .where(eq(outboxEntries.event, 'auth.reset'));
-      expect(outboxRows).toHaveLength(2);
-
-      // 첫 토큰은 이제 거부되어야 함 (invalidatePending 으로 burn)
-      const r = await passwordResetAction({
-        rawToken: firstToken,
-        password: 'NewPassword2@',
-      });
-      expect(r.ok).toBe(false);
-    } finally {
-      vi.useRealTimers();
     }
+
+    async function resetTokens() {
+      return db
+        .select()
+        .from(verificationTokens)
+        .where(eq(verificationTokens.email, 'kim@example.com'));
+    }
+
+    async function forgotAt(iso: string) {
+      vi.setSystemTime(new Date(iso));
+      return passwordForgotAction({ email: 'kim@example.com' });
+    }
+
+    beforeEach(async () => {
+      await seedUser('kim@example.com');
+      vi.useFakeTimers({ toFake: ['Date'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      requestHeaders.delete('x-forwarded-for');
+    });
+
+    it('같은 1분 안에 다시 요청하면 새 메일·토큰을 만들지 않고 첫 링크를 살려 둔다', async () => {
+      await forgotAt('2026-05-19T10:00:10Z');
+      const firstToken = tokenFromOutbox((await resetRows())[0].html);
+
+      await forgotAt('2026-05-19T10:00:40Z');
+
+      expect(await resetRows()).toHaveLength(1);
+      expect(await resetTokens()).toHaveLength(1);
+      expect(
+        await passwordResetAction({ rawToken: firstToken, password: 'NewPassword2@' }),
+      ).toMatchObject({ ok: true });
+    });
+
+    it('재발송 대기 60초가 지나 다시 요청하면 새 메일이 나가고 이전 링크는 무효가 된다', async () => {
+      await forgotAt('2026-05-19T10:00:30Z');
+      await forgotAt('2026-05-19T10:01:30Z');
+
+      const rows = await resetRows();
+      expect(rows).toHaveLength(2);
+      const [firstToken, secondToken] = rows.map((row) => tokenFromOutbox(row.html));
+      expect(
+        await passwordResetAction({ rawToken: firstToken, password: 'NewPassword2@' }),
+      ).toMatchObject({ ok: false });
+      expect(
+        await passwordResetAction({ rawToken: secondToken, password: 'NewPassword2@' }),
+      ).toMatchObject({ ok: true });
+    });
+
+    it('한 이메일에는 최근 1시간 동안 5통까지만 보내고, 그 뒤 요청도 성공처럼 응답한다', async () => {
+      for (const minute of ['00', '01', '02', '03', '04']) {
+        await forgotAt(`2026-05-19T10:${minute}:00Z`);
+      }
+      const fifthToken = tokenFromOutbox((await resetRows())[4].html);
+
+      expect(await forgotAt('2026-05-19T10:05:00Z')).toEqual({ ok: true });
+      expect(await resetRows()).toHaveLength(5);
+      expect(await resetTokens()).toHaveLength(5);
+      // 한도에 걸린 요청은 마지막으로 보낸 링크를 무효화하지 않는다.
+      expect(
+        await passwordResetAction({ rawToken: fifthToken, password: 'NewPassword2@' }),
+      ).toMatchObject({ ok: true });
+    });
+
+    it('1시간 창은 미끄러진다 — 가장 오래된 발송이 창을 벗어나면 다시 보낸다', async () => {
+      for (const minute of ['00', '01', '02', '03', '04']) {
+        await forgotAt(`2026-05-19T10:${minute}:00Z`);
+      }
+      await forgotAt('2026-05-19T11:00:30Z');
+
+      expect(await resetRows()).toHaveLength(6);
+    });
+
+    it('IP 요청 한도에 걸려도 결과는 ok:true 이고 메일·토큰을 만들지 않는다', async () => {
+      // 새 1분 창에서 시작해 다른 테스트의 호출 수와 섞이지 않게 한다.
+      vi.setSystemTime(new Date('2027-01-01T00:00:00Z'));
+      requestHeaders.set('x-forwarded-for', '203.0.113.7');
+      for (let i = 0; i < 60; i++) {
+        expect(await passwordForgotAction({ email: `probe${i}@example.com` })).toEqual({ ok: true });
+      }
+
+      expect(await passwordForgotAction({ email: 'kim@example.com' })).toEqual({ ok: true });
+      expect(await resetRows()).toHaveLength(0);
+      expect(await resetTokens()).toHaveLength(0);
+    });
   });
 });
 
