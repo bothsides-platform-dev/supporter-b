@@ -17,6 +17,7 @@ import {
 } from "@/lib/server/__tests__/_business-calendar";
 import {
   agentEvents,
+  agentObservations,
   agentRequests,
   pgMatchingPolicies,
   pgRecommendationGroups,
@@ -36,6 +37,8 @@ import {
 } from "../agent-request";
 import { agentAccountUrls } from "@/lib/server/agent/account-contract";
 import { DrizzleAgentRepository } from "@/lib/server/repositories/drizzle/agent";
+import { DrizzleAgentAnalyticsRepository } from "@/lib/server/repositories/drizzle/agent-analytics";
+import { __resetAgentAnalyticsForTest } from "../agent-analytics";
 
 vi.mock("@/lib/server/outbox/post-commit", () => ({
   flushAfterCommit: vi.fn(),
@@ -52,6 +55,8 @@ let actor: { userId: string; workspaceId: string };
 let token: string;
 let input: { requestKey: string; content: Record<string, unknown> };
 beforeEach(async () => {
+  vi.stubEnv("AGENT_ANALYTICS_ENABLED", "true");
+  __resetAgentAnalyticsForTest();
   db = await setupServerTestEnv();
   await seedBusinessCalendar();
   const u = await seedUser(db);
@@ -64,23 +69,21 @@ beforeEach(async () => {
   await db
     .insert(pgRecommendationGroups)
     .values({ id: group, name: "온라인 판매" });
-  await db
-    .insert(pgMatchingPolicies)
-    .values({
-      groupId: group,
-      policy: {
-        risk: "white",
-        candidates: [
-          {
-            pgWorkspaceId: p.id,
-            reason: "상담 가능",
-            feeMin: null,
-            feeMax: null,
-            feeNote: "",
-          },
-        ],
-      },
-    });
+  await db.insert(pgMatchingPolicies).values({
+    groupId: group,
+    policy: {
+      risk: "white",
+      candidates: [
+        {
+          pgWorkspaceId: p.id,
+          reason: "상담 가능",
+          feeMin: null,
+          feeMax: null,
+          feeNote: "",
+        },
+      ],
+    },
+  });
   const client = await registerAgentClient({
     redirect_uris: ["http://localhost:12345/callback"],
   });
@@ -130,6 +133,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   teardownServerTestEnv();
 });
 
@@ -159,6 +163,15 @@ it("sends one private, single-PG consultation and records linkage/event atomical
     ),
   ).toHaveLength(1);
   expect((await db.select().from(agentRequests))[0].rfpCode).toBe(sent.rfpCode);
+  const observations = (await db.select().from(agentObservations)).filter(
+    (row) => row.operation === "submit",
+  );
+  expect(observations).toHaveLength(2);
+  expect(
+    observations.every(
+      (row) => row.outcome === "ok" && row.requestId === draft.requestId,
+    ),
+  ).toBe(true);
 });
 it("rejects stale browser confirmation, another workspace and changed PG policy", async () => {
   const draft = await prepareAgentRequest(token, input);
@@ -178,6 +191,32 @@ it("rejects stale browser confirmation, another workspace and changed PG policy"
     submitBrowserAgentRequest(draft.requestId, 1, actor),
   ).rejects.toMatchObject({ code: "MATCHING_UNAVAILABLE" });
   expect(await db.select().from(rfps)).toHaveLength(0);
+  const observations = (await db.select().from(agentObservations)).filter(
+    (row) => row.operation === "submit",
+  );
+  expect(observations.map((row) => row.outcome)).toEqual([
+    "blocked",
+    "rejected",
+    "blocked",
+  ]);
+  expect(observations[1]).toMatchObject({
+    connectionId: null,
+    requestId: null,
+  });
+});
+it("preserves a committed consultation when optional observation storage fails", async () => {
+  const draft = await prepareAgentRequest(token, input);
+  vi.spyOn(
+    DrizzleAgentAnalyticsRepository.prototype,
+    "record",
+  ).mockRejectedValue(new Error("optional observation failure"));
+  const result = await submitBrowserAgentRequest(draft.requestId, 1, actor);
+  expect((await db.select().from(rfps))[0].code).toBe(result.rfpCode);
+  expect(
+    (await db.select().from(agentEvents)).filter(
+      (row) => row.event === "request_submitted",
+    ),
+  ).toHaveLength(1);
 });
 it("rolls the consultation back if its durable event cannot be saved", async () => {
   const draft = await prepareAgentRequest(token, input);

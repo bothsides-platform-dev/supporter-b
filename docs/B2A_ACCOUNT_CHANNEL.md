@@ -33,7 +33,7 @@ sequenceDiagram
 
 공개 MCP `/api/agent/mcp`는 계속 인증 없이 조회만 제공한다. 계정 MCP는 `/api/agent/account/mcp`다. 고객의 기존 모든 견적·계약·첨부를 읽는 권한은 제공하지 않는다. 다른 연결에서 만든 초안도 조회할 수 없다. 재연결은 새 연결이며 기존 발송 상담은 웹에서 확인한다.
 
-최종 발송은 브라우저의 서버 액션이다. 에이전트가 `confirmed: true`를 보내는 것으로 대체하지 않는다. PG 한 곳, 비공개 요청, 업종 정책, 영업일 마감, 현재 PG 제외 등 기존 `RfpService` 검증을 그대로 거친다. 견적 선정·서명은 기존 웹에서 진행한다. 고객–PG 서비스 이용계약, 노온–구매사 할인 합의서, 제휴사 수수료 구조는 유지한다. `providerContractStatus: not_verified`는 PG 계약을 이 채널에서 확인하지 않았다는 뜻이다.
+최종 발송은 브라우저의 서버 액션이다. 에이전트가 `confirmed: true`를 보내는 것으로 대체하지 않는다. PG 한 곳, 비공개 요청, 업종 정책, 영업일 마감, 현재 PG 제외 등 기존 `RfpService` 검증을 그대로 거친다. 견적 선정·서명은 기존 웹에서 진행한다. 고객–PG 서비스 이용계약, 노온–구매사 할인 합의서, 제휴사 수수료 구조는 유지한다. `providerContractStatus`는 별도 제휴 결과 원장의 `confirmed` 또는 `not_verified`다. `providerContract`와 `integration.sandbox/live`에는 확인 시각·출처를 제공하고 내부 수수료·근거 번호는 포함하지 않는다. `not_verified`는 아직 완료 여부를 확인하지 못했다는 뜻이다. [결과 기록 절차](B2A_OUTCOMES.md)를 따른다.
 
 ## 연결 방법
 
@@ -74,6 +74,7 @@ PC 브라우저와 서버 CLI가 같은 buyer origin을 사용해야 한다. SSH
 | 이벤트 | 관측한 사실 |
 |---|---|
 | `connected`, `revoked` | 연결 동의 완료·연결 철회 |
+| `token_issued` | 최초 인증 코드 교환과 토큰 발급 성공. 클라이언트 응답 수신은 별도 |
 | `token_refreshed` | 정상 토큰 갱신 |
 | `draft_created`, `draft_updated` | 초안 저장·판본 변경 |
 | `request_submitted` | 기존 상담 생성과 연결 저장 완료 |
@@ -91,11 +92,11 @@ FROM agent_requests
 WHERE created_at >= $1 AND created_at < $2;
 ```
 
-공개 조회 기록과 연결 사용자를 강제로 이어 붙이지 않는다. 클라이언트가 입력한 앱 이름으로 Claude Code·Codex 사용 실적을 확정하지 않는다. 추천 노출·동의 화면 이탈·실패 사유 퍼널, PG 계약·실제 수수료 대조, 분석 대시보드, 자동 보관 정리는 다음 단계다. 현재 이벤트만으로 계약 성사율을 계산하지 않는다.
+공개 조회 기록과 연결 사용자를 강제로 이어 붙이지 않는다. 클라이언트가 입력한 앱 이름으로 Claude Code·Codex 사용 실적을 확정하지 않는다. v0.49.0.0에서 브라우저 단계·호출 실패·토큰 발급과 전환 리포트를 추가했다. [애널리틱스 운영 안내](B2A_ANALYTICS.md)에 환경 분리·DDL·조회·호출 관측 정리 명령을 설명한다. v0.50.0.0에서 [제휴 결과 원장](B2A_OUTCOMES.md)을 연결했다. 실제 PG 근거·수수료 대조, 추천 노출 확인·관리자 웹 화면·운영 스케줄 등록은 사용자와의 후속 대화에서 진행한다. 호출 이벤트만으로 계약 성사율을 계산하지 않는다.
 
 ## 배포 순서와 중단
 
-1. DB 백업과 대상 환경을 확인한 뒤 [20261108-agent-channel.sql](../scripts/migrations/20261108-agent-channel.sql)을 **앱 배포 전에 한 번** 적용한다. 기존 users/workspaces를 참조하는 테이블 6개와 인덱스·제약을 추가한다. 기존 업무 테이블은 변경하지 않는다. 이미 적용한 환경에서는 재실행하지 않는다.
+1. DB 백업과 대상 환경을 확인한 뒤 [20261108-agent-channel.sql](../scripts/migrations/20261108-agent-channel.sql)을 **앱 배포 전에 한 번** 적용한다. 기존 users/workspaces를 참조하는 테이블 6개와 인덱스·제약을 추가한다. v0.49.0.0 배포는 이어서 [20261108-agent-analytics.sql](../scripts/migrations/20261108-agent-analytics.sql)도 선행한다. v0.50.0.0은 이어서 [20261109-partner-outcomes.sql](../scripts/migrations/20261109-partner-outcomes.sql)을 적용한다. 이미 적용한 DDL은 재실행하지 않는다.
 2. `AGENT_ACCOUNT_CHANNEL_ENABLED`를 생략하거나 `false`로 앱을 배포한다. 비활성일 때 계정 HTTP·메타데이터는 DB 접근 전에 404다. 공개 가이드와 프로필에 연결 안내도 노출하지 않는다.
 3. 기존 buyer/partner origin 설정, HTTPS·인입 프록시, 영업일 달력과 PG 추천 정책을 확인한다. 계정 토큰용 새 비밀키는 없다. 기존 Auth.js 로그인 설정은 필요하다.
 4. 내부 검증 환경에서 `AGENT_ACCOUNT_CHANNEL_ENABLED=true`로 재시작하고 실제 두 하네스의 신규 연결·조회·초안·브라우저 발송·재시도·연결 해제를 실행한다. 운영 제휴사에 시험 상담을 보내지 않는다.

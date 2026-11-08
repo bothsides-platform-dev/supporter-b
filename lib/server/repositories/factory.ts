@@ -410,3 +410,13 @@ export async function getAgentRepo() {
   const { DrizzleAgentRepository } = await import('./drizzle/agent');
   return new DrizzleAgentRepository((await getBundle()).db);
 }
+
+export async function getAgentAnalyticsRepo() {
+  const { DrizzleAgentAnalyticsRepository } = await import('./drizzle/agent-analytics');
+  return new DrizzleAgentAnalyticsRepository((await getBundle()).db);
+}
+
+export async function getPartnerOutcomeRepo() {
+  const { DrizzlePartnerOutcomeRepository } = await import('./drizzle/partner-outcomes');
+  return new DrizzlePartnerOutcomeRepository((await getBundle()).db);
+}

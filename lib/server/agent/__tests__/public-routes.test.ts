@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { recordAgentObservation } from '@/lib/server/services/agent-analytics';
 import { GET as catalog } from '@/app/api/agent/v1/services/route';
 import { GET as requirements } from '@/app/api/agent/v1/services/[serviceId]/requirements/route';
 import { GET as guide } from '@/app/developers/agents.md/route';
@@ -7,6 +8,10 @@ import { decideRoute } from '@/lib/auth/route-decision';
 import { __resetPublicAgentBudgetForTest } from '../public-guard';
 import { __resetAgentDiscoveryEventsForTest } from '../discovery-events';
 import { AGENT_CATALOG_VERSION, getPublicRequirements } from '../catalog';
+
+vi.mock('@/lib/server/services/agent-analytics', () => ({
+  recordAgentObservation: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/lib/observability/logger', () => ({ logger: { info: vi.fn() } }));
 
@@ -19,6 +24,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', origin);
   vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.support-b.test');
   vi.mocked(logger.info).mockReset();
+  vi.mocked(recordAgentObservation).mockReset().mockResolvedValue(undefined);
   __resetPublicAgentBudgetForTest();
   __resetAgentDiscoveryEventsForTest();
 });

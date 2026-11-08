@@ -1,4 +1,8 @@
+"use client";
+
 import { Button } from "@/components/primitives/Button";
+import { useFunnelView } from "@/lib/analytics/use-funnel";
+import { trackFunnel } from "@/lib/analytics/funnel";
 
 export function AgentRequestReview({
   workspaceName,
@@ -15,6 +19,7 @@ export function AgentRequestReview({
   action: () => void | Promise<void>;
   submittedUrl?: string;
 }) {
+  useFunnelView("agent", submittedUrl ? "submitted_view" : "review");
   return (
     <section className="mx-auto w-full max-w-3xl space-y-6 p-6 text-[var(--md-sys-color-on-surface)]">
       <div className="space-y-2">
@@ -61,7 +66,17 @@ export function AgentRequestReview({
           보낸 상담 보기
         </a>
       ) : (
-        <form action={action} className="flex justify-end">
+        <form
+          action={action}
+          className="flex justify-end"
+          onSubmit={() => {
+            if (!missing.length)
+              trackFunnel("funnel_cta_click", {
+                funnel_id: "agent",
+                step_id: "submit_attempt",
+              });
+          }}
+        >
           <Button type="submit" disabled={missing.length > 0}>
             이 내용으로 상담 요청해요
           </Button>

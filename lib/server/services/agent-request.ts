@@ -35,6 +35,12 @@ import { z } from "zod";
 import type { Actor } from "./types";
 import { businessDeadline } from "@/lib/rfp/business-deadline";
 import { kstDateOf } from "@/lib/utils/deadline";
+import {
+  agentErrorCode,
+  type AgentObservation,
+} from "@/lib/analytics/agent-contract";
+import { recordAgentObservation } from "./agent-analytics";
+import { readPartnerOutcomeStatus } from "./partner-outcomes";
 
 function requireId(id: string) {
   if (!z.string().uuid().safeParse(id).success)
@@ -155,6 +161,7 @@ export async function readAgentRequest(principal: AgentPrincipal, id: string) {
     : undefined;
   if (rfp && rfp.buyerWsId !== principal.connection.workspaceId)
     throw new AgentError("not_found", 404);
+  const outcomes = await readPartnerOutcomeStatus(id, rfp?.id);
   await repo.event({
     id: randomUUID(),
     connectionId: principal.connection.id,
@@ -166,10 +173,12 @@ export async function readAgentRequest(principal: AgentPrincipal, id: string) {
     ...summary,
     requestStatus: rfp?.status ?? null,
     deadline: rfp?.deadline ?? null,
-    providerContractStatus: "not_verified",
+    providerContractStatus: outcomes.providerContract.status,
+    providerContract: outcomes.providerContract,
+    integration: outcomes.integration,
     checkedAt: new Date().toISOString(),
     guidance: rfp
-      ? "견적과 합의서의 자세한 내용은 웹에서 확인해요. PG 서비스 계약 완료는 별도로 확인해요."
+      ? "견적과 합의서의 자세한 내용은 웹에서 확인해요. PG 서비스 계약과 연동 상태는 확인된 기록을 기준으로 안내해요. 미확인은 완료 여부를 아직 확인하지 못했다는 뜻이에요."
       : "브라우저에서 내용을 확인하고 상담 요청을 보내요.",
   };
 }
@@ -240,6 +249,50 @@ export async function submitBrowserAgentRequest(
   revision: number,
   actor: Actor,
 ) {
+  const started = performance.now();
+  const observation: AgentObservation = {
+    surface: "browser",
+    operation: "submit",
+    outcome: "ok",
+    durationMs: 0,
+  };
+  try {
+    return await submitBrowserAgentRequestInternal(
+      id,
+      revision,
+      actor,
+      observation,
+    );
+  } catch (error) {
+    observation.outcome =
+      error instanceof AgentError
+        ? error.status === 401 || error.status === 403 || error.status === 404
+          ? "rejected"
+          : error.status < 500
+            ? "blocked"
+            : "error"
+        : "error";
+    observation.errorCode =
+      error instanceof AgentError
+        ? agentErrorCode(error.code)
+        : "temporarily_unavailable";
+    throw error;
+  } finally {
+    observation.durationMs = Math.max(0, performance.now() - started);
+    try {
+      await recordAgentObservation(observation);
+    } catch {
+      /* Optional observation. */
+    }
+  }
+}
+
+async function submitBrowserAgentRequestInternal(
+  id: string,
+  revision: number,
+  actor: Actor,
+  observation: AgentObservation,
+) {
   requireId(id);
   const db = await getDb();
   const afterCommit: (() => void)[] = [];
@@ -259,6 +312,8 @@ export async function submitBrowserAgentRequest(
       throw new AgentError("not_found", 404);
     if (!connection.scopes.includes("requests:write"))
       throw new AgentError("insufficient_scope", 403);
+    observation.connectionId = connection.id;
+    observation.requestId = initial.id;
     const row = (await repo.request(id, true))!;
     if (row.revision !== revision)
       throw new AgentError("revision_conflict", 409);

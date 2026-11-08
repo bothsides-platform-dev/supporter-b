@@ -27,3 +27,14 @@ it('a history failure never prevents first-touch capture or rendering', () => {
   expect(readFirstTouch()?.utmSource).toBe('naver');
   expect(readFirstTouch()?.landingPath).toBe('/signup/buyer?utm_source=naver&keep=1');
 });
+it('does not consume docs parameters, modify an OAuth URL or capture its login redirect', () => {
+  const authUrl='/login?next=%2Fagent%2Fauthorize%3Fstate%3Dprivate-state&sb_via=docs&sb_docs_path=%2Fglossary%2Fpg&sb_docs_placement=header_cta';
+  window.history.replaceState({}, '', authUrl);
+  const receive=vi.spyOn(funnelAnalytics,'docsArrival');
+  const replace=vi.spyOn(window.history,'replaceState');
+  render(<FirstTouchCapture />);
+  expect(receive).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
+  expect(readFirstTouch()).toBeNull();
+  expect(window.location.pathname+window.location.search).toBe(authUrl);
+});

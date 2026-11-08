@@ -9,6 +9,8 @@ export const EVENTS = [
 ] as const;
 export type FunnelEvent = (typeof EVENTS)[number];
 export const STEPS = {
+  // Browser observations only. Actual grants and submissions are server facts.
+  agent: ["consent", "approve", "deny", "review", "submit_attempt", "submitted_view", "connections"],
   acquisition: [
     "landing",
     "quote_start",

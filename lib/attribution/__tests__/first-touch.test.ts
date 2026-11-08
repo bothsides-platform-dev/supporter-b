@@ -75,4 +75,43 @@ describe('first-touch attribution capture', () => {
     expect(() => captureFirstTouch()).not.toThrow();
     spy.mockRestore();
   });
+
+  it.each([
+    '/agent/authorize?state=private-state&code_challenge=private-challenge',
+    '/login?next=%2Fagent%2Fauthorize%3Fstate%3Dprivate-state',
+    '/callback?code=private-code&code_verifier=private-verifier',
+  ])('does not persist auth entry %s, then captures the next ordinary visit', path => {
+    setLocation(`https://support-b.com${path}`);
+    captureFirstTouch();
+    expect(localStorage.getItem('bidit.firstTouch')).toBeNull();
+    setLocation('https://support-b.com/?utm_source=google');
+    captureFirstTouch();
+    expect(readFirstTouch()?.utmSource).toBe('google');
+  });
+
+  it('keeps prior ordinary attribution when OAuth is opened later', () => {
+    setLocation('https://support-b.com/?utm_source=naver');
+    captureFirstTouch();
+    setLocation('https://support-b.com/agent/authorize?state=private-state');
+    captureFirstTouch();
+    expect(readFirstTouch()?.landingPath).toBe('/?utm_source=naver');
+  });
+
+  it('omits sensitive external referrers while keeping ordinary landing information', () => {
+    setLocation('https://support-b.com/?utm_source=google', 'https://example.com/callback?code=private-code');
+    captureFirstTouch();
+    expect(readFirstTouch()?.referrer).toBeUndefined();
+    expect(readFirstTouch()?.utmSource).toBe('google');
+    expect(localStorage.getItem('bidit.firstTouch')).not.toContain('private-code');
+  });
+
+  it('does not forward old auth captures during signup', () => {
+    localStorage.setItem('bidit.firstTouch', JSON.stringify({
+      _v: 1,
+      utmSource: 'google',
+      landingPath: '/login?next=%2Fagent%2Fauthorize%3Fstate%3Dprivate-state',
+      referrer: 'https://example.com/callback?code=private-code',
+    }));
+    expect(readFirstTouch()).toEqual({ _v: 1, utmSource: 'google' });
+  });
 });

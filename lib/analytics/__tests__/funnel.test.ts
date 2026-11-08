@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createFunnelAnalytics, safePagePath } from '../funnel';
+import { sanitizeJourneyEvent } from '@/lib/guest-rfp/journey-contract';
 const event = { funnel_id: 'acquisition', step_id: 'landing', entry_path: 'guest', mode: 'write' } as const;
 let send = vi.fn();
 beforeEach(() => { send = vi.fn(); localStorage.clear(); });
@@ -63,4 +64,26 @@ it('does not treat anonymous email-verification or app access as buyer events',(
 
 it('gives pending identity a bounded opportunity before hard navigation', async () => {
  vi.useFakeTimers(); const a=create(); a.track('funnel_step_view',event,'/'); const done=vi.fn(); void a.flush().then(done); await vi.advanceTimersByTimeAsync(0); expect(done).not.toHaveBeenCalled(); a.configure('G-TEST'); a.identify(null); await vi.advanceTimersByTimeAsync(300); expect(done).toHaveBeenCalledOnce(); expect(send.mock.calls.filter(c=>c[0]==='event')).toHaveLength(1); vi.useRealTimers();
+});
+
+it('records agent browser stages with fixed paths and no OAuth or request identifiers', () => {
+ const a=create();a.configure('G-TEST');a.identify({id:'buyer',workspaceType:'buyer'});
+ const requestId='73f01e81-4fe6-4185-b4fe-c2d960359ace';
+ for(const step of ['consent','approve','deny','review','submit_attempt','submitted_view','connections']) {
+  const path=['consent','approve','deny'].includes(step)?'/agent/authorize?state=secret-state&code=secret-code&code_verifier=secret-verifier':`/agent/requests/${requestId}?code=secret-code`;
+  a.track('funnel_step_view',{funnel_id:'agent',step_id:step,clientName:'private-app',workspaceName:'private-business'} as never,path);
+ }
+ a.pageView('/login?next=%2Fagent%2Fauthorize%3Fstate%3Dsecret-state');
+ expect(send.mock.calls.filter(c=>c[1]==='funnel_step_view')).toHaveLength(7);
+ expect(send.mock.calls).toContainEqual(['event','funnel_step_view',expect.objectContaining({page_location:'https://support-b.com/agent/requests/:requestId'})]);
+ for(const secret of ['secret-',requestId,'private-app','private-business','next=']) expect(JSON.stringify(send.mock.calls)).not.toContain(secret);
+ expect(safePagePath('/settings/agents?state=secret')).toBe('/settings/agents');
+});
+
+it('never turns agent observations into duplicate successful conversions or guest journeys', () => {
+ const a=create();a.configure('G-TEST');a.identify({id:'buyer',workspaceType:'buyer'});
+ for(const name of ['funnel_step_complete','sign_up','quote_request_submitted'] as const)
+  a.track(name,{funnel_id:'agent',step_id:'submitted_view'},'/agent/authorize');
+ expect(send.mock.calls.filter(c=>c[0]==='event')).toHaveLength(0);
+ expect(sanitizeJourneyEvent('funnel_step_view',{funnel_id:'agent',step_id:'consent'})).toBeNull();
 });

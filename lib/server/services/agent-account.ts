@@ -1,6 +1,11 @@
 import OAuth2Server from "@node-oauth/oauth2-server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  agentErrorCode,
+  type AgentObservation,
+} from "@/lib/analytics/agent-contract";
+import { recordAgentObservation } from "./agent-analytics";
 import { getAgentRepo, getDb } from "@/lib/server/repositories/factory";
 import {
   DrizzleAgentRepository,
@@ -221,16 +226,56 @@ export async function authorizeAgent(
   actor: Actor,
   approved: boolean,
 ) {
+  const started = performance.now();
+  const observation: AgentObservation = {
+    surface: "browser",
+    operation: "authorize",
+    outcome: "error",
+    durationMs: 0,
+  };
+  try {
+    const result = await authorizeAgentGrant(input, actor, approved);
+    observation.outcome = approved ? "ok" : "denied";
+    if (result.connectionId) observation.connectionId = result.connectionId;
+    if (!approved) observation.errorCode = "access_denied";
+    return result.url;
+  } catch (error) {
+    observation.errorCode =
+      error instanceof AgentError
+        ? agentErrorCode(error.code)
+        : "temporarily_unavailable";
+    observation.outcome =
+      error instanceof AgentError && error.status < 500
+        ? error.status === 400
+          ? "invalid_request"
+          : "rejected"
+        : "error";
+    throw error;
+  } finally {
+    observation.durationMs = Math.max(0, performance.now() - started);
+    try {
+      await recordAgentObservation(observation);
+    } catch {
+      /* Preserve consent even if the sink fails. */
+    }
+  }
+}
+
+async function authorizeAgentGrant(
+  input: unknown,
+  actor: Actor,
+  approved: boolean,
+): Promise<{ url: string; connectionId?: string }> {
   const { query, client, scopes } = await inspectAgentAuthorization(input);
   const target = new URL(query.redirect_uri);
   target.searchParams.set("state", query.state);
   target.searchParams.set("iss", agentAccountUrls().issuer);
   if (!approved) {
     target.searchParams.set("error", "access_denied");
-    return target.href;
+    return { url: target.href };
   }
   const db = await getDb();
-  const code = await db.transaction(async (tx: Tx) => {
+  const grant = await db.transaction(async (tx: Tx) => {
     const repo = new DrizzleAgentRepository(tx);
     const member = await repo.member(actor.userId, actor.workspaceId);
     if (!member) throw new AgentError("access_denied", 403);
@@ -260,10 +305,10 @@ export async function authorizeAgent(
       connectionId: id,
       event: "connected",
     });
-    return code.authorizationCode;
+    return { code: code.authorizationCode, connectionId: id };
   });
-  target.searchParams.set("code", code);
-  return target.href;
+  target.searchParams.set("code", grant.code);
+  return { url: target.href, connectionId: grant.connectionId };
 }
 
 const tokenInput = z
@@ -281,7 +326,11 @@ const tokenInput = z
 
 export async function exchangeAgentToken(
   input: unknown,
-): Promise<{ status: number; body: Record<string, unknown> }> {
+): Promise<{
+  status: number;
+  body: Record<string, unknown>;
+  connectionId?: string;
+}> {
   const parsed = tokenInput.safeParse(input);
   if (!parsed.success) throw new AgentError("invalid_request");
   const body = parsed.data;
@@ -338,13 +387,19 @@ export async function exchangeAgentToken(
         }),
         response,
       );
-      if (body.grant_type === "refresh_token")
-        await repo.event({
-          id: randomUUID(),
-          connectionId: token.user.connectionId,
-          event: "token_refreshed",
-        });
-      return { status: 200, body: response.body };
+      await repo.event({
+        id: randomUUID(),
+        connectionId: token.user.connectionId,
+        event:
+          body.grant_type === "refresh_token"
+            ? "token_refreshed"
+            : "token_issued",
+      });
+      return {
+        status: 200,
+        body: response.body,
+        connectionId: token.user.connectionId,
+      };
     } catch (error) {
       // Commit intentional code consumption on invalid proof. Infrastructure
       // errors roll back token issuance and events together.

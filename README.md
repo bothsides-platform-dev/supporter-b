@@ -4,6 +4,8 @@
 
 개발 에이전트용 공개 조회 채널을 추가했습니다. 현재 범위·MCP 연결·분석 한계는 [B2A 개발 안내](docs/B2A_DISCOVERY.md), 계정 연결·상담 초안·웹 확인 발송과 활성화 절차는 [계정 채널](docs/B2A_ACCOUNT_CHANNEL.md), 이후 SDK 확장은 [B2A 로드맵](docs/B2A_ROADMAP.md)을 참조합니다. 계정 채널은 기본 비활성(`AGENT_ACCOUNT_CHANNEL_ENABLED=false`)이며 DDL을 먼저 적용합니다.
 
+B2A의 GA4·Axiom·DB 계측과 운영자 리포트는 [B2A 애널리틱스](docs/B2A_ANALYTICS.md)를 따릅니다. `pnpm b2a:analytics --help`로 조회·정리 명령을 확인할 수 있습니다. 운영 데이터와 테스트 데이터를 명시적으로 분리합니다. [계약·연동·수수료 결과 연결](docs/B2A_OUTCOMES.md)은 `pnpm b2a:outcomes`로 확인 근거를 기록하고 같은 분석 리포트에서 조회합니다.
+
 **핵심 도메인 원칙**
 
 - **공개 구매사 체험** — `/demo`에서 준비된 견적의 핵심 4단계 또는 요청 작성부터 전체 6단계를 선택함. 예시 데이터로 선정·가상 서명·계약 보관을 체험하고, `내 조건으로 견적 요청하기`로 `/quote-start`에서 실제 작성을 시작함. 데모 값은 전달하지 않음. [화면 규칙](SCREEN_DESIGN.md)

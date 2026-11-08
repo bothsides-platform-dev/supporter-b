@@ -131,3 +131,9 @@ funnel_id=questions, mode=write. 단계 도달은 view 이벤트를 쓴다. 개�
 [Slack 행동 스레드](GUEST_RFP_SLACK_THREADS.md)는 같은 이벤트·단계 정의를 재사용하지만 수집과 전송은 GA와 독립이다. 익명 증명·서버 소유권으로 초안을 연결하고, GA/Clarity 미로딩에도 허용된 행동을 수집한다. 가입·최종 요청 성공은 서버 결과를 쓰며 화면의 심사 대기·복귀를 실제 승인 시각으로 해석하지 않는다. 개발 환경에서는 GA 전송 없이 내부 수집만 검증할 수 있다.
 
 속성 `540469131`의 [로그인 전 견적 · Slack 사용자 탐색](https://analytics.google.com/analytics/web/#/analysis/a396924123p540469131/edit/cd9F5C6iTDSVJEFjjEWsWw)에서 댓글의 관측 날짜와 client_id·User-ID를 조회한다. 식별자는 공식 gtag get으로 취득하며 개별 사용자 딥링크를 추측하지 않는다. 보고서는 생성 계정 소유이고 추가 공유 여부는 GA 설정에 따른다.
+
+## 개발 에이전트의 브라우저 단계 (2026-11-08)
+
+`funnel_id=agent`의 `consent`, `approve`, `deny`, `review`, `submit_attempt`, `submitted_view`, `connections`를 기존 퍼널 전송 경계에서 수집한다. 동의·검토·관리 화면은 view, 승인/거절·발송 시도는 cta_click이다. `submitted_view`는 이미 발송된 상담 확인 화면이며 서버의 상담 성공 횟수와 합산하지 않는다. 기존 구매사·운영계정·개발 환경 제외 규칙과 맞춤 측정기준을 재사용한다. OAuth 쿼리와 요청 ID를 GA에 보내지 않도록 정적 경로로 정제한다.
+
+CLI의 실제 토큰 발급·초안·발송은 [B2A 서버 분석](B2A_ANALYTICS.md)에서 별도로 집계한다. 계약·수수료 결과 연결이 다음 작업이며, 이 브라우저 단계만으로 계약 전환을 추정하지 않는다. 운영 GA4 저장된 탐색과 DebugView 실수신 확인은 배포 후 수행한다.

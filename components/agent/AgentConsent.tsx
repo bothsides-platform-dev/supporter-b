@@ -1,4 +1,8 @@
+"use client";
+
 import { Button } from "@/components/primitives/Button";
+import { useFunnelView } from "@/lib/analytics/use-funnel";
+import { trackFunnel } from "@/lib/analytics/funnel";
 
 export function AgentConsent({
   clientName,
@@ -13,6 +17,7 @@ export function AgentConsent({
   canWrite: boolean;
   action: (form: FormData) => void | Promise<void>;
 }) {
+  useFunnelView("agent", "consent");
   return (
     <section className="mx-auto w-full max-w-xl space-y-6 p-6 text-[var(--md-sys-color-on-surface)]">
       <div className="space-y-2">
@@ -41,7 +46,20 @@ export function AgentConsent({
         연결은 최대 30일 동안 유지해요. 설정의 에이전트 연결에서 언제든 해제할
         수 있어요. 연결·초안·상담 요청 기록을 서비스 개선을 위해 남겨요.
       </p>
-      <form action={action} className="flex justify-end gap-2">
+      <form
+        action={action}
+        className="flex justify-end gap-2"
+        onSubmit={(event) => {
+          const decision = (
+            event.nativeEvent as SubmitEvent
+          ).submitter?.getAttribute("value");
+          if (decision === "approve" || decision === "deny")
+            trackFunnel("funnel_cta_click", {
+              funnel_id: "agent",
+              step_id: decision,
+            });
+        }}
+      >
         <Button type="submit" name="decision" value="deny" variant="outlined">
           닫기
         </Button>

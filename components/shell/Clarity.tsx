@@ -1,4 +1,5 @@
 import { CLARITY_PROJECT_ID } from '@/lib/guest-rfp/clarity';
+import { clarityScript } from '@/lib/analytics/clarity-script';
 
 /**
  * Microsoft Clarity 세션 리플레이/히트맵 태그 — 로컬 개발 세션이 통계를
@@ -11,7 +12,7 @@ export function Clarity() {
   return (
     <script
       dangerouslySetInnerHTML={{
-        __html: `(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window, document, "clarity", "script", "${CLARITY_PROJECT_ID}");`,
+        __html: clarityScript(CLARITY_PROJECT_ID),
       }}
     />
   );

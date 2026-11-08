@@ -8,6 +8,7 @@ import {
 import { AgentAccessNotice } from "@/components/agent/AgentAccessNotice";
 import { getAgentRepo } from "@/lib/server/repositories/factory";
 import { revokeAgentAction } from "@/lib/server/actions/agent-account";
+import { FunnelView } from "@/lib/analytics/use-funnel";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "에이전트 연결",
@@ -29,6 +30,7 @@ export default async function AgentConnectionsPage() {
   ).connections(actor.userId, actor.workspaceId);
   return (
     <SettingsPage title="에이전트 연결">
+      <FunnelView funnel="agent" step="connections" />
       <p>
         이 계정에 연결한 개발 에이전트예요. 연결을 해제하면 다음 요청부터 접근을
         막아요. 이미 보낸 PG 상담은 유지해요.

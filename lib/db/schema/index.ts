@@ -52,3 +52,4 @@ export * from './guest-quote-assist';
 
 export * from './bid-drafts';
 export * from './agent';
+export * from './partner-outcomes';

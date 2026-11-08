@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { recordAgentObservation } from '@/lib/server/services/agent-analytics';
 
 const { fetchMcp } = vi.hoisted(() => ({ fetchMcp: vi.fn() }));
 vi.mock('@/lib/server/agent/mcp', () => ({ createPublicMcpHandler: () => ({ fetch: fetchMcp }) }));
+vi.mock('@/lib/server/services/agent-analytics', () => ({
+  recordAgentObservation: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/lib/observability/logger', () => ({ logger: { info: vi.fn() } }));
 
 import { POST } from '@/app/api/agent/mcp/route';
@@ -14,6 +19,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'http://localhost:3000');
   vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'http://localhost:3001');
   vi.clearAllMocks();
+  vi.mocked(recordAgentObservation).mockReset().mockResolvedValue(undefined);
   __resetPublicAgentBudgetForTest();
   __resetAgentDiscoveryEventsForTest();
 });

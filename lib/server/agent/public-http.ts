@@ -22,8 +22,8 @@ export function discoveryOutcome(status: number): AgentDiscoveryObservation['out
   return 'ok';
 }
 
-export function observePublicAgentRequest(observation: Observation, started: number, outcome: AgentDiscoveryObservation['outcome']) {
-  recordAgentDiscoveryEvent({
+export async function observePublicAgentRequest(observation: Observation, started: number, outcome: AgentDiscoveryObservation['outcome']) {
+  await recordAgentDiscoveryEvent({
     ...observation, outcome, catalogVersion: AGENT_CATALOG_VERSION,
     durationMs: Math.max(0, performance.now() - started),
   });
@@ -34,15 +34,15 @@ export async function servePublicAgentRead(request: Request, observation: Observ
   try {
     const rejected = guardPublicAgentRequest(request);
     if (rejected) {
-      observePublicAgentRequest(observation, started, discoveryOutcome(rejected.status));
+      await observePublicAgentRequest(observation, started, discoveryOutcome(rejected.status));
       return rejected;
     }
     const response = await serve();
-    observePublicAgentRequest(observation, started,
+    await observePublicAgentRequest(observation, started,
       response.status === 404 ? 'unsupported_service' : discoveryOutcome(response.status));
     return response;
   } catch {
-    observePublicAgentRequest(observation, started, 'error');
+    await observePublicAgentRequest(observation, started, 'error');
     return publicAgentJson({ error: { code: 'SERVICE_UNAVAILABLE' } }, 503);
   }
 }

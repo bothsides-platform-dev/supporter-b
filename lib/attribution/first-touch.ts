@@ -7,6 +7,7 @@
 // 최초 유입처가 보존되어야 하므로 sessionStorage(lib/auth/signup-storage.ts, 가입 플로우
 // 자체 상태용) 와는 다른 저장소를 쓴다.
 import { migrateSignupSource, SIGNUP_SOURCE_VERSION, type SignupSource } from '@/lib/types/signup-source';
+import { isSensitiveAnalyticsUrl } from '@/lib/analytics/url-privacy';
 
 const STORAGE_KEY = 'bidit.firstTouch';
 
@@ -24,6 +25,7 @@ const UTM_PARAM_KEYS: Array<[param: string, key: SignupSourceUtmKey]> = [
 export function captureFirstTouch(location?: string): void {
   if (typeof window === 'undefined') return;
   try {
+    if (isSensitiveAnalyticsUrl(location ?? window.location.href)) return;
     if (window.localStorage.getItem(STORAGE_KEY)) return;
 
     const source: SignupSource = { _v: SIGNUP_SOURCE_VERSION };
@@ -36,7 +38,7 @@ export function captureFirstTouch(location?: string): void {
     }
 
     const referrer = document.referrer;
-    if (referrer) {
+    if (referrer && !isSensitiveAnalyticsUrl(referrer)) {
       try {
         const referrerHost = new URL(referrer).hostname;
         if (referrerHost !== window.location.hostname) {
@@ -62,7 +64,11 @@ export function readFirstTouch(): SignupSource | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return migrateSignupSource(JSON.parse(raw));
+    const source = migrateSignupSource(JSON.parse(raw));
+    // Old captures can predate the OAuth boundary; never forward them at signup.
+    if (source.landingPath && isSensitiveAnalyticsUrl(source.landingPath)) delete source.landingPath;
+    if (source.referrer && isSensitiveAnalyticsUrl(source.referrer)) delete source.referrer;
+    return source;
   } catch {
     return null;
   }

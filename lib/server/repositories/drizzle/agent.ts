@@ -11,6 +11,7 @@ import {
   workspaceMembers,
 } from "@/lib/db/schema";
 import type { Tx } from "../types";
+import { agentAnalyticsEnvironment } from "@/lib/analytics/agent-contract";
 
 export type AgentConnection = typeof agentConnections.$inferSelect;
 export type AgentRequestRow = typeof agentRequests.$inferSelect;
@@ -177,6 +178,6 @@ export class DrizzleAgentRepository {
       .where(eq(agentRequests.id, id));
   }
   async event(row: typeof agentEvents.$inferInsert) {
-    await this.tx.insert(agentEvents).values(row);
+    await this.tx.insert(agentEvents).values({ ...row, environment: agentAnalyticsEnvironment() });
   }
 }

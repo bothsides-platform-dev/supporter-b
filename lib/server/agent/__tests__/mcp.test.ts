@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { recordAgentObservation } from '@/lib/server/services/agent-analytics';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { DELETE, GET, POST } from '@/app/api/agent/mcp/route';
 import { logger } from '@/lib/observability/logger';
 import { AGENT_CATALOG_VERSION, PG_CONSULTATION_ID } from '../catalog';
 import { __resetAgentDiscoveryEventsForTest } from '../discovery-events';
 import { __resetPublicAgentBudgetForTest } from '../public-guard';
+
+vi.mock('@/lib/server/services/agent-analytics', () => ({
+  recordAgentObservation: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/lib/observability/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -64,6 +69,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'http://localhost:3000');
   vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'http://localhost:3001');
   vi.clearAllMocks();
+  vi.mocked(recordAgentObservation).mockReset().mockResolvedValue(undefined);
   __resetPublicAgentBudgetForTest();
   __resetAgentDiscoveryEventsForTest();
 });

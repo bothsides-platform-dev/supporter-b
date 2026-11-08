@@ -15,10 +15,10 @@ export async function POST(request: Request): Promise<Response> {
     observePublicAgentRequest({ surface: 'mcp', operation }, started, outcome);
   try {
     const rejected = guardPublicAgentRequest(request);
-    if (rejected) { observe(discoveryOutcome(rejected.status)); return rejected; }
+    if (rejected) { await observe(discoveryOutcome(rejected.status)); return rejected; }
     const body = await readBoundedBody(request);
     if (typeof body === 'number') {
-      observe('invalid_request');
+      await observe('invalid_request');
       return publicAgentJson({ error: { code: body === 413 ? 'BODY_TOO_LARGE' : 'BODY_TIMEOUT' } }, body);
     }
     operation = mcpOperation(body);
@@ -27,7 +27,7 @@ export async function POST(request: Request): Promise<Response> {
     let batch = false;
     try { batch = Array.isArray(JSON.parse(body)); } catch { /* SDK returns the parse error. */ }
     if (batch) {
-      observe('invalid_request');
+      await observe('invalid_request');
       return publicAgentJson({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Batch requests are not supported.' } }, 400);
     }
     const controller = new AbortController();
@@ -48,7 +48,7 @@ export async function POST(request: Request): Promise<Response> {
         const outcome = response.ok && await mcpResponseFailed(response) ? 'invalid_request' : discoveryOutcome(response.status);
         return { response, outcome };
       })()]);
-      observe(outcome);
+      await observe(outcome);
       const headers = new Headers(response.headers);
       for (const [key, value] of Object.entries(PUBLIC_AGENT_HEADERS)) headers.set(key, value);
       return new Response(response.body, { status: response.status, headers });
@@ -56,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
       clearTimeout(timer);
     }
   } catch {
-    observe('error');
+    await observe('error');
     return publicAgentJson({ error: { code: 'SERVICE_UNAVAILABLE' } }, 503);
   }
 }

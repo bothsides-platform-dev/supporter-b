@@ -2,9 +2,13 @@ import { EVENTS, STEPS, ERRORS, type FunnelEvent, type FunnelParams, type EntryP
 import { CAMPAIGN_SOURCES, CAMPAIGN_MEDIUMS } from '@/lib/attribution/docs-contract';
 import { createDocsAssist } from '@/lib/attribution/docs-assist';
 export { EVENTS, STEPS, ERRORS, type FunnelEvent, type FunnelParams, type FunnelId, type EntryPath } from './funnel-definitions';
-const ROUTES = ['/', '/quote-start', '/rfp-create', '/signup/buyer', '/signup/buyer/workspace', '/signup/buyer/profile', '/login', '/pending-approval', '/auth/verify', '/home'];
+const ROUTES = ['/', '/quote-start', '/rfp-create', '/signup/buyer', '/signup/buyer/workspace', '/signup/buyer/profile', '/login', '/pending-approval', '/auth/verify', '/home', '/agent/authorize', '/settings/agents'];
 export function safePagePath(value: string): string {
-  try { const url = new URL(value, 'https://support-b.com'); return ROUTES.includes(url.pathname) ? url.pathname : '/other'; } catch { return '/other'; }
+  try {
+    const url = new URL(value, 'https://support-b.com');
+    if (/^\/agent\/requests\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.pathname)) return '/agent/requests/:requestId';
+    return ROUTES.includes(url.pathname) ? url.pathname : '/other';
+  } catch { return '/other'; }
 }
 type Identity = { id?: string; workspaceType?: string; isMaster?: boolean } | null;
 function attribution(location: string, referrer: string) {
@@ -80,6 +84,7 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
     },
     track(name: FunnelEvent, input: FunnelParams, location: string, successKey?: string) {
       if (!EVENTS.includes(name) || !(input.funnel_id in STEPS) || !(STEPS[input.funnel_id] as readonly string[]).includes(input.step_id)) return;
+      if (input.funnel_id === 'agent' && !['funnel_step_view', 'funnel_cta_click', 'funnel_step_error'].includes(name)) return;
       const page = safePagePath(location);
       if (page === '/other') return;
       const params: Record<string, unknown> = {

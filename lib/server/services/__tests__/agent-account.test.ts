@@ -10,6 +10,7 @@ import {
   seedBuyerWorkspace,
   seedPgWorkspace,
   seedMembership,
+  seedRfp,
 } from "@/lib/server/repositories/drizzle/__tests__/_seed";
 import type { PgliteDB } from "@/lib/db/client-pglite";
 import {
@@ -17,6 +18,11 @@ import {
   agentConnections,
   agentEvents,
   agentTokens,
+  agentRequests,
+  bids,
+  contracts,
+  rfpInvitations,
+  rfps,
   users,
   workspaceMembers,
   workspaces,
@@ -30,6 +36,8 @@ import {
   revokeAgentConnection,
 } from "../agent-account";
 import { prepareAgentRequest, readAgentRequest } from "../agent-request";
+import { recordPartnerOutcome } from "../partner-outcomes";
+import type { PartnerOutcomeOperator } from "@/lib/agent/partner-outcomes";
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -43,6 +51,11 @@ import { GET as metadataGet } from "@/app/.well-known/oauth-protected-resource/a
 import { __resetPublicAgentBudgetForTest } from "@/lib/server/agent/public-guard";
 import { DrizzleAgentRepository } from "@/lib/server/repositories/drizzle/agent";
 
+import { recordAgentObservation } from "../agent-analytics";
+vi.mock("../agent-analytics", () => ({
+  recordAgentObservation: vi.fn().mockResolvedValue(undefined),
+}));
+
 let db: PgliteDB;
 let actor: { userId: string; workspaceId: string };
 const verifier = "v".repeat(64);
@@ -52,6 +65,7 @@ beforeEach(async () => {
   vi.stubEnv("NEXT_PUBLIC_PARTNER_ORIGIN", "https://partner.support-b.test");
   vi.stubEnv("AGENT_ACCOUNT_CHANNEL_ENABLED", "true");
   __resetPublicAgentBudgetForTest();
+  vi.mocked(recordAgentObservation).mockReset().mockResolvedValue(undefined);
   db = await setupServerTestEnv();
   const user = await seedUser(db);
   const workspace = await seedBuyerWorkspace(db);
@@ -195,6 +209,222 @@ describe("protected HTTP and MCP", () => {
       "requests:write",
     );
   });
+  it("returns only verified contract and integration projections through MCP and rejects another connection", async () => {
+    const { token } = await connect();
+    const draft = await prepareAgentRequest(token, {
+      requestKey: randomUUID(),
+      content: { title: "PG 상담" },
+    });
+    const pg = await seedPgWorkspace(db, "Selected test PG");
+    const rfp = await seedRfp(db, {
+      buyerWsId: actor.workspaceId,
+      createdBy: actor.userId,
+    });
+    const submittedAt = new Date(Date.now() - 60_000);
+    const invitationId = randomUUID();
+    const bidId = randomUUID();
+    await db
+      .insert(rfpInvitations)
+      .values({
+        id: invitationId,
+        rfpId: rfp.id,
+        pgWsId: pg.id,
+        tokenHash: randomUUID(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      });
+    await db
+      .insert(bids)
+      .values({
+        id: bidId,
+        rfpId: rfp.id,
+        pgWsId: pg.id,
+        invitationId,
+        settleCycle: "D+1",
+        submittedBy: actor.userId,
+      });
+    await db
+      .update(rfps)
+      .set({ status: "awarded", awardedBidId: bidId, sentAt: submittedAt })
+      .where(eq(rfps.id, rfp.id));
+    await db
+      .insert(contracts)
+      .values({
+        rfpId: rfp.id,
+        bidId,
+        awardedBy: actor.userId,
+        awardedAt: submittedAt,
+      });
+    await db
+      .update(agentRequests)
+      .set({ rfpCode: rfp.code, submittedAt })
+      .where(eq(agentRequests.id, draft.requestId));
+    const operator: PartnerOutcomeOperator = {
+      channel: "operator_cli",
+      label: "private-operator@example.test",
+    };
+    const common = {
+      requestId: draft.requestId,
+      providerWorkspaceId: pg.id,
+      evidenceReference: "private/evidence-sentinel",
+      source: "operator_evidence",
+      occurredAt: new Date(Date.now() - 30_000).toISOString(),
+    };
+    const toolClient = async (accessToken: string) => {
+      const client = new Client({ name: "projection-test", version: "1" });
+      await client.connect(
+        new StreamableHTTPClientTransport(
+          new URL(agentAccountUrls().resource),
+          {
+            requestInit: {
+              headers: { authorization: `Bearer ${accessToken}` },
+            },
+            fetch: async (input, init) => {
+              const request = new Request(input, init);
+              return request.method === "POST"
+                ? mcpPost(request)
+                : mcpGet(request);
+            },
+          },
+        ),
+      );
+      return client;
+    };
+    const client = await toolClient(token);
+    const foreign = await connect("requests:read");
+    const foreignClient = await toolClient(foreign.token);
+    const read = async () => {
+      const result = await client.callTool({
+        name: "get_request_status",
+        arguments: { requestId: draft.requestId },
+      });
+      expect(result.isError).not.toBe(true);
+      const text = result.content[0];
+      if (text.type !== "text") throw new Error("expected JSON MCP result");
+      return JSON.parse(text.text);
+    };
+    try {
+      expect(await read()).toMatchObject({
+        providerContractStatus: "not_verified",
+        integration: {
+          sandbox: { status: "not_verified" },
+          live: { status: "not_verified" },
+        },
+      });
+      const contract = await recordPartnerOutcome(
+        {
+          ...common,
+          kind: "provider_contract_confirmed",
+          commandId: randomUUID(),
+          reference: "private/provider-contract-sentinel",
+        },
+        operator,
+      );
+      await recordPartnerOutcome(
+        {
+          ...common,
+          kind: "integration_verified",
+          commandId: randomUUID(),
+          reference: "private/sandbox-sentinel",
+          source: "test_result",
+          integrationEnvironment: "sandbox",
+        },
+        operator,
+      );
+      await recordPartnerOutcome(
+        {
+          ...common,
+          kind: "integration_verified",
+          commandId: randomUUID(),
+          reference: "private/live-sentinel",
+          source: "customer_report",
+          integrationEnvironment: "live",
+        },
+        operator,
+      );
+      const commission = await recordPartnerOutcome(
+        {
+          ...common,
+          kind: "commission_confirmed",
+          commandId: randomUUID(),
+          reference: "private/commission-sentinel",
+          amount: "9876543.2100",
+          currency: "KRW",
+          agreementReference: "private/agreement-sentinel",
+          calculationReference: "private/calculation-sentinel",
+        },
+        operator,
+      );
+      await recordPartnerOutcome(
+        {
+          ...common,
+          kind: "commission_paid",
+          commandId: randomUUID(),
+          reference: "private/payment-sentinel",
+          relatedEntryId: commission.entry.id,
+          amount: "9876543.2100",
+          currency: "KRW",
+        },
+        operator,
+      );
+      const status = await read();
+      expect(status.providerContractStatus).toBe("confirmed");
+      expect(status.providerContract).toEqual({
+        status: "confirmed",
+        source: "operator_evidence",
+        occurredAt: common.occurredAt,
+        recordedAt: expect.any(String),
+      });
+      expect(status.integration).toEqual({
+        sandbox: {
+          status: "verified",
+          source: "test_result",
+          environment: "sandbox",
+          occurredAt: common.occurredAt,
+          recordedAt: expect.any(String),
+        },
+        live: {
+          status: "reported",
+          source: "customer_report",
+          environment: "live",
+          occurredAt: common.occurredAt,
+          recordedAt: expect.any(String),
+        },
+      });
+      const serialized = JSON.stringify(status);
+      for (const value of [
+        "private/",
+        operator.label,
+        "9876543.2100",
+        "KRW",
+        contract.entry.id,
+        commission.entry.id,
+        "evidenceReference",
+        "agreementReference",
+        "calculationReference",
+        "inputHash",
+        "commission",
+        "operatorLabel",
+      ])
+        expect(serialized).not.toContain(value);
+      await expect(
+        readAgentRequest(
+          await authenticateAgent(foreign.token),
+          draft.requestId,
+        ),
+      ).rejects.toMatchObject({ code: "not_found", status: 404 });
+      const denied = await foreignClient.callTool({
+        name: "get_request_status",
+        arguments: { requestId: draft.requestId },
+      });
+      expect(denied.isError).toBe(true);
+      expect(denied.content).toEqual([
+        { type: "text", text: JSON.stringify({ error: "not_found" }) },
+      ]);
+    } finally {
+      await client.close();
+      await foreignClient.close();
+    }
+  });
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -250,7 +480,195 @@ function tokenRequest(fields: Record<string, string>) {
   );
 }
 
+function toolRequest(
+  token: string,
+  name: string,
+  args: Record<string, unknown>,
+) {
+  return new Request(agentAccountUrls().resource, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      "mcp-protocol-version": "2025-11-25",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name, arguments: args },
+    }),
+  });
+}
+
+describe("account observations", () => {
+  it("records anonymous authentication failure once without supplied identifiers or content", async () => {
+    const foreignId = randomUUID();
+    const response = await mcpPost(
+      toolRequest("bad-secret-sentinel", "get_request_status", {
+        requestId: foreignId,
+        prompt: "private-prompt-sentinel",
+      }),
+    );
+    expect(response.status).toBe(401);
+    expect(recordAgentObservation).toHaveBeenCalledTimes(1);
+    const observation = vi.mocked(recordAgentObservation).mock.calls[0][0];
+    expect(observation).toMatchObject({
+      surface: "account_mcp",
+      operation: "unknown",
+      outcome: "rejected",
+      errorCode: "invalid_token",
+    });
+    expect(observation).not.toHaveProperty("connectionId");
+    expect(observation).not.toHaveProperty("requestId");
+    expect(JSON.stringify(observation)).not.toMatch(/sentinel/);
+    expect(JSON.stringify(observation)).not.toContain(foreignId);
+  });
+  it("observes HTTP-200 SDK validation errors without arguments or error messages", async () => {
+    const { token } = await connect();
+    vi.mocked(recordAgentObservation).mockClear();
+    const response = await mcpPost(
+      toolRequest(token, "get_connection", {
+        privateField: "private-value-sentinel",
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('"isError":true');
+    expect(recordAgentObservation).toHaveBeenCalledTimes(1);
+    const observation = vi.mocked(recordAgentObservation).mock.calls[0][0];
+    expect(observation).toMatchObject({
+      operation: "get_connection",
+      outcome: "invalid_request",
+      errorCode: "invalid_request",
+      connectionId: expect.any(String),
+    });
+    expect(JSON.stringify(observation)).not.toMatch(/privateField|sentinel/);
+  });
+  it("records a tool-level ownership denial without attributing the foreign request", async () => {
+    const { token } = await connect();
+    vi.mocked(recordAgentObservation).mockClear();
+    const foreignId = randomUUID();
+    const response = await mcpPost(
+      toolRequest(token, "get_request_status", { requestId: foreignId }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('"isError":true');
+    expect(recordAgentObservation).toHaveBeenCalledTimes(1);
+    const observation = vi.mocked(recordAgentObservation).mock.calls[0][0];
+    expect(observation).toMatchObject({
+      operation: "get_request_status",
+      outcome: "rejected",
+      errorCode: "not_found",
+    });
+    expect(observation).not.toHaveProperty("requestId");
+    expect(JSON.stringify(observation)).not.toContain(foreignId);
+  });
+  it("projects only verified draft identifiers and finite missing-rule metadata", async () => {
+    const { token } = await connect();
+    vi.mocked(recordAgentObservation).mockClear();
+    const response = await mcpPost(
+      toolRequest(token, "prepare_request", {
+        requestKey: randomUUID(),
+        content: { title: "private-title-sentinel", contractType: "new" },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(recordAgentObservation).toHaveBeenCalledTimes(1);
+    const observation = vi.mocked(recordAgentObservation).mock.calls[0][0];
+    expect(observation).toMatchObject({
+      operation: "prepare_request",
+      outcome: "ok",
+      connectionId: expect.any(String),
+      requestId: expect.any(String),
+      contractType: "new",
+      missingRules: expect.arrayContaining(["website-required", "pg"]),
+    });
+    expect(JSON.stringify(observation)).not.toMatch(/sentinel/);
+  });
+  it("keeps OAuth and MCP successful when the observation sink rejects", async () => {
+    vi.mocked(recordAgentObservation).mockRejectedValue(
+      new Error("observation sink unavailable"),
+    );
+    const { token } = await connect();
+    const response = await mcpPost(toolRequest(token, "get_connection", {}));
+    expect(response.status).toBe(200);
+    expect(await response.text()).not.toContain('"isError":true');
+  });
+  it("distinguishes consent denial, consent alone and initial token issuance", async () => {
+    const { query } = await authorization();
+    await authorizeAgent(query, actor, false);
+    expect(recordAgentObservation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        surface: "browser",
+        operation: "authorize",
+        outcome: "denied",
+      }),
+    );
+    expect(await db.select().from(agentEvents)).toHaveLength(0);
+    const url = new URL(await authorizeAgent(query, actor, true));
+    expect(
+      (await db.select().from(agentEvents)).map((event) => event.event),
+    ).toEqual(["connected"]);
+    const response = await tokenRequest({
+      grant_type: "authorization_code",
+      client_id: query.client_id,
+      resource: query.resource,
+      code: url.searchParams.get("code")!,
+      redirect_uri: query.redirect_uri,
+      code_verifier: verifier,
+    });
+    expect(response.status).toBe(200);
+    expect(
+      (await db.select().from(agentEvents)).map((event) => event.event),
+    ).toEqual(["connected", "token_issued"]);
+    expect(recordAgentObservation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        surface: "oauth",
+        operation: "token",
+        outcome: "ok",
+        connectionId: expect.any(String),
+      }),
+    );
+  });
+});
+
 describe("OAuth delegation", () => {
+  it("rolls back initial token issuance if its lifecycle event cannot be stored", async () => {
+    const { query } = await authorization();
+    const redirect = new URL(await authorizeAgent(query, actor, true));
+    const fields = {
+      grant_type: "authorization_code",
+      client_id: query.client_id,
+      resource: query.resource,
+      code: redirect.searchParams.get("code")!,
+      redirect_uri: query.redirect_uri,
+      code_verifier: verifier,
+    };
+    const event = DrizzleAgentRepository.prototype.event;
+    const failure = vi
+      .spyOn(DrizzleAgentRepository.prototype, "event")
+      .mockImplementationOnce(async function (
+        this: DrizzleAgentRepository,
+        input,
+      ) {
+        if (input.event === "token_issued")
+          throw new Error("storage unavailable");
+        return event.call(this, input);
+      });
+    expect((await tokenRequest(fields)).status).toBe(503);
+    expect(await db.select().from(agentTokens)).toHaveLength(0);
+    expect((await db.select().from(agentCodes))[0].usedAt).toBeNull();
+    expect(
+      (await db.select().from(agentEvents)).map((entry) => entry.event),
+    ).toEqual(["connected"]);
+    failure.mockRestore();
+    expect((await tokenRequest(fields)).status).toBe(200);
+    expect(await db.select().from(agentTokens)).toHaveLength(1);
+    expect(
+      (await db.select().from(agentEvents)).map((entry) => entry.event),
+    ).toEqual(["connected", "token_issued"]);
+  });
   it("issues PKCE-bound, hashed credentials and immutable workspace scopes", async () => {
     const { token, refresh } = await connect();
     const principal = await authenticateAgent(token);
@@ -261,6 +679,7 @@ describe("OAuth delegation", () => {
     expect(stored).not.toContain(refresh);
     expect(await db.select().from(agentEvents)).toMatchObject([
       { event: "connected" },
+      { event: "token_issued" },
     ]);
   });
   it("rejects redirect changes, plain PKCE and a different resource before consent", async () => {
@@ -336,6 +755,7 @@ describe("OAuth delegation", () => {
     ).rejects.toMatchObject({ code: "invalid_token" });
     expect((await db.select().from(agentEvents)).map((e) => e.event)).toEqual([
       "connected",
+      "token_issued",
       "token_refreshed",
       "revoked",
     ]);
@@ -443,7 +863,7 @@ describe("OAuth delegation", () => {
     expect((await db.select().from(agentTokens))[0].revokedAt).toBeNull();
     expect(
       (await db.select().from(agentEvents)).map((event) => event.event),
-    ).toEqual(["connected"]);
+    ).toEqual(["connected", "token_issued"]);
     memberRead.mockRestore();
     expect((await tokenRequest(fields)).status).toBe(200);
   });
@@ -528,6 +948,7 @@ describe("delegated draft scope and revision", () => {
     ).toBe("새 제목");
     expect((await db.select().from(agentEvents)).map((e) => e.event)).toEqual([
       "connected",
+      "token_issued",
       "draft_created",
       "draft_updated",
       "status_read",

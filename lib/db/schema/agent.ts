@@ -12,6 +12,10 @@ import { sql } from "drizzle-orm";
 import { users } from "./users";
 import { workspaces } from "./workspaces";
 import type { AgentScope } from "@/lib/server/agent/account-contract";
+import type {
+  AgentAnalyticsEnvironment,
+  AgentObservation,
+} from "@/lib/analytics/agent-contract";
 
 export const agentClients = pgTable("agent_clients", {
   id: uuid("id").primaryKey(),
@@ -111,6 +115,7 @@ export const agentEvents = pgTable(
     event: text("event")
       .$type<
         | "connected"
+        | "token_issued"
         | "revoked"
         | "token_refreshed"
         | "draft_created"
@@ -120,6 +125,10 @@ export const agentEvents = pgTable(
       >()
       .notNull(),
     schemaVersion: integer("schema_version").notNull().default(1),
+    environment: text("environment")
+      .$type<AgentAnalyticsEnvironment>()
+      .notNull()
+      .default("unknown"),
     revision: integer("revision"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -127,5 +136,62 @@ export const agentEvents = pgTable(
   },
   (t) => [
     index("agent_event_connection_time_idx").on(t.connectionId, t.createdAt),
+    index("agent_event_environment_time_idx").on(t.environment, t.createdAt),
+  ],
+);
+
+export const agentObservations = pgTable(
+  "agent_observations",
+  {
+    id: uuid("id").primaryKey(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    environment: text("environment")
+      .$type<AgentAnalyticsEnvironment>()
+      .notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    connectionId: uuid("connection_id").references(() => agentConnections.id, {
+      onDelete: "cascade",
+    }),
+    requestId: uuid("request_id").references(() => agentRequests.id, {
+      onDelete: "cascade",
+    }),
+    surface: text("surface").$type<AgentObservation["surface"]>().notNull(),
+    operation: text("operation")
+      .$type<AgentObservation["operation"]>()
+      .notNull(),
+    outcome: text("outcome").$type<AgentObservation["outcome"]>().notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    errorCode: text("error_code").$type<AgentObservation["errorCode"]>(),
+    dimensions: jsonb("dimensions")
+      .$type<
+        Pick<
+          AgentObservation,
+          "contractType" | "missingRules" | "candidateCount"
+        >
+      >()
+      .notNull()
+      .default({}),
+  },
+  (t) => [
+    index("agent_observation_environment_time_idx").on(
+      t.environment,
+      t.occurredAt,
+    ),
+    index("agent_observation_time_idx").on(t.occurredAt),
+    index("agent_observation_connection_time_idx").on(
+      t.connectionId,
+      t.occurredAt,
+    ),
+    index("agent_observation_request_idx").on(t.requestId),
+    check(
+      "agent_observation_duration_check",
+      sql`${t.durationMs} BETWEEN 0 AND 3600000`,
+    ),
+    check(
+      "agent_observation_request_connection_check",
+      sql`${t.requestId} IS NULL OR ${t.connectionId} IS NOT NULL`,
+    ),
   ],
 );

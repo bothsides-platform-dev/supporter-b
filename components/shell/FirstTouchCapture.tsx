@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { captureFirstTouch } from '@/lib/attribution/first-touch';
 import { funnelAnalytics } from '@/lib/analytics/funnel';
+import { isSensitiveAnalyticsUrl } from '@/lib/analytics/url-privacy';
 
 /**
  * 사이트 어느 페이지든 최초 진입 시 UTM/referrer 유입 정보를 1회 캡처(write-once,
@@ -12,6 +13,7 @@ import { funnelAnalytics } from '@/lib/analytics/funnel';
  */
 export function FirstTouchCapture() {
   useEffect(() => {
+    if (isSensitiveAnalyticsUrl(window.location.href)) return;
     // Docs assists are last-touch with their own 30-day clock, even for returning visitors.
     // Consume before first touch so transport metadata never enters signupSource.
     const clean = funnelAnalytics.docsArrival(window.location.href);
