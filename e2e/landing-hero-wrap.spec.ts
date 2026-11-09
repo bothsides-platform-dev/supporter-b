@@ -5,7 +5,8 @@ import { test, expect } from 'playwright/test';
 // 여전히 두 줄로 남는 혼재 구간(실측 약 1512~1600px)이 생긴다. 1920px 미만에서는 모든
 // 문구가 항상 두 줄, 1920px 이상에서는 모든 문구가 항상 한 줄이어야 한다. 애니메이션
 // 순환을 기다리지 않고, 항상 렌더되는 숨은 측정용 그리드([data-roll-sizing])의 조각
-// 폭을 실제 롤링 줄 폭과 비교해 네 문구 모두의 줄 수를 한 번에 판정한다.
+// 폭을 실제 롤링 줄 폭과 비교해 네 문구 모두의 줄 수를 한 번에 판정한다. 측정용 그리드는
+// 제목에 문구가 중복되지 않도록 h1 밖, 같은 헤드라인 그리드의 형제 요소로 렌더된다.
 for (const [width, expectSingleLine] of [
   [1600, false], // 이전 램프 구현에서 혼재가 발생했던 구간 — 여전히 모두 2줄이어야 한다
   [1919, false], // breakpoint 바로 아래 — 모두 2줄
@@ -21,7 +22,7 @@ for (const [width, expectSingleLine] of [
     await expect(heading).toBeVisible();
 
     const fits = await heading.evaluate((h1) => {
-      const sizing = h1.querySelector('[data-roll-sizing]')!;
+      const sizing = h1.parentElement!.querySelector('[data-roll-sizing]')!;
       const phraseGroups = Array.from(sizing.children);
       const segWidths = phraseGroups.map((group) =>
         Array.from(group.querySelectorAll('[data-roll-segment]')).map(
@@ -54,6 +55,7 @@ for (const route of ['/', '/pg-landing']) {
     for (const width of [320, 768, 1024]) {
       await page.setViewportSize({ width, height: 900 });
       const phrases = await heading
+        .locator('xpath=..')
         .locator('[data-roll-sizing] > span')
         .evaluateAll((groups) =>
           groups.map((group) =>
