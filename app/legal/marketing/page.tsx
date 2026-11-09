@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: '마케팅 수신 동의',
-  description: '서포트비의 마케팅 정보 수신 동의 내용과 동의 철회 방법을 확인해요.',
   alternates: { canonical: '/legal/marketing' },
 };
 

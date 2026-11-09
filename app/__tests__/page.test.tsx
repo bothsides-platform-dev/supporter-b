@@ -15,11 +15,23 @@ vi.mock('@/components/landing/faq-data', () => ({
     { q: 'Test Q 2?', a: 'Test A 2' },
   ],
 }));
-vi.mock('@/lib/site-config', () => ({
-  siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test', alternateNames: ['Test Alias'], sameAs: [] },
-}));
+vi.mock('@/lib/site-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/site-config')>();
+  return {
+    ...actual,
+    siteConfig: {
+      ...actual.siteConfig,
+      name: 'Test',
+      url: 'https://test.com',
+      description: 'Test',
+      alternateNames: ['Test Alias'],
+      sameAs: [],
+    },
+  };
+});
 
 import RootPage from '../page';
+import { siteConfig } from '@/lib/site-config';
 
 describe('RootPage — buyer 랜딩', () => {
   it('buyer 랜딩을 렌더한다', () => {
@@ -49,6 +61,10 @@ describe('RootPage — buyer 랜딩', () => {
     const org = schemas.find((s) => s['@type'] === 'Organization');
     const app = schemas.find((s) => s['@type'] === 'SoftwareApplication');
     expect(org.alternateName).toEqual(['Test Alias']);
+    expect(org.contactPoint).toMatchObject({
+      '@type': 'ContactPoint',
+      email: siteConfig.operator.email,
+    });
     expect(app).not.toHaveProperty('alternateName');
   });
 

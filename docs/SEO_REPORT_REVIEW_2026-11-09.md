@@ -10,6 +10,7 @@
 - 사이트맵에 `/legal`, `/legal/terms`, `/legal/privacy`, `/legal/marketing`을 추가했다. `noindex`인 `/signup/buyer`는 제외하고 partner 호스트의 빈 사이트맵은 유지했다.
 - 실제 콘텐츠 수정 시각 대신 매 요청 시각을 넣던 `lastModified`를 제거했다. 추후 콘텐츠 수정 시각을 추적하면 다시 제공할 수 있다.
 - `/legal`과 `/login`이 홈페이지 canonical을 상속하지 않도록 자기 URL을 지정했다. 법적 고지 페이지 네 개에는 내용에 맞는 검색 설명을 지정했다. 고지 본문은 변경하지 않았다.
+  - 개별 법적 문서의 검색 설명은 `layout.tsx`에서 제공한다. 게시 판본의 `page.tsx` 소스와 고정 해시를 보존한다.
 - 제휴 로고의 컬러 이미지와 CSS 단색 마스크 모두 무손실 WebP를 우선 제공한다. `<picture>`와 CSS `image-set()`의 PNG 폴백을 두고 원본 파일과 표시 좌표·크기를 보존했다.
 
 | 로고 | PNG | WebP | 확인 |
@@ -42,6 +43,7 @@ WebP는 Next.js에 설치된 sharp의 `webp({ lossless: true, effort: 6 })`로 �
 
 ## 로컬 검증
 
+- CI 실패 수정: 랜딩 테스트의 설정 모킹을 실제 설정 기반으로 보완하고 운영사 문의 이메일 출력을 검증했다. 법적 문서 판본 검사와 SEO 관련 검사를 포함해 10개 파일, 65개 테스트가 통과했다.
 - SEO·히어로·제휴 로고 관련 65개와 사이트 설정 6개, 합계 71개 테스트 통과.
 - H1 후속 수정: `HeroKineticHeadline`·`WordMaskRoll`·구매사/PG 히어로 관련 26개 테스트 통과. Chromium에서 390·1440·1920px의 초기 제목과 순환 중 높이·고정 문장 위치 유지, WebKit에서 390·1920px의 JS 없는 초기 표시와 모바일 구매사·PG 순환을 확인했다. 두 엔진 모두 페이지 JavaScript 오류가 없었다.
 - `next typegen`, `tsc --noEmit`, 변경 TypeScript 파일 ESLint, `git diff --check` 통과.
