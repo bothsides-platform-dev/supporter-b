@@ -1,10 +1,8 @@
 'use client';
 
 import { Fragment, type ReactNode } from 'react';
-import { motion } from 'motion/react';
 import { SupportBWordmark } from '@/components/primitives/Logo';
-import { EASE_OUT } from '@/lib/landing/ease';
-import { WordMaskRoll, type RollingPhrase } from './WordMaskRoll';
+import { WordMaskRoll, WordMaskRollSizer, type RollingPhrase } from './WordMaskRoll';
 
 const TYPING_VALUES = [
   ['PG사마다 같은 설명을', '반복하기 번거로울 때.'],
@@ -24,45 +22,12 @@ const LINE1_WORDS: ReactNode[] = [<BrandWordB key="support-b" particle="를" />]
 const headlineCls =
   'text-[clamp(30px,5.5vw,72px)] max-md:text-[clamp(22px,7.2vw,34px)] leading-[1.06] tracking-[-0.028em] font-medium break-keep';
 
-// 단어별 마스크 리빌 — overflow-hidden 마스크 안에서 글자가 아래에서 솟아오른다(키네틱 타이포).
-// 마스크에 살짝 세로 여유(pb/-mb)를 줘 정착 후 글리프가 잘리지 않게 한다.
-function MaskedWord({ word, delay }: { word: ReactNode; delay: number }) {
+// 첫 HTML부터 제목을 표시한다. 진입 시 숨겼다가 꺼내는 transform은 사용하지 않고,
+// JS가 준비된 뒤 WordMaskRoll의 문구 순환만 시작한다.
+function HeadlineWord({ word }: { word: ReactNode }) {
   return (
-    <span className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]">
-      <motion.span
-        initial={{ y: '112%' }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.6, delay, ease: EASE_OUT }}
-        className="inline-block will-change-transform"
-      >
-        {word}
-      </motion.span>
-    </span>
-  );
-}
-
-// 강조 문구는 독립된 줄에서 리빌한다. 모든 후보의 높이는 WordMaskRoll이 예약한다.
-// className은 리빌 마스크(overflow-hidden) 박스 자체의 너비를 바꾼다 — WordMaskRoll의
-// max-w-full은 이 박스의 100%로 해석되므로, 여기서 넓히면 내부도 함께 넓어진다.
-function MaskedLine({
-  children,
-  delay,
-  className,
-}: {
-  children: ReactNode;
-  delay: number;
-  className?: string;
-}) {
-  return (
-    <span className={`block overflow-hidden pb-[0.08em] -mb-[0.08em] ${className ?? ''}`}>
-      <motion.span
-        initial={{ y: '112%' }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.6, delay, ease: EASE_OUT }}
-        className="block will-change-transform"
-      >
-        {children}
-      </motion.span>
+    <span className="inline-block align-top pb-[0.08em] -mb-[0.08em]">
+      {word}
     </span>
   );
 }
@@ -98,28 +63,31 @@ export function HeroKineticHeadline({
   rollingPosition?: 'before' | 'after';
 } = {}) {
   const rollingLine = (
-    <MaskedLine
-      delay={rollingPosition === 'before' ? 0.08 : 0.32}
-      className={ROLLING_LINE_WIDTH_CLS}
-    >
+    <span className={`block overflow-hidden pb-[0.08em] -mb-[0.08em] ${ROLLING_LINE_WIDTH_CLS}`}>
       <WordMaskRoll phrases={phrases} className="text-[var(--md-sys-color-inverse-primary)]" />
-    </MaskedLine>
+    </span>
   );
   return (
-    <h1
-      className={`${headlineCls} flex flex-col gap-[0.12em] text-[var(--md-sys-color-inverse-on-surface)]`}
-    >
-      {rollingPosition === 'before' ? <>{rollingLine}{' '}</> : null}
-      <span className="block">
-        {line1Words.map((word, i) => (
-          <Fragment key={i}>
-            <MaskedWord word={word} delay={0.08 + i * 0.07} />
-            {i < line1Words.length - 1 ? ' ' : null}
-          </Fragment>
-        ))}{' '}
-        <MaskedWord word={suffix} delay={0.08 + line1Words.length * 0.07} />
-      </span>{' '}
-      {rollingPosition === 'after' ? rollingLine : null}
-    </h1>
+    <div className={`${headlineCls} grid grid-cols-1 gap-y-[0.12em] text-[var(--md-sys-color-inverse-on-surface)]`}>
+      {/* Sizing shares the rolling row through subgrid, outside the semantic heading.
+          The same CSS geometry reserves all phrases before JS/fonts finish loading. */}
+      <WordMaskRollSizer
+        phrases={phrases}
+        className={`col-start-1 ${rollingPosition === 'before' ? 'row-start-1' : 'row-start-2'} ${ROLLING_LINE_WIDTH_CLS}`}
+      />
+      <h1 className="col-start-1 row-start-1 row-span-2 grid grid-rows-subgrid min-w-0">
+        {rollingPosition === 'before' ? <>{rollingLine}{' '}</> : null}
+        <span className="block">
+          {line1Words.map((word, i) => (
+            <Fragment key={i}>
+              <HeadlineWord word={word} />
+              {i < line1Words.length - 1 ? ' ' : null}
+            </Fragment>
+          ))}{' '}
+          <HeadlineWord word={suffix} />
+        </span>{' '}
+        {rollingPosition === 'after' ? rollingLine : null}
+      </h1>
+    </div>
   );
 }

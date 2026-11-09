@@ -2,7 +2,7 @@ import { act, Profiler, StrictMode } from 'react';
 import { render } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WordMaskRoll } from '../WordMaskRoll';
+import { WordMaskRoll, WordMaskRollSizer } from '../WordMaskRoll';
 
 const phrases = ['협상의 주도권을', '연간 수천만 원의 절감을'];
 // Flush boundary commits between frames, as the browser does before the next rAF.
@@ -22,13 +22,15 @@ describe('WordMaskRoll', () => {
   });
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-  it('server renders a readable first phrase once for assistive technology', () => {
+  it('server renders only the first phrase as readable words, without animation copies', () => {
     const markup = renderToStaticMarkup(<WordMaskRoll phrases={phrases} />);
     const host = document.createElement('div');
     host.innerHTML = markup;
-    expect(host.querySelector('.sr-only')?.textContent).toBe('협상의 주도권을');
+    expect(host.textContent).toBe('협상의 주도권을');
+    expect(host.querySelector('.sr-only')).toBeNull();
+    expect(host.querySelector('[data-roll-character]')).toBeNull();
     expect(visible(host, 'current')?.textContent).toBe('협상의 주도권을');
-    expect(visible(host, 'current')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(visible(host, 'current')?.closest('[aria-hidden="true"]')).toBeNull();
     expect(host.querySelector('[aria-live]')).toBeNull();
   });
 
@@ -55,7 +57,7 @@ describe('WordMaskRoll', () => {
   });
 
   it('reserves every phrase independently of the active layers so width and wrapping remain stable', () => {
-    const { container } = render(<WordMaskRoll phrases={phrases} />);
+    const { container } = render(<><WordMaskRollSizer phrases={phrases} /><WordMaskRoll phrases={phrases} /></>);
     expect(container.querySelector('[data-roll-sizing]')).not.toBeNull();
     const sizing = container.querySelector('[data-roll-sizing]')!;
     expect(Array.from(sizing.children, el => el.textContent)).toEqual(phrases);
@@ -89,7 +91,8 @@ describe('WordMaskRoll', () => {
     advance(80);
     expect(visible(container, 'next')).toBeNull();
     expect(visible(container, 'current')?.textContent).toBe('다음 문구');
-    expect(offsets('current')).toEqual([0, 0, 0, 0]);
+    expect(visible(container, 'current')?.querySelector('[data-roll-character]')).toBeNull();
+    expect(container.textContent).toBe('다음 문구');
   });
 
   it('rolls every character in reading order without grouping the later characters together', () => {

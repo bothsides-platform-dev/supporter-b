@@ -1,4 +1,11 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: '법적 고지',
+  description: '서포트비의 이용약관, 개인정보 처리방침과 마케팅 수신 동의 내용을 확인해요.',
+  alternates: { canonical: '/legal' },
+};
 
 export default function LegalPage() {
   return (

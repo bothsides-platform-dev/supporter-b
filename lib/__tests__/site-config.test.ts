@@ -12,8 +12,10 @@ describe('siteConfig', () => {
     expect(siteConfig.keywords).toContain('서포트비');
   });
 
-  it('description mentions PG도입', () => {
-    expect(siteConfig.description).toContain('PG도입');
+  it('describes the current industry-matched PG consultation flow', () => {
+    expect(siteConfig.description).toContain('PG 도입');
+    expect(siteConfig.description).toContain('업종에 맞는 PG사');
+    expect(siteConfig.description).not.toMatch(/봉인입찰|여러 PG사의 견적을 한 번에 비교/);
   });
 
   it('description mentions 서포트비', () => {

@@ -8,5 +8,5 @@ import { buildSitemap } from '@/lib/seo/sitemap';
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const host = (await headers()).get('host');
   const ctx = seoHostContext(host, appOrigins());
-  return buildSitemap(ctx, new Date());
+  return buildSitemap(ctx);
 }
