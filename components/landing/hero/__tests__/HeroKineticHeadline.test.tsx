@@ -1,24 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
-import React from "react";
 import { act } from "react";
 import { render, screen } from "@testing-library/react";
-
-vi.mock("motion/react", () => {
-  const makeEl = (tag: string) => {
-    const El = ({ children, ...props }: Record<string, unknown>) =>
-      React.createElement(tag, props, children as React.ReactNode);
-    El.displayName = `motion.${tag}`;
-    return El;
-  };
-
-  return {
-    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
-  };
-});
+import { renderToStaticMarkup } from "react-dom/server";
 
 import { HeroKineticHeadline, BrandWordB } from "../HeroKineticHeadline";
 
 describe("HeroKineticHeadline", () => {
+  it('server renders one visible heading sentence with sizing copies outside the h1', () => {
+    const host = document.createElement('div');
+    host.innerHTML = renderToStaticMarkup(<HeroKineticHeadline rollingPosition="before" />);
+    const heading = host.querySelector('h1')!;
+    expect(heading.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'PG사마다 같은 설명을 반복하기 번거로울 때. 서포트비를 찾아주세요.',
+    );
+    expect(heading.querySelector('[data-roll-sizing]')).toBeNull();
+    expect(host.querySelector('[data-roll-sizing]')).not.toBeNull();
+    expect(heading.querySelector('.sr-only')).toBeNull();
+    expect(heading.querySelector('[data-roll-character]')).toBeNull();
+    expect(heading.innerHTML).not.toContain('translateY(112%)');
+  });
+
   it("cycles buyer situations before the fixed brand sentence in reading order", () => {
     vi.useFakeTimers({
       toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"],

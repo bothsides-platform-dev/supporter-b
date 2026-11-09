@@ -15,6 +15,12 @@ export function buildOrganizationJsonLd(overrides?: { description?: string }) {
     url: siteConfig.url,
     logo: `${siteConfig.url}/icon.svg`,
     sameAs: [...siteConfig.sameAs],
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: siteConfig.operator.email,
+      availableLanguage: 'ko',
+    },
     description: overrides?.description ?? siteConfig.description,
   } as const;
 }
@@ -37,10 +43,16 @@ export function buildSoftwareApplicationJsonLd() {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
+    '@id': `${siteConfig.url}/#software`,
     name: siteConfig.name,
+    url: new URL('/', siteConfig.url).href,
+    publisher: { '@id': `${siteConfig.url}/#organization` },
     applicationCategory: 'BusinessApplication',
+    applicationSubCategory: '맞춤 PG 견적',
     operatingSystem: 'Web',
+    inLanguage: 'ko',
+    isAccessibleForFree: true,
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'KRW' },
-    description: 'PG 도입을 위한 맞춤 PG 견적 플랫폼',
+    description: siteConfig.description,
   } as const;
 }
