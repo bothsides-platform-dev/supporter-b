@@ -162,6 +162,9 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
+                // 한글 IME 조합 확정 Enter 는 추가가 아니다. Safari 는 isComposing 을
+                // false 로 주므로 keyCode 229 도 막는다.
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                 addCustom();
               }
             }}
