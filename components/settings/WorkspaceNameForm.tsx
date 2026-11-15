@@ -116,7 +116,12 @@ export function WorkspaceNameForm({ workspaceId, currentName, canEdit, pendingRe
       <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">운영자가 확인한 뒤 이름이 바뀌어요.</p>
       <Field label="변경할 이름" htmlFor="workspace-name-input">
         <input ref={inputRef} id="workspace-name-input" type="text" value={name} maxLength={200} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => {
-          if (event.key === 'Enter') { event.preventDefault(); void handleSubmit(); }
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            // 한글 IME 조합 확정 Enter 는 제출이 아니다(Safari 는 keyCode 229).
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            void handleSubmit();
+          }
           if (event.key === 'Escape') { event.preventDefault(); setEditing(false); setName(currentName); }
         }} className={cn(underlineInputClass, 'sm:max-w-[360px]')} />
       </Field>
