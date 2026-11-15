@@ -67,7 +67,7 @@ describe('WorkspaceNameForm', () => {
     });
 
     it('IME 조합 확정 Enter(isComposing)로는 제출되지 않는다', async () => {
-      fireEvent.keyDown(await openEditor(), { key: 'Enter', isComposing: true, keyCode: 229 });
+      fireEvent.keyDown(await openEditor(), { key: 'Enter', isComposing: true });
       await Promise.resolve();
       expect(requestWorkspaceNameChangeAction).not.toHaveBeenCalled();
     });

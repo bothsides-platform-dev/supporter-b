@@ -89,7 +89,7 @@ describe('RfpPaymentMethodSelect', () => {
 
     it('IME 조합 확정 Enter(isComposing)로는 추가되지 않는다', () => {
       render(<RfpPaymentMethodSelect />);
-      fireEvent.keyDown(typeCustom('포인트결제'), { key: 'Enter', isComposing: true, keyCode: 229 });
+      fireEvent.keyDown(typeCustom('포인트결제'), { key: 'Enter', isComposing: true });
       expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([]);
     });
 
