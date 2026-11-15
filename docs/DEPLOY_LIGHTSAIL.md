@@ -8,6 +8,20 @@
 
 `dev` 브랜치에 동기화하는 별도 테스트 서버는 [스테이징 자동 배포 런북](STAGING.md)을 따른다. 운영 VM·DB와 분리하고, 새 서버 설정 후에만 GitHub의 staging 배포를 활성화한다.
 
+## 운영자 콘솔 관리자 계정·2차 인증 — DDL 선행 (2026-11-15)
+
+admin-supporter-b가 `ADMIN_EMAILS` 환경변수 대신 `admin_users` 테이블로 관리자 허용 목록과 TOTP 2차 인증을 관리한다. 본 서비스는 이 테이블을 읽거나 쓰지 않는다. 이 변경은 `lib/db/schema`·`scripts/migrations`를 바꾸므로 운영 CI의 스키마 fingerprint가 달라진다.
+
+1. 이 스키마가 **`main`에 들어간 뒤에** 테이블을 만든다. 그 전에 운영 DB에 만들면 `admin_users`가 없는 체크아웃의 `pnpm db:push`가 관리자 자격증명 테이블 DROP을 제안한다. `main` push의 운영 배포는 [운영 CI](PRODUCTION_CI.md)의 `schema-ready` 확인에서 멈추는 것이 정상이다.
+2. `scripts/migrations/20261115-admin-users.sql`을 적용하고 admin 서버의 현재 `ADMIN_EMAILS` 값을 소문자로 넣는다. 시드 SQL은 운영 이메일이 Git에 남지 않도록 파일에 담지 않았다. 구 admin은 이 테이블을 무시하므로 admin 배포 전에 적용해도 안전하다.
+3. 검증한 manifest의 `schema` 값을 `shared/schema-ready`에 기록해 본 서비스 배포를 이어 간다.
+4. 그다음 admin을 배포한다. 테이블 없이 새 admin을 먼저 배포하면 로그인이 전부 실패한다. 세부 순서·잠김 복구·롤백은 admin-supporter-b의 `docs/DEPLOY.md`를 따른다. 앱 롤백 때도 테이블과 행은 남긴다.
+
+```bash
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261115-admin-users.sql
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO admin_users (email, created_by) VALUES ('<관리자 이메일>', 'migration:env') ON CONFLICT (email) DO NOTHING"
+```
+
 ## PG 업무 화면 v2 — DDL·읽기 선행
 
 `scripts/migrations/20261101-pg-workspace-v2.sql`을 먼저 적용하고 본 서비스와 admin-supporter-b의 v2 읽기를 함께 준비한다. 새 견적 작성·발송은 별도 플래그 없이 제공하므로 앱 배포 전에 두 앱의 호환 읽기를 확인한다. v2 견적이 저장된 뒤 구버전 읽기로 롤백하지 않는다. 상세 절차·관측·복구는 [PG 업무 화면 v2](PG_WORKSPACE_V2.md#반영-순서)를 따른다.

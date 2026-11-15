@@ -175,6 +175,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 **운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 상세 규범과 가드는 `docs/agents/routing.md`의 같은 제목 절, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
 
+**운영자 콘솔 관리자 계정·2차 인증 (2026-11-15)**: 별도 레포 admin-supporter-b의 로그인은 Google OAuth와 `admin_users` 허용 목록, TOTP 2차 인증을 모두 통과해야 한다. 본 서비스는 이 테이블을 쓰지 않는다. TOTP 시크릿은 admin 서버만 가진 키로 AES-256-GCM 암호화하고 행 id에 묶어 저장한다. 2차 인증 통과 표시는 Auth.js 세션 갱신 입력이 아니라 admin의 서명 쿠키이며, 로그인 세션 id와 등록 시각에 묶인다. 남은 위험은 AR-9를 따른다.
+
 ### 3.5 스테이징 세션 격리
 
 `APP_ENV=staging`은 발급·로그아웃·사전 로딩 응답 정리 모두 별도 `authjs.staging.session-token` 패밀리를 사용한다. 운영의 `.support-b.com` 쿠키는 브라우저 규칙상 `dev.support-b.com`에도 전송되므로 쿠키 도메인 변경만으로 격리되지 않는다. 스테이징은 독립 `AUTH_SECRET`과 `.dev.support-b.com` 도메인을 함께 사용하며, 운영 패밀리를 인증 또는 정리 대상으로 삼지 않는다. 이는 쿠키 충돌 방지이며 스테이징 서버로 운영 쿠키가 전송되는 것 자체를 막지는 않는다. 서버는 신뢰되는 팀 전용으로 제한하고 독립 DB·저장소·외부 서비스 자격증명을 사용한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`. 구성과 활성화 절차는 [스테이징 런북](STAGING.md)을 따른다.
@@ -365,3 +367,7 @@ assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·
 ### AR-8 — 비밀번호 재설정 메일 한도의 잔여 위험 (수용, 2026-11-08)
 
 이메일별 1시간 5통 한도는 발급 수를 센 뒤 쓰는 구조라 서로 다른 분 버킷의 동시 요청이 함께 통과하면 6통까지 나갈 수 있다. 같은 분의 동시 요청은 dedupe 유니크 인덱스가 막는다. IP 한도는 단일 PM2 프로세스 메모리 값이며 다중 인스턴스에서는 인스턴스별로 따로 센다. 전체 300건 예산을 소진하는 공격은 가입 이메일·중복 확인·비밀번호 찾기를 1분 동안 함께 막을 수 있다. 재발송으로 새 메일이 나가면 앞선 메일의 링크는 무효가 되므로 늦게 도착한 첫 메일을 누른 사용자는 만료 안내를 본다. 60초 안에 오지 않은 메일은 실패나 스팸 분류일 가능성이 높아 최신 링크만 유효하게 두는 쪽을 택했다. 다중 인스턴스 전환이나 악용이 확인되면 DB 기반 IP 예산으로 재검토한다.
+
+### AR-9 — 운영자 콘솔 허용 목록의 공유 DB 이전 (수용, 2026-11-15)
+
+admin-supporter-b의 관리자 허용 목록을 서버 환경변수에서 공유 DB의 `admin_users`로 옮겼다. 두 앱이 같은 `supporter_b` DB 역할을 쓰므로 DB 쓰기 권한을 얻은 주체는 행을 추가해 해당 Google 계정으로 로그인하고 TOTP를 직접 등록할 수 있다. 또 미등록 행은 그 Google 계정으로 처음 로그인한 사람이 등록한다(TOFU). DB 쓰기 권한이 있으면 이미 모든 업무 데이터를 바꿀 수 있어서 늘어나는 위험은 작다고 보고 수용한다. 관리자 추가·삭제·2차 인증 초기화는 `admin_audit_logs`에 `entity_type=admin_user`로 남는다. 테이블 전용 DB 역할·grant 분리나 admin 전용 키로 서명한 행 무결성 MAC 도입, 또는 공유 DB 역할 노출이 확인되면 재검토한다.
