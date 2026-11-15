@@ -3,7 +3,7 @@ import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   workspaces,
   pgProfiles, verificationApplications,
-  adminNotes, riskFlags, adminAuditLogs,
+  adminNotes, riskFlags, adminAuditLogs, adminUsers,
 } from '@/lib/db/schema';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -87,5 +87,30 @@ describe('admin tables', () => {
       .returning();
     expect(flag.severity).toBe('warning');
     expect(flag.resolvedAt).toBeNull();
+  });
+});
+
+describe('admin_users (operator-console allowlist + TOTP)', () => {
+  it('inserts an allowlisted email with 2FA not yet enrolled', async () => {
+    const [row] = await db.insert(adminUsers).values({ email: 'ops@example.com', createdBy: 'migration:env' }).returning();
+    expect(row.id).toBeTruthy();
+    expect(row.totpSecretEnc).toBeNull();
+    expect(row.totpEnabledAt).toBeNull();
+    expect(row.totpLastUsedStep).toBeNull();
+    expect(row.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('stores a TOTP step beyond 32-bit range', async () => {
+    const [row] = await db.insert(adminUsers).values({ email: 'step@example.com', totpLastUsedStep: 2 ** 33 }).returning();
+    expect(row.totpLastUsedStep).toBe(2 ** 33);
+  });
+
+  it('rejects non-lowercase emails', async () => {
+    await expect(db.insert(adminUsers).values({ email: 'Ops@Example.com' })).rejects.toThrow();
+  });
+
+  it('rejects duplicate emails', async () => {
+    await db.insert(adminUsers).values({ email: 'dup@example.com' });
+    await expect(db.insert(adminUsers).values({ email: 'dup@example.com' })).rejects.toThrow();
   });
 });
