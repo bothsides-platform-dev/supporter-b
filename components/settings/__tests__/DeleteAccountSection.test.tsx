@@ -235,6 +235,22 @@ describe('DeleteAccountSection', () => {
       expect(deleteAccountAction).not.toHaveBeenCalled();
     });
 
+    // 비밀번호 칸은 보통 IME 가 꺼지지만, 켜진 채 들어온 조합 확정 Enter 가
+    // 비가역 제출을 일으키면 안 된다. Safari 는 isComposing=false·keyCode 229 다.
+    it.each([
+      ['isComposing', { isComposing: true, keyCode: 229 }],
+      ['Safari keyCode 229', { keyCode: 229 }],
+    ])('IME 조합 확정 Enter(%s)로는 제출되지 않는다', async (_label, init) => {
+      const user = userEvent.setup();
+      await openReadyDialog(user);
+
+      typePassword('my-password');
+      fireEvent.keyDown(screen.getByLabelText('비밀번호'), { key: 'Enter', ...init });
+
+      await Promise.resolve();
+      expect(deleteAccountAction).not.toHaveBeenCalled();
+    });
+
     it('제출 진행 중 Enter 재진입은 중복 제출되지 않는다', async () => {
       let resolveAction!: (v: unknown) => void;
       deleteAccountAction.mockReturnValue(

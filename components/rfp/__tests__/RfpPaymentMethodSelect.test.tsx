@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { RfpPaymentMethodSelect } from '../RfpPaymentMethodSelect';
@@ -69,6 +69,35 @@ describe('RfpPaymentMethodSelect', () => {
     await user.click(screen.getByRole('button', { name: '추가' }));
 
     expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([{ label: '포인트결제' }]);
+  });
+
+  // 한글 IME: 조합 확정 Enter 는 추가가 아니다. 그대로 두면 글자 조합이 끝나기 전에
+  // 추가가 실행된다. Safari 는 확정 keydown 에서 isComposing 을 false 로 주므로
+  // keyCode 229 도 같이 막아야 한다.
+  describe('커스텀 결제수단 Enter 추가', () => {
+    function typeCustom(value: string) {
+      const input = screen.getByRole('textbox', { name: '목록에 없는 결제수단' });
+      fireEvent.change(input, { target: { value } });
+      return input;
+    }
+
+    it('Enter 로 추가된다', () => {
+      render(<RfpPaymentMethodSelect />);
+      fireEvent.keyDown(typeCustom('포인트결제'), { key: 'Enter' });
+      expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([{ label: '포인트결제' }]);
+    });
+
+    it('IME 조합 확정 Enter(isComposing)로는 추가되지 않는다', () => {
+      render(<RfpPaymentMethodSelect />);
+      fireEvent.keyDown(typeCustom('포인트결제'), { key: 'Enter', isComposing: true, keyCode: 229 });
+      expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([]);
+    });
+
+    it('Safari 조합 확정 Enter(keyCode 229, isComposing=false)로는 추가되지 않는다', () => {
+      render(<RfpPaymentMethodSelect />);
+      fireEvent.keyDown(typeCustom('포인트결제'), { key: 'Enter', keyCode: 229 });
+      expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([]);
+    });
   });
 
   it('목록에 없는 결제수단 입력칸을 눈에 보이는 라벨로 찾을 수 있다', () => {

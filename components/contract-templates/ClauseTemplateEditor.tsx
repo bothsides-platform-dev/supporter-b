@@ -396,7 +396,7 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 /**
  * 조항 편집용 textarea — 최소 높이 72px, 세로 크기는 **사용자가 끈다**(`resize-y`).
  *
- * 자동 높이(`useAutoGrowTextarea`)를 쓰지 않는다: 조항 본문은 채팅 한 줄과 달리
+ * 자동 높이(채팅 컴포저의 `field-sizing: content`)를 쓰지 않는다: 조항 본문은 채팅 한 줄과 달리
  * 길고, 자동으로 늘어나면 조항 하나가 화면을 다 먹어 목록 재정렬이 어려워진다.
  */
 function ClauseTextarea({

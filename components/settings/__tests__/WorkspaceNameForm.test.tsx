@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const toast = vi.fn();
@@ -43,6 +43,40 @@ describe('WorkspaceNameForm', () => {
       name: '새 이름',
     });
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  // 한글 IME: 조합 확정 Enter 는 제출이 아니다. Safari 는 확정 keydown 에서
+  // isComposing 을 false 로 주므로 keyCode 229 도 같이 막아야 한다.
+  describe('Enter 제출', () => {
+    async function openEditor() {
+      requestWorkspaceNameChangeAction.mockResolvedValue({ ok: true });
+      const user = userEvent.setup();
+      render(<WorkspaceNameForm workspaceId="ws-rendered" currentName="테스트 회사" canEdit pendingRequest={null} />);
+      await user.click(screen.getByRole('button', { name: '변경 요청' }));
+      const input = screen.getByRole('textbox', { name: '변경할 이름' });
+      fireEvent.change(input, { target: { value: '새 이름' } });
+      return input;
+    }
+
+    it('Enter 로 제출된다', async () => {
+      fireEvent.keyDown(await openEditor(), { key: 'Enter' });
+      await waitFor(() => expect(requestWorkspaceNameChangeAction).toHaveBeenCalledWith({
+        workspaceId: 'ws-rendered',
+        name: '새 이름',
+      }));
+    });
+
+    it('IME 조합 확정 Enter(isComposing)로는 제출되지 않는다', async () => {
+      fireEvent.keyDown(await openEditor(), { key: 'Enter', isComposing: true, keyCode: 229 });
+      await Promise.resolve();
+      expect(requestWorkspaceNameChangeAction).not.toHaveBeenCalled();
+    });
+
+    it('Safari 조합 확정 Enter(keyCode 229, isComposing=false)로는 제출되지 않는다', async () => {
+      fireEvent.keyDown(await openEditor(), { key: 'Enter', keyCode: 229 });
+      await Promise.resolve();
+      expect(requestWorkspaceNameChangeAction).not.toHaveBeenCalled();
+    });
   });
 
   it('대기 요청이 있으면 추가 변경 입력을 막고 요청 이름을 보여준다', () => {

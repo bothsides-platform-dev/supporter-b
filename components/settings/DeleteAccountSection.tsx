@@ -208,6 +208,8 @@ export function DeleteAccountSection() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
+                      // IME 조합 확정 Enter(Safari 는 keyCode 229)로 탈퇴를 제출하지 않는다.
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
                       handleSubmit();
                     }
                   }}

@@ -36,7 +36,6 @@ import { useThreadReadTracking } from './useThreadReadTracking';
 import { promoteSentMessage, removeMessage, applyLiveEcho, createPendingMessageId } from './optimistic-thread';
 import { useRecoverableMessages } from './useRecoverableMessages';
 import { computeMessageGrouping } from './message-grouping';
-import { useAutoGrowTextarea } from './useAutoGrowTextarea';
 import { DateDivider } from './DateDivider';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
@@ -85,7 +84,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       authorAvatarUpdatedAt: viewerAvatarUpdatedAt, isSelf: true,
       pending: false, failed: true, localKey: message.id }),
   );
-  const { ref: textareaRef, resize: resizeTextarea } = useAutoGrowTextarea(draft);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastIsOwn = localMessages[localMessages.length - 1]?.isSelf ?? false;
   const { listRef, bottomRef } = useStickToBottom({
@@ -215,7 +214,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       mention.reset();
       setAttachments([]);
     }
-    // 높이 리셋은 useAutoGrowTextarea 가 draft='' 효과로 처리한다.
+    // 높이는 CSS field-sizing 이 내용에 맞추므로 draft='' 면 저절로 한 줄로 돌아온다.
 
     let result: Awaited<ReturnType<typeof sendTeamMessageAction>>;
     try {
@@ -430,11 +429,10 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
               onChange={(e) => {
                 const value = e.target.value;
                 setUserDraft(value);
-                resizeTextarea();
                 mention.onTextChange(value, e.target.selectionStart ?? value.length);
               }}
               onKeyDown={handleKeyDown}
-              className="box-border max-h-40 min-h-8 w-full flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:truncate placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+              className="box-border field-sizing-content max-h-40 min-h-8 w-full flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:truncate placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
             />
           </div>
           <Button
