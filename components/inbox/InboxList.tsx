@@ -50,16 +50,22 @@ export type InboxRow = {
   bidWindowOpen?: boolean;
 };
 
+/** 행 안에서 스스로 클릭을 처리하는 요소 — 행 클릭으로 한 번 더 열지 않는다. */
+const ROW_CONTROL = 'button, a, input, select, textarea, label, [role="button"]';
+
 export function InboxList({
   rows,
   onOpenRfp,
   selected,
   compact = false,
+  active = -1,
 }: {
   rows: InboxRow[];
   onOpenRfp?: (rfpId: string, tab?: 'write') => void;
   selected?: string;
   compact?: boolean;
+  /** 키보드로 강조한 행의 위치. 열기(미리보기)와 다르다 — 강조만으로는 열람 처리하지 않는다. */
+  active?: number;
 }) {
   const router = useRouter();
   const demoNavigate = useDemoNavigate();
@@ -111,7 +117,7 @@ export function InboxList({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const state = pgRequestState(row);
             const methods = [
               ...(row.requiredPaymentMethods ?? []).map((m) => PAYMENT_METHOD_LABELS[m]),
@@ -121,7 +127,13 @@ export function InboxList({
               <tr
                 key={row.invitationId}
                 aria-selected={selected === row.rfpId}
-                className={`border-t border-[var(--md-sys-color-outline-variant)] align-top ${selected === row.rfpId ? 'bg-[var(--md-sys-color-primary-container)]' : 'hover:bg-[var(--md-sys-color-surface-container-low)]'}`}
+                data-active={active === index}
+                // 행 어디를 눌러도 제목을 누른 것과 같다. 키보드 사용자는 제목 버튼으로 같은 일을 한다.
+                onClick={(e) => {
+                  if (e.target instanceof Element && e.target.closest(ROW_CONTROL)) return;
+                  open(row.rfpId);
+                }}
+                className={`cursor-pointer border-t border-[var(--md-sys-color-outline-variant)] align-top ${selected === row.rfpId ? 'bg-[var(--md-sys-color-primary-container)]' : 'hover:bg-[var(--md-sys-color-surface-container-low)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)]'}`}
               >
                 <td className="px-4 py-4">
                   <p className="mb-1 truncate font-semibold" title={row.buyerName}>

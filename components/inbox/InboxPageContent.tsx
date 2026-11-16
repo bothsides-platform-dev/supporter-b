@@ -9,6 +9,7 @@ import { InboxIcon } from '@/components/icons';
 import { MERCHANT_TIER_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import { INBOX_VIEWS, INBOX_PAGE_SIZE } from '@/lib/rfp/inbox-query';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
+import { useListNavigation } from '@/lib/hooks/useListNavigation';
 
 const control =
   'min-h-9 rounded-[6px] border border-[var(--md-sys-color-outline)] bg-[var(--md-sys-color-background)] px-2 text-[14px] focus-visible:outline-2 focus-visible:outline-[var(--md-sys-color-primary)]';
@@ -93,6 +94,20 @@ export function InboxPageContent({
     if (tab) router.push(`/inbox/${id}?tab=write`, { scroll: false });
     else select(id);
   };
+  // J/K·방향키는 강조만 옮기고, 미리보기(=열람 처리)는 Enter·클릭으로만 연다.
+  // 랜딩 데모에서는 문서 전체 키를 가로채면 방문자의 페이지 조작을 빼앗으므로 끈다.
+  const { active } = useListNavigation(
+    rows.length,
+    {
+      onEnter: (i) => open(rows[i].rfpId),
+      onEdit: (i) => open(rows[i].rfpId, 'write'),
+      onMove: (i) =>
+        list.current
+          ?.querySelector<HTMLElement>(`[data-inbox-row="${CSS.escape(rows[i].rfpId)}"]`)
+          ?.focus(),
+    },
+    { enabled: !demoNavigate },
+  );
   const index = (order ?? []).indexOf(selected ?? '');
   return (
     <>
@@ -216,7 +231,13 @@ export function InboxPageContent({
           className={`min-w-0 flex-1 overflow-y-auto ${selected ? 'hidden lg:block' : ''}`}
         >
           {rows.length ? (
-            <InboxList rows={rows} onOpenRfp={open} selected={selected} compact={!!selected} />
+            <InboxList
+              rows={rows}
+              onOpenRfp={open}
+              selected={selected}
+              compact={!!selected}
+              active={active}
+            />
           ) : (
             <EmptyState
               icon={<InboxIcon />}
