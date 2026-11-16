@@ -71,6 +71,15 @@ describe('AwardResult', () => {
     tier: 'general' as const,
   };
 
+  it('신규 선정 완료 후에도 홈페이지 판가 기준을 유지한다', async () => {
+    render(<AwardResult {...baseProps} current={{}} contractType="new" homepageCardRate={0.034} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: '선정한 조건 보기' }));
+    expect(screen.getByText('홈페이지 판가보다 이만큼 좋아져요')).toBeVisible();
+    expect(screen.getByText('3.40%')).toBeVisible();
+    expect(screen.getByText('2.10%')).toBeVisible();
+    expect(screen.queryByText('현재 조건')).not.toBeInTheDocument();
+  });
+
   it('협의 완료와 PG의 3영업일 이메일 안내를 구분해 알려준다', () => {
     render(<AwardResult {...baseProps} current={{}} />);
     expect(screen.getByRole('dialog', { name: /최종 계약 조건 협의를.*마쳤어요/ })).toBeInTheDocument();

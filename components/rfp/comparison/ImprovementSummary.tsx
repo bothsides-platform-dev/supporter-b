@@ -1,7 +1,7 @@
 import { bidConditions, formatCondition } from '@/lib/quote/terms';
 // 포커스 뷰 hero — 선택된 견적이 "지금 조건 대비 얼마나 좋아지나"를 4지표로 보여준다.
-// 카드 수수료·정산주기·월 정산한도·보증보험. 현재 조건(자유 텍스트)이 파싱되면 개선폭
-// 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
+// 갱신은 구매사의 현재 조건과 비교하고, 신규는 같은 PG·등급의 홈페이지 판가와
+// 카드 수수료만 비교한다. 비교 근거가 없으면 받은 견적만 보여준다.
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
@@ -12,7 +12,6 @@ import {
   cycleQuality,
 } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
-import { Divider } from '@/components/primitives/Divider';
 import { InfoTip } from '@/components/ui/info-tip';
 
 export type CurrentConditions = {
@@ -30,10 +29,12 @@ const CYCLE_QUALITY_LABEL: Record<'faster' | 'same' | 'slower', string> = {
 
 export function ImprovementSummary({
   bid,
-  current,
+  current: savedCurrent,
   tier = 'general',
   flash,
   showCurrentHint = true,
+  contractType,
+  homepageCardRate,
 }: {
   bid: Bid;
   current: CurrentConditions;
@@ -41,7 +42,16 @@ export function ImprovementSummary({
   flash?: boolean;
   /** 선정 완료 화면에서는 수정할 수 없는 현재 조건 입력 안내를 숨긴다. */
   showCurrentHint?: boolean;
+  contractType?: 'new' | 'renewal' | null;
+  /** 같은 PG·조회 구간의 홈페이지 카드 판가. 소수 요율·부가세 별도이며 0도 유효하다. */
+  homepageCardRate?: number | null;
 }) {
+  const homepageComparison = contractType === 'new';
+  // 과거 데이터에 신규의 현재 조건이 남아 있어도 비교 근거로 사용하지 않는다.
+  const current: CurrentConditions = homepageComparison ? {} : savedCurrent;
+  const homepageRate = typeof homepageCardRate === 'number' && Number.isFinite(homepageCardRate)
+    && homepageCardRate >= 0 && homepageCardRate <= 1 ? homepageCardRate : null;
+  const baselineCardRate = homepageComparison ? homepageRate : parseCurrentValue(current.feeRate, 'percent');
   const hasAnyCurrent = Boolean(
     current.feeRate ||
     current.settlementCycle ||
@@ -54,29 +64,44 @@ export function ImprovementSummary({
   const cycleQ = cycleQuality(current.settlementCycle, bid.settleCycle);
   const verdicts = [
     cardRate !== undefined
-      ? metricVerdict(parseCurrentValue(current.feeRate, 'percent'), cardRate, 'lower')
+      ? metricVerdict(baselineCardRate, cardRate, 'lower')
       : null,
     cycleQ,
     metricVerdict(parseCurrentValue(current.settlementLimit, 'krw'), bid.settleLimit, 'higher'),
   ];
   const anyWorse = verdicts.some((v) => v === 'worse' || v === 'slower');
 
-  const heading = !hasAnyCurrent
+  const heading = homepageComparison
+    ? homepageRate === null
+      ? '핵심 수치'
+      : verdicts[0] === 'better'
+        ? '홈페이지 판가보다 이만큼 좋아져요'
+        : '홈페이지 판가와 비교한 조건이에요'
+    : !hasAnyCurrent
     ? '핵심 수치'
     : anyWorse || !verdicts.some((v) => v === 'better' || v === 'faster')
       ? '지금 조건과 비교하면 이렇게 달라져요'
       : '지금 조건보다 이만큼 좋아져요';
 
   return (
-    <section>
-      <div className="flex items-center gap-3 mb-3">
-        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+    <section className="@container/summary">
+      <div className="mb-3 space-y-1">
+        <h2 className="text-[18px] font-semibold leading-snug tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] text-balance">
           {heading}
-        </span>
-        <Divider />
+        </h2>
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          {homepageComparison && homepageRate !== null
+            ? '같은 등급의 카드 수수료를 비교해요. 부가세는 별도예요.'
+            : '수수료는 부가세 별도예요.'}
+        </p>
       </div>
 
-      {!hasAnyCurrent && showCurrentHint && (
+      {homepageComparison && homepageRate === null && (
+        <p className="mb-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          이 구간의 홈페이지 판가가 없어 받은 견적만 보여드려요.
+        </p>
+      )}
+      {!homepageComparison && !hasAnyCurrent && showCurrentHint && (
         <p className="mb-3 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
           현재 조건을 입력하면 개선폭을 보여드려요.
         </p>
@@ -84,13 +109,17 @@ export function ImprovementSummary({
 
       {/* 라벨·현재값·화살표·제안값·개선폭을 5열 그리드로 묶어 행끼리 열을 정렬한다.
           각 행은 grid-cols-subgrid 로 부모 열을 그대로 물려받아 같은 세로선에 맞춰진다. */}
-      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 border-t border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)] max-md:block">
+      <dl className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] gap-x-4 divide-y divide-[var(--md-sys-color-outline-variant)] @max-[620px]/summary:block">
         {
           <MetricRow
             testId="metric-row-card"
             label="카드 수수료"
+            emphasized
             infoTerm="수수료율"
-            currentText={formatFeeRateDisplay(current.feeRate)}
+            currentLabel={homepageComparison ? '홈페이지 판가' : '현재 조건'}
+            currentText={homepageComparison
+              ? homepageRate === null ? undefined : formatPct(homepageRate)
+              : formatFeeRateDisplay(current.feeRate)}
             proposedText={
               cardRate === undefined
                 ? formatCondition(bidConditions(bid).fees[`card:${tier}`], '%')
@@ -98,7 +127,7 @@ export function ImprovementSummary({
             }
             proposedNumeric={cardRate !== undefined}
             trailing={
-              cardRate === undefined ? null : badgeNode(feeBadge(current.feeRate, cardRate))
+              cardRate === undefined ? null : badgeNode(feeBadge(baselineCardRate, cardRate))
             }
             proposedFlash={flash}
             proposedFlashTestId="flash-card-fee"
@@ -135,19 +164,18 @@ export function ImprovementSummary({
         <MetricRow
           testId="metric-row-signup"
           label="가입비"
-          labelNote="한 번만 내는 비용이라 위 비교에 넣지 않았어요"
+          labelNote={homepageComparison ? '처음 한 번만 내는 비용이에요' : '한 번만 내는 비용이라 위 비교에 넣지 않았어요'}
           proposedText={formatCondition(bidConditions(bid).signupFee)}
           proposedNumeric={bidConditions(bid).signupFee.state === 'confirmed'}
         />
-      </div>
+      </dl>
     </section>
   );
 }
 
-function feeBadge(currentText: string | null | undefined, proposed: number) {
-  const current = parseCurrentValue(currentText, 'percent');
+function feeBadge(current: number | null, proposed: number) {
   const imp = improvement(current, proposed, 'lower');
-  if (!imp || current === null) return null;
+  if (!imp || current === null || imp.deltaAbs === 0) return null;
   return {
     text: `${(imp.deltaAbs * 100).toFixed(2)}%p`,
     down: proposed < current,
@@ -195,11 +223,13 @@ function MetricRow({
   infoTerm,
   labelNote,
   currentText,
+  currentLabel = '현재 조건',
   proposedText,
   trailing,
   proposedFlash,
   proposedFlashTestId,
   proposedNumeric = true,
+  emphasized = false,
 }: {
   testId: string;
   label: string;
@@ -212,58 +242,66 @@ function MetricRow({
   /** 라벨 밑 한 줄 단서 — 이 지표가 왜 다른지. 개선폭 열을 오염시키지 않는 자리다. */
   labelNote?: string;
   currentText?: string | null;
+  currentLabel?: string;
   proposedText: string;
   trailing?: ReactNode;
   proposedFlash?: boolean;
   proposedFlashTestId?: string;
   /** 제안값이 금액·요율이 아니라 상태어('없어요')면 false — mono/tabular 를 벗긴다. */
   proposedNumeric?: boolean;
+  emphasized?: boolean;
 }) {
   return (
     <div
       data-testid={testId}
-      className="col-span-full grid grid-cols-subgrid items-center py-2.5 max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] max-md:gap-x-3 max-md:gap-y-1 max-md:py-3"
+      className={cn(
+        'col-span-full grid grid-cols-subgrid items-center py-4 @max-[620px]/summary:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @max-[620px]/summary:gap-x-3 @max-[620px]/summary:gap-y-2',
+        emphasized && 'mb-1 rounded-[6px] bg-[var(--md-sys-color-surface-container-low)] px-4 @max-[620px]/summary:py-3',
+      )}
     >
-      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] max-md:col-span-2">
+      <dt className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)] @max-[620px]/summary:col-span-2">
         {label}
         {infoTerm && <InfoTip term={infoTerm} className="ml-0.5" />}
         {labelNote && (
-          <span className="block text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="mt-1 block text-[13px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
             {labelNote}
           </span>
         )}
-      </span>
+      </dt>
       {currentText ? (
-        <span className="text-[13px] text-right text-[var(--md-sys-color-on-surface-variant)] max-md:min-w-0 max-md:text-left max-md:[overflow-wrap:anywhere]">
-          <span className="hidden text-[12px] max-md:block">현재</span>
+        <dd className="min-w-0 text-[14px] text-right text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere] @max-[620px]/summary:text-left">
+          <span className="mb-1 block text-[12px]">{currentLabel}</span>
           <span className="md-numeric">{currentText}</span>
-        </span>
+        </dd>
       ) : (
-        <span className="max-md:hidden" />
+        <dd aria-hidden="true" className="@max-[620px]/summary:hidden" />
       )}
       {currentText ? (
-        <span
+        <dd
+          aria-hidden="true"
           data-testid="metric-arrow"
-          className="text-center text-[var(--md-sys-color-on-surface-variant)] max-md:hidden"
+          className="text-center text-[var(--md-sys-color-on-surface-variant)] @max-[620px]/summary:hidden"
         >
           →
-        </span>
+        </dd>
       ) : (
-        <span className="max-md:hidden" />
+        <dd aria-hidden="true" className="@max-[620px]/summary:hidden" />
       )}
-      <span
+      <dd
         data-testid={proposedFlashTestId}
         className={cn(
-          'text-[13px] font-[600] text-[var(--md-sys-color-on-surface)] max-md:min-w-0 max-md:[overflow-wrap:anywhere]',
+          'min-w-0 font-semibold text-[var(--md-sys-color-on-surface)] [overflow-wrap:anywhere]',
+          emphasized ? 'text-[26px] leading-tight' : 'text-[16px]',
+          !currentText && '@max-[620px]/summary:col-span-2',
           proposedFlash && 'tier-flash',
         )}
       >
-        <span className="hidden text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)] max-md:block">
-          제안
+        <span className="mb-1 block text-[12px] font-normal leading-normal text-[var(--md-sys-color-on-surface-variant)]">
+          받은 견적
         </span>
         <span className={cn(proposedNumeric && 'md-numeric')}>{proposedText}</span>
-      </span>
-      <span className="max-md:col-span-2 max-md:justify-self-end">{trailing}</span>
+      </dd>
+      <dd aria-hidden={!trailing || undefined} className="@max-[620px]/summary:col-span-2 @max-[620px]/summary:justify-self-end">{trailing}</dd>
     </div>
   );
 }

@@ -475,7 +475,24 @@ it('레거시 계약은 요약과 빈 계약 탭도 노출하지 않는다', () 
 });
 
 
-describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
+describe('BuyerDealRoomBody — 선정 진입점의 완료 화면', () => {
+  it('신규 선정 결과는 해당 PG·조회 구간의 홈페이지 판가를 전달한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, contractType: 'new' },
+      bids: [{ ...aBid, paymentFees: { card: { general: 0.022, sole: 0.018 } } }],
+      pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
+      homepageCardRatesByPg: { 'ws-toss': { general: 0.034, sole: 0.023 } },
+    })} />);
+    await user.click(screen.getByRole('button', { name: '영세로 비교' }));
+    await user.click(screen.getByRole('button', { name: '비교에서 선정 성공' }));
+    await user.click(screen.getByRole('button', { name: '선정한 조건 보기' }));
+    expect(screen.getByText('홈페이지 판가보다 이만큼 좋아져요')).toBeVisible();
+    expect(screen.getByText('2.30%')).toBeVisible();
+    expect(screen.getByText('1.80%')).toBeVisible();
+    expect(screen.queryByText('3.40%')).not.toBeInTheDocument();
+  });
+
   function FocusPg() {
     const {setCounterparty} = useDealRoom();
     return <button onClick={() => setCounterparty({workspaceId:'ws-toss',name:'토스페이먼츠',type:'pg',logoUpdatedAt:null})}>PG 포커스</button>;
@@ -503,7 +520,7 @@ describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
     expect(awardRfpAction).toHaveBeenCalledTimes(2);
     expect(awardRfpAction).toHaveBeenLastCalledWith({ rfpId: baseRfp.id, awardedBidId: aBid.id });
   });
-  it.each(['비교', '레일'])('%s에서 성공하면 같은 완료 화면을 연다', async source => {
+  it.each(['비교', '레일', '하단'])('%s에서 성공하면 같은 완료 화면을 연다', async source => {
     const user = userEvent.setup();
     render(<><FocusPg /><BuyerDealRoomBody data={buildData({
       rfp:{...baseRfp,bizProfile:{bizNo:'1234567890',taxType:'general',status:'active',grade:'general',gradeSource:'user_confirmed'}},
@@ -511,11 +528,11 @@ describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
       pgWsById:{'ws-toss':{id:'ws-toss',name:'토스페이먼츠',type:'pg',logoUpdatedAt:null}},
     })} /></>);
     await user.click(screen.getByRole('button',{name:'영세로 비교'}));
-    if (source === '레일') {
+    if (source !== '비교') {
       await user.click(screen.getByRole('button',{name:'PG 포커스'}));
-      await user.click(screen.getByRole('button',{name:'선정'}));
+      await user.click(screen.getByRole('button',{name: source === '레일' ? '선정' : '이 견적 선정하기'}));
     }
-    await user.click(screen.getByRole('button',{name: source === '레일' ? '선정할게요' : '비교에서 선정 성공'}));
+    await user.click(screen.getByRole('button',{name: source !== '비교' ? '선정할게요' : '비교에서 선정 성공'}));
     expect(await screen.findByRole('dialog',{name:/최종 계약 조건 협의를.*마쳤어요/})).toBeVisible();
     expect(screen.getByText('토스페이먼츠 온보딩 담당자가 이메일을 보내드려요.')).toBeVisible();
     await user.click(screen.getByRole('button',{name:'선정한 조건 보기'}));

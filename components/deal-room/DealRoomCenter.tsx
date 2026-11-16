@@ -12,6 +12,8 @@ export type DealRoomTab = {
   id: string;
   label: string;
   content: ReactNode;
+  /** 본문 스크롤과 분리된 해당 탭의 행동 영역. 콘텐츠·초점을 덮지 않는다. */
+  footer?: ReactNode;
   /**
    * 한 번 열리면 비활성이 돼도 언마운트하지 않고 숨긴다(마운트는 여전히 지연된다).
    *
@@ -54,7 +56,7 @@ export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
           onChange={onChange}
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
         {tabs.map((t) => (
           <div
             key={t.id}
@@ -68,6 +70,7 @@ export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
           </div>
         ))}
       </div>
+      {active?.footer && <div className="shrink-0">{active.footer}</div>}
     </div>
   );
 }

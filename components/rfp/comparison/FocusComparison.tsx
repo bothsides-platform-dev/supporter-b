@@ -8,7 +8,7 @@
 // 내부 구조는 응집 단위로 분할된다(공개 props/exports 불변):
 //   BidTabStrip(탭+peek) · FeeMatrixTables(구간 매트릭스) · FeeComparisonRows(요율 비교)
 //   · PgMemoPdfPanel(메모/PDF) · AwardCtaBar(CTA). 순수 파생은 focus-comparison-model.ts.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Inbox } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
@@ -36,6 +36,7 @@ import {
   type CustomPaymentMethod,
   type MerchantTier,
   type PaymentMethod,
+  type TierRates,
 } from '@/lib/types/bid';
 
 type Props = {
@@ -59,8 +60,12 @@ type Props = {
    * "현재 조건을 입력하면…" 안내가 실행할 수 없는 약속이 된다.
    */
   contractType?: 'new' | 'renewal' | null;
+  /** PG별 홈페이지 카드 판가. 신규 비교에서 조회 중인 구간만 사용한다. */
+  homepageCardRatesByPg?: Record<string, TierRates>;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
   hideHeader?: boolean;
+  /** 딜룸은 선정 행동을 스크롤 밖의 전용 영역에서 제공한다. */
+  hideActions?: boolean;
   /** 견적이 아직 없을 때 구매사에게 보여줄 초대 현황. */
   invitedPgCount?: number;
   /** PG 관리에 추가했지만 아직 초대 메일을 보내지 않은 PG 수. */
@@ -87,6 +92,7 @@ type Props = {
 export function FocusComparison(props: Props) {
   const { bids, pgWsById, current, rfpStatus, awardedBidId, requoteByPg, onSampleAward } = props;
   const router = useRouter();
+  const comparisonId = useId();
 
   const [localTier, setLocalTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
   const tier = props.tier ?? localTier;
@@ -234,6 +240,7 @@ export function FocusComparison(props: Props) {
 
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
   const canAward = rfpStatus === 'sent';
+  const multipleBids = sortedBids.length > 1;
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) ?? null : null;
 
 
@@ -251,9 +258,8 @@ export function FocusComparison(props: Props) {
         </div>
       )}
 
-      <TierContextHeader tier={tier} onTierChange={setTier} />
-
-      <BidTabStrip
+      {multipleBids && <BidTabStrip
+        id={comparisonId}
         sortedBids={sortedBids}
         activeId={active.id}
         awardedBidId={awardedBidId}
@@ -266,10 +272,16 @@ export function FocusComparison(props: Props) {
         onSelect={setActiveBidId}
         onPeekEnter={onPeekEnter}
         onPeekLeave={onPeekLeave}
-      />
+      />}
 
       {/* Active bid body */}
-      <div className="mt-5 space-y-2">
+      <div
+        id={`${comparisonId}-panel`}
+        role={multipleBids ? 'tabpanel' : undefined}
+        aria-labelledby={multipleBids ? `${comparisonId}-${active.id}` : undefined}
+        tabIndex={multipleBids ? 0 : undefined}
+        className={`${multipleBids ? 'mt-5' : ''} min-w-0 space-y-4 rounded-[6px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--md-sys-color-primary)]`}
+      >
         <div className="mb-2 flex items-center justify-between gap-3">
           <CounterpartyProfileCard
             variant="profile"
@@ -289,7 +301,20 @@ export function FocusComparison(props: Props) {
               color={active.id === awardedBidId ? 'tertiary' : 'surface'}
             />
           )}
+          {!isAwarded && !multipleBids && (
+            <div className="flex flex-wrap justify-end gap-2">
+              {active.round > 1 && <Chip label={`${active.round}차`} color="surface" />}
+              {requoteByPg?.[active.pgWsId] && (
+                <Chip
+                  label={requoteByPg[active.pgWsId].status === 'pending' ? '수정 견적 대기 중' : '수정 견적 도착'}
+                  color={requoteByPg[active.pgWsId].status === 'pending' ? 'warning' : 'tertiary'}
+                />
+              )}
+            </div>
+          )}
         </div>
+
+        <TierContextHeader tier={tier} onTierChange={setTier} buyerGrade={props.buyerGrade} />
 
         <ImprovementSummary
           bid={active}
@@ -297,6 +322,8 @@ export function FocusComparison(props: Props) {
           tier={tier}
           flash={flash}
           showCurrentHint={props.contractType !== 'new'}
+          contractType={props.contractType}
+          homepageCardRate={props.homepageCardRatesByPg?.[active.pgWsId]?.[tier]}
         />
 
         <Accordion>
@@ -319,12 +346,12 @@ export function FocusComparison(props: Props) {
 
         </Accordion>
 
-        <AwardCtaBar
+        {!props.hideActions && <AwardCtaBar
           canAward={canAward}
           showRequote={!props.onSampleAward}
           onRequote={onRequoteOpen}
           onAward={onAwardOpen}
-        />
+        />}
       </div>
 
       <AwardConfirmDialog
