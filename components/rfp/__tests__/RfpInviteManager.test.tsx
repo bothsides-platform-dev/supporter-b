@@ -171,7 +171,7 @@ describe('RfpInviteManager — 인라인 칩 추가', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '1개 PG에 초대 보내기' })).toBeEnabled());
   });
 
-  it('선택 취소 액션이 실패하면 오류 토스트를 보여준다', async () => {
+  it('선택 취소 액션이 실패하면 오류 코드 없이 이유를 알리는 토스트를 보여준다', async () => {
     mockHook({ pgList: [PG_A] });
     removeDraftPgWorkspaceActionMock.mockResolvedValueOnce({ ok: false, error: 'INVITATION_NOT_DRAFT' });
     render(
@@ -183,7 +183,24 @@ describe('RfpInviteManager — 인라인 칩 추가', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'KG이니시스 선택 취소' }));
     await waitFor(() => expect(toastMock).toHaveBeenCalledWith(
-      '선택을 취소하지 못했어요 — INVITATION_NOT_DRAFT',
+      'PG 목록이 바뀌었어요. 새로고침해 최신 상태를 확인해요.',
+      { type: 'error' },
+    ));
+  });
+
+  it('표에 없는 실패 코드는 화면에 내보내지 않고 기본 문구로 알린다', async () => {
+    mockHook({ pgList: [PG_A] });
+    removeDraftPgWorkspaceActionMock.mockResolvedValueOnce({ ok: false, error: 'NOT_OWNED' });
+    render(
+      <RfpInviteManager
+        rfpId="rfp-1"
+        invitations={[{ ws: { id: 'pg-a', name: 'KG이니시스', type: 'pg', logoUpdatedAt: null }, status: 'draft' }]}
+        canEdit
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'KG이니시스 선택 취소' }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(
+      '선택을 취소하지 못했어요. 잠시 후 다시 시도해요.',
       { type: 'error' },
     ));
   });

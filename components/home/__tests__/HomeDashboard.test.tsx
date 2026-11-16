@@ -46,9 +46,22 @@ describe('HomeDashboard', () => {
 
   it('shows a workspace-specific empty state when there are no action groups', () => {
     render(<HomeDashboard dashboard={empty} workspaceType="pg" items={[]} unreadCount={0} />);
-    expect(screen.getByText('지금 처리할 일이 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('지금 처리할 일이 없어요')).toBeInTheDocument();
     expect(screen.getByText('구매사가 초대한 견적 요청이 여기에 표시돼요.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /진행중/ })).toBeInTheDocument();
+  });
+
+  it('요청을 한 번도 보내지 않은 구매사에게는 다 처리했다고 말하지 않는다', () => {
+    render(<HomeDashboard dashboard={{ ...empty, hasSentRequests: false }} workspaceType="buyer" items={[]} unreadCount={0} />);
+    expect(screen.getByText('아직 보낸 견적 요청이 없어요')).toBeInTheDocument();
+    expect(screen.getByText('견적을 요청하면 PG사의 답변과 마감 일정이 여기에 표시돼요.')).toBeInTheDocument();
+    expect(screen.queryByText('지금 처리할 일이 없어요')).not.toBeInTheDocument();
+  });
+
+  it('요청을 보낸 적이 있고 할 일이 없는 구매사에게는 처리할 일이 없다고 말한다', () => {
+    render(<HomeDashboard dashboard={{ ...empty, hasSentRequests: true }} workspaceType="buyer" items={[]} unreadCount={0} />);
+    expect(screen.getByText('지금 처리할 일이 없어요')).toBeInTheDocument();
+    expect(screen.getByText('새 견적이 오거나 마감이 다가오면 여기에 표시돼요.')).toBeInTheDocument();
   });
 
   it('renders the open-RFP discovery section for a PG with openRfps', () => {

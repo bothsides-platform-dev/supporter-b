@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/primitives/Button";
 import { Chip } from "@/components/primitives/Chip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { underlineInputClass } from "@/components/forms/inputs";
+import {
+  underlineInputClass,
+  underlineInputErrorBorder,
+} from "@/components/forms/inputs";
+import { useFocusFirstInvalid } from "@/lib/a11y/use-focus-first-invalid";
+import { cn } from "@/lib/utils";
 import {
   loadPlatformAgreementAction,
   savePlatformAgreementAction,
@@ -24,6 +29,14 @@ const fields = [
   ["address", "주소", 200],
   ["representative", "대표자명", 50],
 ] as const;
+type FieldKey = (typeof fields)[number][0];
+/** 미리보기를 막는 칸별 이유. 통과 규칙은 `PlatformAgreementCompleteSchema` 가 단일 출처다. */
+const FIELD_ERRORS: Record<FieldKey, string> = {
+  company: "상호를 입력해요.",
+  bizNo: "사업자등록번호 10자리를 숫자로 입력해요.",
+  address: "주소를 입력해요.",
+  representative: "대표자명을 입력해요.",
+};
 const dim = "text-[var(--md-sys-color-on-surface-variant)]";
 function errorCopy(code: string) {
   return code === "BUYER_PHONE_REQUIRED"
@@ -52,6 +65,11 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
     null,
   );
   const [confirm, setConfirm] = useState(false);
+  // 막힌 [저장하고 미리보기]를 누른 뒤에만 칸별 이유를 보여준다 — 입력 전부터 빨갛게 두지 않는다.
+  const [blocked, setBlocked] = useState(false);
+  const [discard, setDiscard] = useState(false);
+  const { containerRef: fieldsRef, requestFocus } =
+    useFocusFirstInvalid<HTMLFieldSetElement>();
   const url = useRef<string | null>(null);
   useEffect(() => {
     let alive = true;
@@ -185,6 +203,10 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
       </div>
     );
   const awaiting = status === "awaiting_pg_template";
+  const check = PlatformAgreementCompleteSchema.safeParse({ buyer });
+  const invalid = new Set(
+    check.success ? [] : check.error.issues.map((issue) => String(issue.path[1])),
+  );
   return (
     <section className="space-y-5 py-4" aria-label="노온과의 합의서">
       <header>
@@ -218,22 +240,48 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
         </p>
       </section>
       {awaiting && view.editable ? (
-        <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
+        <fieldset
+          ref={fieldsRef}
+          disabled={busy}
+          className="grid gap-4 sm:grid-cols-2"
+        >
           <legend className="md-title-small mb-3">구매사 회사 정보</legend>
-          {fields.map(([key, label, max]) => (
-            <label key={key} className={`block text-sm ${dim}`}>
-              구매사 {label}
-              <input
-                value={buyer[key] ?? ""}
-                maxLength={max}
-                className={`${underlineInputClass} ${key === "bizNo" ? "md-numeric" : ""}`}
-                onChange={(e) => {
-                  setBuyer({ ...buyer, [key]: e.target.value });
-                  setPreview(null);
-                }}
-              />
-            </label>
-          ))}
+          {fields.map(([key, label, max]) => {
+            const fieldError =
+              blocked && invalid.has(key) ? FIELD_ERRORS[key] : undefined;
+            const errorId = `agreement-${key}-error`;
+            return (
+              <div key={key}>
+                <label className={`block text-sm ${dim}`}>
+                  구매사 {label}
+                  <input
+                    value={buyer[key] ?? ""}
+                    maxLength={max}
+                    aria-invalid={fieldError ? "true" : undefined}
+                    aria-describedby={fieldError ? errorId : undefined}
+                    className={cn(
+                      underlineInputClass,
+                      key === "bizNo" && "md-numeric",
+                      fieldError && underlineInputErrorBorder,
+                    )}
+                    onChange={(e) => {
+                      setBuyer({ ...buyer, [key]: e.target.value });
+                      setPreview(null);
+                    }}
+                  />
+                </label>
+                {/* 포커스가 첫 문제 칸으로 옮겨 가며 이 설명을 읽으므로 role="alert" 를 칸마다 두지 않는다. */}
+                {fieldError && (
+                  <p
+                    id={errorId}
+                    className="mt-1 text-[length:var(--md-typescale-body-small-size)] leading-[var(--md-typescale-body-small-line-height)] text-[var(--md-sys-color-error)]"
+                  >
+                    {fieldError}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </fieldset>
       ) : null}
       <div className="space-y-2 text-sm">
@@ -325,11 +373,18 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
             data-coachmark={
               demo && !preview ? "demo-agreement-preview" : undefined
             }
-            disabled={
-              busy ||
-              !PlatformAgreementCompleteSchema.safeParse({ buyer }).success
-            }
-            onClick={() => void save(true)}
+            disabled={busy}
+            // 진짜 disabled 는 클릭을 받지 않아 "왜 안 눌리는지"를 알려 줄 수 없다.
+            // 흐리게만 두고, 누르면 문제 칸의 이유를 보여준 뒤 그 칸으로 옮긴다.
+            dimmed={!check.success}
+            onClick={() => {
+              if (!check.success) {
+                setBlocked(true);
+                requestFocus();
+                return;
+              }
+              void save(true);
+            }}
           >
             저장하고 미리보기
           </Button>
@@ -343,7 +398,9 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
           <Button
             variant="text"
             disabled={busy}
-            onClick={() => setReload((v) => v + 1)}
+            onClick={() =>
+              dirty ? setDiscard(true) : setReload((v) => v + 1)
+            }
           >
             최신 저장본 불러오기
           </Button>
@@ -409,6 +466,18 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
         description={`${view.signer.email}로 노온이 날인한 합의서를 보내요. 구매사 담당자만 서명해요.`}
         confirmLabel="서명 요청하기"
         onConfirm={() => void send(preview!.stamp)}
+      />
+      <ConfirmDialog
+        open={discard}
+        onOpenChange={setDiscard}
+        title="저장하지 않은 입력을 지우고 불러올까요?"
+        description="마지막으로 저장한 회사 정보로 바꿔요. 지금 입력한 내용은 사라져요."
+        confirmLabel="지우고 불러올게요"
+        cancelLabel="계속 수정하기"
+        onConfirm={() => {
+          setDiscard(false);
+          setReload((v) => v + 1);
+        }}
       />
     </section>
   );

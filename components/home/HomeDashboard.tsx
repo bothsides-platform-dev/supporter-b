@@ -10,7 +10,7 @@ import { TutorialNudge } from '@/components/onboarding/TutorialNudge';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckIcon, PlusIcon } from '@/components/icons';
+import { CheckIcon, FileTextIcon, PlusIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
@@ -19,6 +19,8 @@ const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
   buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
   pg: '구매사가 초대한 견적 요청이 여기에 표시돼요.',
 };
+
+const FIRST_RUN_DESC = '견적을 요청하면 PG사의 답변과 마감 일정이 여기에 표시돼요.';
 
 /** 홈 미리보기에서 보여줄 오픈 RFP 최대 개수. 나머지는 /opportunities 전체 보기. */
 const HOME_OPEN_RFP_PREVIEW = 5;
@@ -36,6 +38,8 @@ export function HomeDashboard({
   unreadCount: number;
   welcomeState?: 'welcome' | 'nudge' | 'none';
 }) {
+  // 한 번도 요청을 보내지 않은 구매사에게 "처리할 일이 없어요"는 틀린 말이다 — 아직 시작 전이다.
+  const firstRun = workspaceType === 'buyer' && dashboard.hasSentRequests === false;
   return (
     <div className="flex flex-col gap-4">
       <HomeHeaderActionsRegistrar />
@@ -67,9 +71,9 @@ export function HomeDashboard({
             <ActionQueue groups={dashboard.groups} />
           ) : (
             <EmptyState
-              icon={<CheckIcon />}
-              title="지금 처리할 일이 없습니다"
-              description={EMPTY_DESC[workspaceType]}
+              icon={firstRun ? <FileTextIcon /> : <CheckIcon />}
+              title={firstRun ? '아직 보낸 견적 요청이 없어요' : '지금 처리할 일이 없어요'}
+              description={firstRun ? FIRST_RUN_DESC : EMPTY_DESC[workspaceType]}
             />
           )}
           {OPEN_BOARD_ENABLED &&

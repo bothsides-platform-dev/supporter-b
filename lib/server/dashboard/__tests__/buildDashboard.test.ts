@@ -143,6 +143,20 @@ describe('buildPgDashboard — open RFP discovery', () => {
   });
 });
 
+describe('buildBuyerDashboard — 첫 요청 전 구분', () => {
+  it('요청이 없거나 작성 중 초안뿐이면 아직 보낸 요청이 없다고 본다', () => {
+    expect(buildBuyerDashboard([], new Map(), NOW).hasSentRequests).toBe(false);
+    expect(buildBuyerDashboard([rfp({ id: 'd', status: 'draft' })], new Map(), NOW).hasSentRequests).toBe(false);
+  });
+
+  it.each(['sent', 'closed', 'cancelled', 'awarded'] as const)(
+    '%s 요청이 하나라도 있으면 보낸 적이 있다고 본다',
+    (status) => {
+      expect(buildBuyerDashboard([rfp({ id: 's', status })], new Map(), NOW).hasSentRequests).toBe(true);
+    },
+  );
+});
+
 describe('buildBuyerDashboard — no open RFP discovery', () => {
   it('never surfaces open-RFP listings to buyers', () => {
     const dash = buildBuyerDashboard([], new Map(), NOW);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { acceptWorkspaceInviteAction } from '@/lib/server/actions/workspace/acceptWorkspaceInviteAction';
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
+import { errorLabel } from '@/lib/utils/error-label';
 
 const ERROR_LABELS: Record<string, string> = {
   INVITE_INVALID: '유효하지 않은 초대 링크예요.',
@@ -46,7 +47,7 @@ export function WorkspaceInviteAuthedClient({ token }: { token: string }) {
           초대 처리 실패
         </p>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          {ERROR_LABELS[error] ?? error}
+          {errorLabel(ERROR_LABELS, error, '초대를 처리하지 못했어요. 잠시 후 초대 링크를 다시 열어요.')}
         </p>
       </div>
     );

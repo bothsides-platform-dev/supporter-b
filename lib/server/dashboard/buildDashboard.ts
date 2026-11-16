@@ -16,6 +16,11 @@ export type Dashboard = {
   requests?: import('@/components/inbox/InboxList').InboxRow[];
   kpis: DashboardKpi[];
   groups: ActionGroup[];
+  /**
+   * 구매사가 견적 요청을 한 번이라도 보냈는지(작성 중 초안 제외). 홈의 빈 화면이
+   * "아직 시작 전"과 "다 처리함"을 구분하는 데 쓴다. PG dashboard 에는 없다.
+   */
+  hasSentRequests?: boolean;
   // PG 게시판 탐색 목록 (오픈 RFP). buyer dashboard 에는 없음.
   openRfps?: OpportunityListing[];
 };
@@ -78,7 +83,7 @@ export function buildBuyerDashboard(
     { id: 'unanswered', label: '견적 미도착', items: unansweredItems },
   ].filter((g) => g.items.length > 0);
 
-  return { kpis, groups };
+  return { kpis, groups, hasSentRequests: rfps.some((r) => r.status !== 'draft') };
 }
 
 export type PgDashRow = PgRequestStateInput & {

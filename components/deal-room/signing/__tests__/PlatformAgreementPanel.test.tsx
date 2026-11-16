@@ -134,3 +134,54 @@ it('발송 응답 유실 후에는 중복 요청 없이 발송 결과 확인으�
   expect(sendPlatformAgreementAction).toHaveBeenLastCalledWith({ contractId: 'c', stamp: 'recover' });
   expect(await screen.findByRole('status')).toHaveTextContent('서명 요청 이메일을 확인해 주세요');
 });
+
+it('회사 정보가 모자란 채 미리보기를 누르면 저장하지 않고 칸별 이유를 보여준 뒤 첫 문제 칸으로 옮긴다', async () => {
+  retryFixture();
+  const company = await screen.findByLabelText('구매사 상호');
+  const bizNo = screen.getByLabelText('구매사 사업자등록번호');
+  fireEvent.change(company, { target: { value: ' ' } });
+  fireEvent.change(bizNo, { target: { value: '123' } });
+  // 누르기 전에는 이유를 미리 보여주지 않는다.
+  expect(screen.queryByText('상호를 입력해요.')).toBeNull();
+  const preview = screen.getByRole('button', { name: '저장하고 미리보기' });
+  expect(preview).toBeEnabled();
+  fireEvent.click(preview);
+  expect(savePlatformAgreementAction).not.toHaveBeenCalled();
+  expect(company).toHaveAccessibleDescription('상호를 입력해요.');
+  expect(bizNo).toHaveAccessibleDescription('사업자등록번호 10자리를 숫자로 입력해요.');
+  expect(company).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByLabelText('구매사 주소')).not.toHaveAttribute('aria-invalid');
+  await waitFor(() => expect(company).toHaveFocus());
+  // 고친 칸의 이유는 바로 사라지고, 모두 고치면 저장으로 이어진다.
+  fireEvent.change(company, { target: { value: '고친 회사' } });
+  expect(screen.queryByText('상호를 입력해요.')).toBeNull();
+  expect(bizNo).toHaveAttribute('aria-invalid', 'true');
+  fireEvent.change(bizNo, { target: { value: '123-45-67890' } });
+  fireEvent.click(preview);
+  await waitFor(() => expect(savePlatformAgreementAction).toHaveBeenCalledTimes(1));
+});
+
+it('저장하지 않은 입력이 있으면 저장본을 불러오기 전에 확인하고, 계속 수정을 고르면 입력을 지킨다', async () => {
+  retryFixture();
+  const company = await screen.findByLabelText('구매사 상호');
+  fireEvent.change(company, { target: { value: '저장 전 회사' } });
+  fireEvent.click(screen.getByRole('button', { name: '최신 저장본 불러오기' }));
+  expect(await screen.findByRole('heading', { name: '저장하지 않은 입력을 지우고 불러올까요?' })).toBeVisible();
+  expect(loadPlatformAgreementAction).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: '계속 수정하기' }));
+  await waitFor(() => expect(screen.queryByRole('heading', { name: '저장하지 않은 입력을 지우고 불러올까요?' })).toBeNull());
+  expect(company).toHaveValue('저장 전 회사');
+  expect(loadPlatformAgreementAction).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: '최신 저장본 불러오기' }));
+  fireEvent.click(await screen.findByRole('button', { name: '지우고 불러올게요' }));
+  await waitFor(() => expect(loadPlatformAgreementAction).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByLabelText('구매사 상호')).toHaveValue('구매회사'));
+});
+
+it('고친 내용이 없으면 확인 없이 저장본을 바로 불러온다', async () => {
+  retryFixture();
+  await screen.findByLabelText('구매사 상호');
+  fireEvent.click(screen.getByRole('button', { name: '최신 저장본 불러오기' }));
+  await waitFor(() => expect(loadPlatformAgreementAction).toHaveBeenCalledTimes(2));
+  expect(screen.queryByRole('heading', { name: '저장하지 않은 입력을 지우고 불러올까요?' })).toBeNull();
+});
