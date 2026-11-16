@@ -5,6 +5,15 @@ import { TierContextHeader } from '../TierContextHeader';
 import { MERCHANT_TIER_LABELS, MERCHANT_TIERS } from '@/lib/types/bid';
 
 describe('TierContextHeader', () => {
+  it('다른 구간을 조회해도 구매사 등급은 바뀌지 않았음을 안내한다', () => {
+    const { rerender } = render(<TierContextHeader tier="general" buyerGrade="sme2" onTierChange={vi.fn()} />);
+    expect(screen.getByText('내 등급: 중소2')).toBeInTheDocument();
+    expect(screen.getByText(/다른 구간의 요율을 보고 있어요/)).toBeInTheDocument();
+    rerender(<TierContextHeader tier="sme2" buyerGrade="sme2" onTierChange={vi.fn()} />);
+    expect(screen.getByText('내 등급: 중소2')).toBeInTheDocument();
+    expect(screen.queryByText(/다른 구간의 요율을 보고 있어요/)).not.toBeInTheDocument();
+  });
+
   it('"기준 구간" 라벨이 렌더된다', () => {
     render(<TierContextHeader tier="general" onTierChange={vi.fn()} />);
     expect(screen.getByText('기준 구간')).toBeInTheDocument();

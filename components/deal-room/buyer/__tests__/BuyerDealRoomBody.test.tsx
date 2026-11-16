@@ -475,7 +475,7 @@ it('레거시 계약은 요약과 빈 계약 탭도 노출하지 않는다', () 
 });
 
 
-describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
+describe('BuyerDealRoomBody — 선정 진입점의 완료 화면', () => {
   function FocusPg() {
     const {setCounterparty} = useDealRoom();
     return <button onClick={() => setCounterparty({workspaceId:'ws-toss',name:'토스페이먼츠',type:'pg',logoUpdatedAt:null})}>PG 포커스</button>;
@@ -503,7 +503,7 @@ describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
     expect(awardRfpAction).toHaveBeenCalledTimes(2);
     expect(awardRfpAction).toHaveBeenLastCalledWith({ rfpId: baseRfp.id, awardedBidId: aBid.id });
   });
-  it.each(['비교', '레일'])('%s에서 성공하면 같은 완료 화면을 연다', async source => {
+  it.each(['비교', '레일', '하단'])('%s에서 성공하면 같은 완료 화면을 연다', async source => {
     const user = userEvent.setup();
     render(<><FocusPg /><BuyerDealRoomBody data={buildData({
       rfp:{...baseRfp,bizProfile:{bizNo:'1234567890',taxType:'general',status:'active',grade:'general',gradeSource:'user_confirmed'}},
@@ -511,11 +511,11 @@ describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
       pgWsById:{'ws-toss':{id:'ws-toss',name:'토스페이먼츠',type:'pg',logoUpdatedAt:null}},
     })} /></>);
     await user.click(screen.getByRole('button',{name:'영세로 비교'}));
-    if (source === '레일') {
+    if (source !== '비교') {
       await user.click(screen.getByRole('button',{name:'PG 포커스'}));
-      await user.click(screen.getByRole('button',{name:'선정'}));
+      await user.click(screen.getByRole('button',{name: source === '레일' ? '선정' : '이 견적 선정하기'}));
     }
-    await user.click(screen.getByRole('button',{name: source === '레일' ? '선정할게요' : '비교에서 선정 성공'}));
+    await user.click(screen.getByRole('button',{name: source !== '비교' ? '선정할게요' : '비교에서 선정 성공'}));
     expect(await screen.findByRole('dialog',{name:/최종 계약 조건 협의를.*마쳤어요/})).toBeVisible();
     expect(screen.getByText('토스페이먼츠 온보딩 담당자가 이메일을 보내드려요.')).toBeVisible();
     await user.click(screen.getByRole('button',{name:'선정한 조건 보기'}));

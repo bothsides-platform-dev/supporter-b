@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 type RequoteByPg = Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
 
 function BidTabStripImpl({
+  id,
   sortedBids,
   activeId,
   awardedBidId,
@@ -26,6 +27,7 @@ function BidTabStripImpl({
   onPeekEnter,
   onPeekLeave,
 }: {
+  id: string;
   sortedBids: Bid[];
   activeId: string;
   awardedBidId?: string | null;
@@ -41,21 +43,37 @@ function BidTabStripImpl({
 }) {
   return (
     <div className="relative">
-      <div role="tablist" className="flex flex-wrap gap-1 border-b border-[var(--md-sys-color-outline-variant)]">
+      <div role="tablist" aria-label="PG사 견적" className="flex flex-wrap gap-1 border-b border-[var(--md-sys-color-outline-variant)]">
         {sortedBids.map((bid) => {
           const isActive = bid.id === activeId;
           const isWinner = isAwarded && bid.id === awardedBidId;
           return (
             <button
               key={bid.id}
+              id={`${id}-${bid.id}`}
               role="tab"
               type="button"
               aria-selected={isActive}
+              aria-controls={`${id}-panel`}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => onSelect(bid.id)}
+              onKeyDown={(event) => {
+                const keys = ['ArrowRight', 'ArrowLeft', 'Home', 'End'];
+                if (!keys.includes(event.key)) return;
+                event.preventDefault();
+                const tabs = Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+                const index = tabs.indexOf(event.currentTarget);
+                const next = event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? tabs.length - 1
+                    : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+                tabs[next]?.focus();
+              }}
               onMouseEnter={() => onPeekEnter(bid.id)}
               onMouseLeave={() => onPeekLeave(bid.id)}
               className={cn(
-                'relative flex items-center gap-2 px-3 h-9 text-[13px] transition-colors cursor-pointer',
+                'relative flex min-h-11 min-w-0 max-w-full flex-wrap items-center gap-2 rounded-t-[6px] px-3 py-2 text-[14px] transition-colors cursor-pointer touch-manipulation focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--md-sys-color-primary)]',
                 isActive
                   ? 'text-[var(--md-sys-color-on-surface)] after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-[2px] after:bg-[var(--md-sys-color-primary)]'
                   : 'text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)]',
@@ -67,7 +85,7 @@ function BidTabStripImpl({
                 workspaceId={bid.pgWsId}
                 logoUpdatedAt={pgLogoFn(bid.pgWsId)}
               />
-              {pgName(bid.pgWsId)}
+              <span className="min-w-0 [overflow-wrap:anywhere]">{pgName(bid.pgWsId)}</span>
               {isAwarded && (
                 <Chip
                   label={isWinner ? '선정' : '미선정'}
@@ -78,8 +96,8 @@ function BidTabStripImpl({
                 <Chip
                   label={
                     requoteByPg[bid.pgWsId]!.status === 'pending'
-                      ? '재요청 후 응답 대기'
-                      : '재제출됨'
+                      ? '수정 견적 대기 중'
+                      : '수정 견적 도착'
                   }
                   color={requoteByPg[bid.pgWsId]!.status === 'pending' ? 'warning' : 'tertiary'}
                 />

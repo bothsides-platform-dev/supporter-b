@@ -12,7 +12,6 @@ import {
   cycleQuality,
 } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
-import { Divider } from '@/components/primitives/Divider';
 import { InfoTip } from '@/components/ui/info-tip';
 
 export type CurrentConditions = {
@@ -68,12 +67,14 @@ export function ImprovementSummary({
       : '지금 조건보다 이만큼 좋아져요';
 
   return (
-    <section>
-      <div className="flex items-center gap-3 mb-3">
-        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+    <section className="@container/summary">
+      <div className="mb-3 space-y-1">
+        <h2 className="text-[18px] font-semibold leading-snug tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] text-balance">
           {heading}
-        </span>
-        <Divider />
+        </h2>
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          수수료는 부가세 별도예요.
+        </p>
       </div>
 
       {!hasAnyCurrent && showCurrentHint && (
@@ -84,11 +85,12 @@ export function ImprovementSummary({
 
       {/* 라벨·현재값·화살표·제안값·개선폭을 5열 그리드로 묶어 행끼리 열을 정렬한다.
           각 행은 grid-cols-subgrid 로 부모 열을 그대로 물려받아 같은 세로선에 맞춰진다. */}
-      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 border-t border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)] max-md:block">
+      <dl className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] gap-x-4 divide-y divide-[var(--md-sys-color-outline-variant)] @max-[620px]/summary:block">
         {
           <MetricRow
             testId="metric-row-card"
             label="카드 수수료"
+            emphasized
             infoTerm="수수료율"
             currentText={formatFeeRateDisplay(current.feeRate)}
             proposedText={
@@ -139,7 +141,7 @@ export function ImprovementSummary({
           proposedText={formatCondition(bidConditions(bid).signupFee)}
           proposedNumeric={bidConditions(bid).signupFee.state === 'confirmed'}
         />
-      </div>
+      </dl>
     </section>
   );
 }
@@ -200,6 +202,7 @@ function MetricRow({
   proposedFlash,
   proposedFlashTestId,
   proposedNumeric = true,
+  emphasized = false,
 }: {
   testId: string;
   label: string;
@@ -218,52 +221,59 @@ function MetricRow({
   proposedFlashTestId?: string;
   /** 제안값이 금액·요율이 아니라 상태어('없어요')면 false — mono/tabular 를 벗긴다. */
   proposedNumeric?: boolean;
+  emphasized?: boolean;
 }) {
   return (
     <div
       data-testid={testId}
-      className="col-span-full grid grid-cols-subgrid items-center py-2.5 max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] max-md:gap-x-3 max-md:gap-y-1 max-md:py-3"
+      className={cn(
+        'col-span-full grid grid-cols-subgrid items-center py-4 @max-[620px]/summary:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @max-[620px]/summary:gap-x-3 @max-[620px]/summary:gap-y-2',
+        emphasized && 'mb-1 rounded-[6px] bg-[var(--md-sys-color-surface-container-low)] px-4 @max-[620px]/summary:py-3',
+      )}
     >
-      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] max-md:col-span-2">
+      <dt className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)] @max-[620px]/summary:col-span-2">
         {label}
         {infoTerm && <InfoTip term={infoTerm} className="ml-0.5" />}
         {labelNote && (
-          <span className="block text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="mt-1 block text-[13px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
             {labelNote}
           </span>
         )}
-      </span>
+      </dt>
       {currentText ? (
-        <span className="text-[13px] text-right text-[var(--md-sys-color-on-surface-variant)] max-md:min-w-0 max-md:text-left max-md:[overflow-wrap:anywhere]">
-          <span className="hidden text-[12px] max-md:block">현재</span>
+        <dd className="min-w-0 text-[14px] text-right text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere] @max-[620px]/summary:text-left">
+          <span className="mb-1 block text-[12px]">현재 조건</span>
           <span className="md-numeric">{currentText}</span>
-        </span>
+        </dd>
       ) : (
-        <span className="max-md:hidden" />
+        <dd aria-hidden="true" className="@max-[620px]/summary:hidden" />
       )}
       {currentText ? (
-        <span
+        <dd
+          aria-hidden="true"
           data-testid="metric-arrow"
-          className="text-center text-[var(--md-sys-color-on-surface-variant)] max-md:hidden"
+          className="text-center text-[var(--md-sys-color-on-surface-variant)] @max-[620px]/summary:hidden"
         >
           →
-        </span>
+        </dd>
       ) : (
-        <span className="max-md:hidden" />
+        <dd aria-hidden="true" className="@max-[620px]/summary:hidden" />
       )}
-      <span
+      <dd
         data-testid={proposedFlashTestId}
         className={cn(
-          'text-[13px] font-[600] text-[var(--md-sys-color-on-surface)] max-md:min-w-0 max-md:[overflow-wrap:anywhere]',
+          'min-w-0 font-semibold text-[var(--md-sys-color-on-surface)] [overflow-wrap:anywhere]',
+          emphasized ? 'text-[26px] leading-tight' : 'text-[16px]',
+          !currentText && '@max-[620px]/summary:col-span-2',
           proposedFlash && 'tier-flash',
         )}
       >
-        <span className="hidden text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)] max-md:block">
-          제안
+        <span className="mb-1 block text-[12px] font-normal leading-normal text-[var(--md-sys-color-on-surface-variant)]">
+          받은 견적
         </span>
         <span className={cn(proposedNumeric && 'md-numeric')}>{proposedText}</span>
-      </span>
-      <span className="max-md:col-span-2 max-md:justify-self-end">{trailing}</span>
+      </dd>
+      <dd aria-hidden={!trailing || undefined} className="@max-[620px]/summary:col-span-2 @max-[620px]/summary:justify-self-end">{trailing}</dd>
     </div>
   );
 }
