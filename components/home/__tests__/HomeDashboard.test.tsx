@@ -174,3 +174,19 @@ it('shows the five earliest response deadlines with the total and full-list link
   expect(screen.getByRole('link', { name: '응답 필요 6건' })).toHaveAttribute('href', '/inbox?status=response');
   expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/inbox?status=response');
 });
+
+it('PG 홈의 응답 필요 표도 집계 시각 기준으로 남은 시간을 먼저 보여준다', () => {
+  render(
+    <HomeDashboard
+      dashboard={{
+        ...empty,
+        now: '2026-11-18T09:00:00+09:00',
+        requests: [{ invitationId: 'i', stage: 'received', rfpId: 'P-1', rfpTitle: '교육 결제', grade: '영세', rfpDeadline: '2026-11-18T18:00:00+09:00' }],
+      }}
+      workspaceType="pg"
+      items={[]}
+      unreadCount={0}
+    />,
+  );
+  expect(screen.getByTestId('time-left')).toHaveTextContent('9시간 남음');
+});

@@ -87,6 +87,33 @@ describe('InboxList', () => {
     expect(screen.getByText('미선정')).toBeInTheDocument();
   });
 
+  it('서버 시각이 있으면 응답이 필요한 행에 남은 시간을 먼저 보여준다', () => {
+    const now = new Date('2026-11-18T09:00:00+09:00');
+    render(
+      <InboxList
+        rows={[{ ...row, rfpDeadline: '2026-11-18T18:00:00+09:00', bidWindowOpen: true }]}
+        now={now.toISOString()}
+      />,
+    );
+    expect(screen.getByTestId('time-left')).toHaveTextContent('9시간 남음');
+    // 절대 시각(KST)은 그대로 남긴다.
+    expect(screen.getByText('2026-11-18 18:00 KST')).toBeInTheDocument();
+  });
+
+  it('응답이 필요 없는 행(보낸 견적)이나 서버 시각이 없으면 남은 시간을 그리지 않는다', () => {
+    const deadline = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    const { unmount } = render(
+      <InboxList
+        rows={[{ ...row, stage: 'submitted', bidId: 'bid-1', rfpDeadline: deadline }]}
+        now={new Date().toISOString()}
+      />,
+    );
+    expect(screen.queryByTestId('time-left')).toBeNull();
+    unmount();
+    render(<InboxList rows={[{ ...row, rfpDeadline: deadline }]} />);
+    expect(screen.queryByTestId('time-left')).toBeNull();
+  });
+
   it('received 단계는 작성중이 아닌 신규로 표시', () => {
     render(<InboxList rows={[row]} />);
     expect(screen.queryByText('작성중')).not.toBeInTheDocument();

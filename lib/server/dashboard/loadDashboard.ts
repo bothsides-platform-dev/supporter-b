@@ -29,6 +29,7 @@ export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
   const rows = pgInboxDataToRows(data);
   return {
     ...buildPgDashboard(rows.map(r => ({ ...r, rfpCode: r.rfpId })), now, openRfps),
+    now: now.toISOString(),
     requests: rows.filter(r => pgRequestState(r, now.getTime()).needsResponse)
       .sort((a, b) => Date.parse(a.rfpDeadline) - Date.parse(b.rfpDeadline)),
   };

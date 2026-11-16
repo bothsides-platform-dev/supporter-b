@@ -25,6 +25,7 @@ export function InboxPageContent({
   pages = 1,
   filteredCount,
   industries = [],
+  now,
 }: {
   rows: InboxRow[];
   totalCount: number;
@@ -37,6 +38,8 @@ export function InboxPageContent({
   pages?: number;
   filteredCount?: number;
   industries?: string[];
+  /** 서버가 정한 현재 시각(ISO) — 목록의 남은 시간 표시 기준. */
+  now?: string;
 }) {
   const router = useRouter();
   const sp = useNavSearchParams();
@@ -237,6 +240,7 @@ export function InboxPageContent({
               selected={selected}
               compact={!!selected}
               active={active}
+              now={now}
             />
           ) : (
             <EmptyState

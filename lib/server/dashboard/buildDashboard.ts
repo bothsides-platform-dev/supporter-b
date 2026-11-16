@@ -1,6 +1,6 @@
 // Pure dashboard aggregation. No DB/IO — repos are read by loadDashboard.ts.
-// `now` is injected for deterministic tests (formatDeadline uses Date.now() and
-// is not injectable, so we use a local now-based badge helper instead).
+// `now` is injected for deterministic tests; D-day badges use the shared
+// KST calendar-day formatter so home and lists show the same number.
 import { pgRequestState, type PgRequestStateInput } from '@/lib/rfp/pg-request-state';
 import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import type { RFP } from '@/lib/types/rfp';
@@ -8,6 +8,7 @@ import type { Bid } from '@/lib/types/bid';
 import type { OpportunityListing } from '@/lib/types/pg-request';
 import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
+import { formatDeadline } from '@/lib/utils/format';
 
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
 export type ActionItem = { id: string; href: string; title: string; badge: string; actionLabel?: string };
@@ -23,6 +24,8 @@ export type Dashboard = {
   hasSentRequests?: boolean;
   // PG 게시판 탐색 목록 (오픈 RFP). buyer dashboard 에는 없음.
   openRfps?: OpportunityListing[];
+  /** 집계 시각(ISO). 목록이 남은 시간을 서버와 같은 기준으로 그리게 넘긴다. */
+  now?: string;
 };
 
 const DAY = 86_400_000;
@@ -42,10 +45,12 @@ function daysSince(iso: string, now: Date): number {
   return Math.floor((now.getTime() - new Date(iso).getTime()) / DAY);
 }
 
-/** now 주입형 마감 뱃지 — 'D-n' 또는 '마감'(지남). */
+/**
+ * now 주입형 마감 뱃지 — KST 달력일 기준 'D-n' 또는 '마감'.
+ * 예전엔 ms 차이를 올림해 마감 당일(18:00) 오전에 'D-1' 로 보였다.
+ */
 function deadlineBadge(deadline: string, now: Date): string {
-  const diff = Math.ceil((new Date(deadline).getTime() - now.getTime()) / DAY);
-  return diff < 0 ? '마감' : `D-${diff}`;
+  return formatDeadline(deadline, now);
 }
 
 export function buildBuyerDashboard(

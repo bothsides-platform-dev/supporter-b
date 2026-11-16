@@ -144,6 +144,25 @@ describe('buildPgDashboard — open RFP discovery', () => {
   });
 });
 
+describe('마감 배지 — KST 달력일', () => {
+  // 예전엔 ms 차이를 올림해 마감 당일(18:00) 오전에도 'D-1' 이었다.
+  it('마감 당일 오전에는 D-0 이다 (구매사·PG 홈 모두)', () => {
+    const now = new Date('2026-11-18T09:00:00+09:00');
+    const deadline = '2026-11-18T18:00:00+09:00';
+    const buyer = buildBuyerDashboard(
+      [rfp({ id: 'today', deadline, sentAt: '2026-11-11T09:00:00+09:00' })],
+      new Map([['today', 0]]),
+      now,
+    );
+    expect(buyer.groups.find((g) => g.id === 'due')!.items[0].badge).toBe('D-0');
+    const pg = buildPgDashboard(
+      [{ invitationId: 'i', rfpCode: 'P-1', rfpTitle: '요청', stage: 'received', rfpDeadline: deadline } as PgDashRow],
+      now,
+    );
+    expect(pg.groups[0].items[0].badge).toBe('D-0');
+  });
+});
+
 describe('buildBuyerDashboard — KPI 와 목록 필터', () => {
   // KPI 를 눌러 열린 목록의 행 수가 KPI 숫자와 같아야 한다 — 예전엔 필터 없는 /rfp 로 가서 전체가 나왔다.
   it('견적 검토대기 KPI 는 같은 집합을 거르는 목록으로 이동한다', () => {

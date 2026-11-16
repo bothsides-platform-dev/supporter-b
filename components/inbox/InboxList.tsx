@@ -8,7 +8,7 @@ import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDateTime, formatKRW } from '@/lib/utils/format';
+import { formatDateTime, formatKRW, formatTimeLeft } from '@/lib/utils/format';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import type { PgReview } from '@/lib/rfp/pg-matching';
 import type { RfpStatus } from '@/lib/types/rfp';
@@ -59,6 +59,7 @@ export function InboxList({
   selected,
   compact = false,
   active = -1,
+  now,
 }: {
   rows: InboxRow[];
   onOpenRfp?: (rfpId: string, tab?: 'write') => void;
@@ -66,6 +67,11 @@ export function InboxList({
   compact?: boolean;
   /** 키보드로 강조한 행의 위치. 열기(미리보기)와 다르다 — 강조만으로는 열람 처리하지 않는다. */
   active?: number;
+  /**
+   * 서버가 정한 현재 시각(ISO). 있으면 응답이 필요한 행에 남은 시간을 먼저 보여준다.
+   * 렌더 중에 Date.now() 로 계산하면 서버·클라이언트 문구가 갈려 하이드레이션이 깨진다.
+   */
+  now?: string;
 }) {
   const router = useRouter();
   const demoNavigate = useDemoNavigate();
@@ -118,7 +124,10 @@ export function InboxList({
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const state = pgRequestState(row);
+            // 서버 시각이 있으면 상태와 남은 시간을 같은 시각으로 판정한다.
+            const state = pgRequestState(row, now ? Date.parse(now) : undefined);
+            const timeLeft =
+              now && state.needsResponse ? formatTimeLeft(row.rfpDeadline, new Date(now)) : null;
             const methods = [
               ...(row.requiredPaymentMethods ?? []).map((m) => PAYMENT_METHOD_LABELS[m]),
               ...(row.customPaymentMethods ?? []).map((m) => m.label),
@@ -192,7 +201,15 @@ export function InboxList({
                   </p>
                 </td>
                 <td className="px-3 py-4">
-                  <time dateTime={row.rfpDeadline} className="md-numeric block text-[13px]">
+                  {timeLeft && (
+                    <p data-testid="time-left" className="md-numeric mb-0.5 text-[14px] font-medium">
+                      {timeLeft}
+                    </p>
+                  )}
+                  <time
+                    dateTime={row.rfpDeadline}
+                    className={`md-numeric block text-[13px] ${timeLeft ? 'text-[var(--md-sys-color-on-surface-variant)]' : ''}`}
+                  >
                     {formatDateTime(row.rfpDeadline)} KST
                   </time>
                 </td>
