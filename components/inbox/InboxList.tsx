@@ -7,6 +7,7 @@ import type { PgContractState } from '@/lib/signing/pg-contract-action';
 import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import { Chip } from '@/components/primitives/Chip';
+import { Button } from '@/components/primitives/Button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDateTime, formatKRW, formatTimeLeft } from '@/lib/utils/format';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
@@ -215,13 +216,15 @@ export function InboxList({
                 </td>
                 {!compact && (
                   <td className="px-3 py-4">
-                    <button
+                    <Button
                       type="button"
+                      variant="outlined"
+                      size="lg"
                       onClick={() => open(row.rfpId, state.tab === 'write' ? 'write' : undefined)}
-                      className="min-h-9 whitespace-nowrap rounded-[6px] border border-[var(--md-sys-color-outline)] px-2 text-[var(--md-sys-color-primary)] focus-visible:outline-2"
+                      className="whitespace-nowrap"
                     >
                       {state.actionLabel}
-                    </button>
+                    </Button>
                   </td>
                 )}
               </tr>
