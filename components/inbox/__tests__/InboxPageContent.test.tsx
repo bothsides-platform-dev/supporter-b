@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -73,6 +73,35 @@ describe('InboxPageContent 키보드 이동', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '견적 작성' })[0]);
     expect(push).toHaveBeenCalledTimes(1);
     expect(push).toHaveBeenCalledWith('/inbox/P-2611-0001?tab=write', { scroll: false });
+  });
+
+  // 미리보기가 열리면 포커스는 미리보기에 있다. 방향키는 본문 스크롤이고, 좁은 화면에선 목록이 숨겨져 있다.
+  it('미리보기가 열려 있으면 목록 키를 받지 않는다', () => {
+    render(
+      <InboxPageContent
+        rows={rows}
+        totalCount={2}
+        order={rows.map((r) => r.rfpId)}
+        selected="P-2611-0001"
+        preview={<p>미리보기 본문</p>}
+      />,
+    );
+    const panel = screen.getByRole('complementary', { name: '견적 요청 미리보기' });
+    const down = createEvent.keyDown(panel, { key: 'ArrowDown' });
+    fireEvent(panel, down);
+    expect(down.defaultPrevented).toBe(false);
+    fireEvent.keyDown(panel, { key: 'j' });
+    expect(rowOf('둘째 요청')).toHaveAttribute('data-active', 'false');
+    expect(rowOf('첫 요청')).toHaveAttribute('data-active', 'false');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('글자를 드래그해 고른 클릭은 행을 열지 않는다', () => {
+    const selection = vi.spyOn(window, 'getSelection').mockReturnValue({ toString: () => 'P-2611-0002' } as Selection);
+    render(<InboxPageContent rows={rows} totalCount={2} order={rows.map((r) => r.rfpId)} />);
+    fireEvent.click(screen.getByText('P-2611-0002'));
+    expect(push).not.toHaveBeenCalled();
+    selection.mockRestore();
   });
 
   it('랜딩 데모에서는 문서 키를 가로채지 않는다', () => {

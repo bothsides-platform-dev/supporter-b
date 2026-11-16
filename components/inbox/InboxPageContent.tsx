@@ -99,6 +99,8 @@ export function InboxPageContent({
   };
   // J/K·방향키는 강조만 옮기고, 미리보기(=열람 처리)는 Enter·클릭으로만 연다.
   // 랜딩 데모에서는 문서 전체 키를 가로채면 방문자의 페이지 조작을 빼앗으므로 끈다.
+  // 미리보기가 열려 있으면 키는 미리보기의 것이다 — 방향키로 본문을 읽고, 다른 요청은
+  // 이전/다음 요청·Esc 로 옮긴다(좁은 화면에서는 목록이 숨겨져 있기도 하다).
   const { active } = useListNavigation(
     rows.length,
     {
@@ -109,7 +111,7 @@ export function InboxPageContent({
           ?.querySelector<HTMLElement>(`[data-inbox-row="${CSS.escape(rows[i].rfpId)}"]`)
           ?.focus(),
     },
-    { enabled: !demoNavigate },
+    { enabled: !demoNavigate && !selected },
   );
   const index = (order ?? []).indexOf(selected ?? '');
   return (

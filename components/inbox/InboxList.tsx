@@ -141,6 +141,8 @@ export function InboxList({
                 // 행 어디를 눌러도 제목을 누른 것과 같다. 키보드 사용자는 제목 버튼으로 같은 일을 한다.
                 onClick={(e) => {
                   if (e.target instanceof Element && e.target.closest(ROW_CONTROL)) return;
+                  // 요청 번호 등을 드래그해 고른 클릭은 복사하려는 것이다 — 열면 열람 처리된다.
+                  if (window.getSelection()?.toString()) return;
                   open(row.rfpId);
                 }}
                 className={`cursor-pointer border-t border-[var(--md-sys-color-outline-variant)] align-top ${selected === row.rfpId ? 'bg-[var(--md-sys-color-primary-container)]' : 'hover:bg-[var(--md-sys-color-surface-container-low)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)]'}`}
