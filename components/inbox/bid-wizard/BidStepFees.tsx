@@ -69,11 +69,6 @@ export function BidStepFees({
         onChange={(value) => onCondition(key, value)}
       />
     ) : null;
-  const tieredCellCount = tieredGroups.reduce(
-    (n, g) => n + g.methods.length * MERCHANT_TIERS.length,
-    0,
-  );
-  const totalUnits = tieredCellCount + singleMethods.length + customPaymentMethods.length;
   const filledUnits =
     tieredGroups.reduce(
       (n, g) =>
@@ -94,11 +89,19 @@ export function BidStepFees({
           카드와 간편결제는 구간(영세~일반)별로 입력해요. 1칸 이상의 확정 수수료가 필요해요.
           수수료는 부가세 별도예요.
         </p>
+        {/* 필요한 것은 확정 수수료 1칸이다. `1/20` 처럼 전체 칸 수를 분모로 두면 덜 끝낸 것처럼
+            읽혀, 필요한 만큼 채웠는지를 먼저 말하고 입력한 칸 수만 덧붙인다. */}
         <span
           data-testid="fees-count"
-          className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]"
+          className="shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]"
         >
-          {filledUnits}/{totalUnits}
+          {filledUnits > 0 ? (
+            <>
+              필요한 만큼 입력했어요 · <span className="md-numeric">{filledUnits}</span>칸
+            </>
+          ) : (
+            '1칸 이상 입력해요'
+          )}
         </span>
       </div>
 
