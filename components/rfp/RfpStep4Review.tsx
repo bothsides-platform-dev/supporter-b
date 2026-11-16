@@ -18,6 +18,7 @@ import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { DEADLINE_ERROR_MESSAGES } from '@/lib/rfp/deadline-errors';
+import { errorLabel } from '@/lib/utils/error-label';
 import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 import { WizardActionBar } from './WizardActionBar';
 import { reviewBackPane, isReviewBackShortcut } from './MatchingReviewLayout';
@@ -178,7 +179,7 @@ function ReviewContent({
         <RfpStep3PgSelect pgList={pgList} recommendedPgIds={selectedIndustry?.pgWorkspaceIds} industryName={selectedIndustry?.name} showFieldErrors={attempted || showFieldErrors} />
       </div>}
 
-      <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />
+      <FieldError error={serverError ? errorLabel(ERROR_MESSAGES, serverError, '견적 요청을 보내지 못했어요. 입력한 내용을 확인한 뒤 다시 시도해요.') : undefined} />
 
       {!persistentActions && <ReviewActions {...actions} matching={matching} sampleMode={sampleMode} serverError={serverError} showFieldErrors={showFieldErrors} persistentActions={false} pgList={pgList} industryGroups={industryGroups} bizProfile={bizProfile} workspaceName={workspaceName} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={onAttempt} />}
     </div>

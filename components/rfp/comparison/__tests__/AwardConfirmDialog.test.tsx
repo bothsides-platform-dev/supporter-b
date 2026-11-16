@@ -158,15 +158,19 @@ describe('AwardConfirmDialog', () => {
     await waitFor(() => expect(onAwarded).toHaveBeenCalled());
   });
 
-  it('surfaces the error and does not notify the parent when the action fails', async () => {
-    awardRfpAction.mockResolvedValue({ ok: false, error: '마감된 견적 요청' });
+  // 서버의 상태 전이 실패는 `INVALID_TRANSITION: <내부 사유>` 로 온다. 코드는 화면에 내보내지 않는다.
+  it('알 수 없는 실패 코드는 그대로 보여주지 않고 안내 문구로 알리며 부모에 알리지 않는다', async () => {
+    awardRfpAction.mockResolvedValue({ ok: false, error: 'INVALID_TRANSITION: closed -> awarded' });
     const onAwarded = vi.fn();
     renderDialog({ onAwarded });
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: '선정할게요' }));
 
-    expect(await screen.findByText(/마감된 견적 요청/)).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '선정하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.',
+    );
+    expect(screen.queryByText(/INVALID_TRANSITION|closed -> awarded/)).not.toBeInTheDocument();
     expect(onAwarded).not.toHaveBeenCalled();
   });
 

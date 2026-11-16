@@ -47,7 +47,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect, estimat
     <div className="space-y-4">
       <div className="space-y-2">
         <Chip label={blocked ? '접수 불가' : risk === 'gray' ? '추가 검토' : risk === 'white' ? '일반 업종' : '확인 필요'} color={blocked ? 'error' : risk === 'white' ? 'tertiary' : 'warning'} />
-        <h3 className="text-[16px] font-semibold">{blocked ? '입력한 사업은 현재 신청을 진행하기 어려워요' : risk === 'gray' ? '입점 조건을 추가로 확인해야 해요' : available ? '사업에 맞는 PG사를 추천했어요' : '상담 가능한 PG사를 확인하고 있어요'}</h3>
+        <h3 className="text-[16px] font-semibold">{blocked ? '입력한 사업은 현재 신청을 진행하기 어려워요' : risk === 'gray' ? '입점 조건을 추가로 확인해야 해요' : available ? '사업에 맞는 PG사를 추천했어요' : '지금은 상담할 수 있는 PG사를 찾지 못했어요'}</h3>
         <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{available ? '상담할 PG사 한 곳을 골라주세요. PG사 검토 후 받은 견적을 확인하고 최종 선정할 수 있어요.' : '입력한 업종을 다시 확인하거나 운영팀에 문의해주세요.'}</p>
       </div>
       {available ? <>

@@ -33,6 +33,26 @@ const fullCurrent = {
 afterEach(cleanup);
 
 describe('ImprovementSummary', () => {
+  it('작성 화면과 같은 용어 설명을 수수료·정산주기·정산한도 행에 붙인다', () => {
+    render(<ImprovementSummary bid={makeBid()} current={fullCurrent} />);
+    expect(
+      within(screen.getByTestId('metric-row-card')).getByRole('button', { name: '수수료율 설명' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('metric-row-cycle')).getByRole('button', { name: '정산 주기 설명' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('metric-row-limit')).getByRole('button', { name: '정산한도 설명' }),
+    ).toBeInTheDocument();
+  });
+
+  // 용어집의 보증보험 설명은 보험료율·금액의 유불리를 말한다. 비교 화면은 중립 표기 규칙을 따른다.
+  it('보증보험·가입비 행에는 용어 설명을 붙이지 않는다', () => {
+    render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    expect(within(screen.getByTestId('metric-row-guarantee')).queryByRole('button')).toBeNull();
+    expect(within(screen.getByTestId('metric-row-signup')).queryByRole('button')).toBeNull();
+  });
+
   it('보증보험 금액은 감소해도 감면으로 평가하지 않는다', () => {
     render(
       <ImprovementSummary

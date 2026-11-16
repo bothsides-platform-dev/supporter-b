@@ -65,6 +65,7 @@ async function InboxListPageLoader({
       {...result}
       totalCount={allRows.length}
       selected={params.selected}
+      now={new Date().toISOString()}
       industries={[
         ...new Set(allRows.flatMap((r) => (r.industryName ? [r.industryName] : []))),
       ].sort()}

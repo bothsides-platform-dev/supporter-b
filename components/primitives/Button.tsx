@@ -103,6 +103,36 @@ function variantClasses(variant: ButtonVariant, color: ButtonColor): string {
   }
 }
 
+/**
+ * 버튼 모양 클래스. 다른 화면으로 **이동**하는 주·보조 행동은 `<button>` 이 아니라 링크여야
+ * 하므로(새 탭 열기·주소 복사), `next/link` 에 이 클래스를 준다. `<Link><Button/></Link>` 처럼
+ * 링크 안에 버튼을 넣으면 Tab 이 두 번 멈추고 화면 낭독기가 두 요소를 읽는다.
+ */
+export function buttonClassName({
+  variant = 'filled',
+  size = 'md',
+  color = 'primary',
+  fullWidth = false,
+  dimmed = false,
+  className,
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  color?: ButtonColor;
+  fullWidth?: boolean;
+  dimmed?: boolean;
+  className?: string;
+} = {}): string {
+  return cn(
+    base,
+    sizeMap[size],
+    variantClasses(variant, color),
+    fullWidth && 'w-full',
+    dimmed && 'opacity-38',
+    className,
+  );
+}
+
 export function Button({
   variant = 'filled',
   size = 'md',
@@ -117,14 +147,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={cn(
-        base,
-        sizeMap[size],
-        variantClasses(variant, color),
-        fullWidth && 'w-full',
-        dimmed && 'opacity-38',
-        className,
-      )}
+      className={buttonClassName({ variant, size, color, fullWidth, dimmed, className })}
       {...props}
     >
       {icon && <span className="[&_svg]:size-4 shrink-0">{icon}</span>}

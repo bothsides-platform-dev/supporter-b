@@ -18,6 +18,30 @@ function setup(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
   return { onFee };
 }
 
+describe('BidStepFees 진행 표시', () => {
+  // 필요한 것은 확정 수수료 1칸이다 — 전체 칸 수를 분모로 보여주면 덜 끝낸 것처럼 읽힌다.
+  it('아직 입력한 칸이 없으면 1칸 이상 입력하라고 말한다', () => {
+    setup();
+    expect(screen.getByTestId('fees-count')).toHaveTextContent('1칸 이상 입력해요');
+  });
+
+  it('1칸이라도 채우면 필요한 만큼 입력했다고 말하고 전체 칸 수를 분모로 쓰지 않는다', () => {
+    setup({ fees: { 'card:general': '2.1', 'naver_pay:general': '2.3' } });
+    const count = screen.getByTestId('fees-count');
+    expect(count).toHaveTextContent('필요한 만큼 입력했어요 · 2칸');
+    expect(count.textContent).not.toMatch(/\//);
+  });
+
+  it('협의 필요로 고른 칸은 확정 수수료로 세지 않는다', () => {
+    setup({
+      fees: { 'card:general': '2.1' },
+      conditionStates: { 'card:general': 'negotiable' },
+      onCondition: vi.fn(),
+    });
+    expect(screen.getByTestId('fees-count')).toHaveTextContent('1칸 이상 입력해요');
+  });
+});
+
 describe('BidStepFees 구간 매트릭스', () => {
   it('카드·간편결제는 5구간 컬럼 헤더를 보여준다', () => {
     setup();

@@ -21,6 +21,7 @@ import { LONG_TERM_AGREEMENTS_ENABLED } from '@/lib/features/long-term-agreement
 import { AgreementConditions } from '@/components/deal-room/signing/AgreementConditions';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { formatKRW, formatPct } from '@/lib/utils/format';
+import { errorLabel } from '@/lib/utils/error-label';
 
 const AWARD_ERROR_LABELS: Record<string, string> = {
   WINNING_BID_OUTDATED: '최신 견적이 도착했어요. 화면을 새로고침한 뒤 최신 견적을 골라 주세요.',
@@ -143,7 +144,7 @@ export function AwardConfirmDialog({
 
         {error && (
           <p role="alert" className="md-label-small text-[var(--md-sys-color-error)]">
-            {AWARD_ERROR_LABELS[error] ?? `처리 실패 — ${error}`}
+            {errorLabel(AWARD_ERROR_LABELS, error, '선정하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.')}
           </p>
         )}
 

@@ -159,7 +159,7 @@ export const demoDashboard: Dashboard = {
     { id: 'active', label: '진행 중', value: 3, href: '/rfp?status=active' },
     { id: 'due', label: '마감 임박', value: 1, href: '/rfp?status=active' },
     { id: 'review', label: '견적 검토 대기', value: 2, href: '/rfp?status=review' },
-    { id: 'awarded', label: '선정 완료', value: 5, href: '/rfp?status=awarded' },
+    { id: 'awarded', label: '선정 완료', value: 5, href: '/rfp?status=closed' },
   ],
   groups: [
     {

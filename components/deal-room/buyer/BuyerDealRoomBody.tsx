@@ -47,6 +47,7 @@ import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSumma
 import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
+import { rfpActionErrorMessage } from '@/lib/rfp/action-errors';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -180,6 +181,7 @@ export function BuyerDealRoomBody({
             rfpCode={rfp.code}
             requoteByPg={requoteByPg}
             buyerGrade={rfp.bizProfile?.grade}
+            contractType={rfp.contractType}
             invitedPgCount={invitedPgCount}
             draftPgCount={draftPgCount}
             deadline={rfp.deadline}
@@ -340,7 +342,7 @@ export function BuyerDealRoomBody({
           try {
             const r = await (demo ? demo.close('closed') : closeRfpAction({ rfpId: rfp.code }));
             if (!r.ok) {
-              toast(`마감하지 못했어요 — ${r.error}`, { type: 'error' });
+              toast(rfpActionErrorMessage(r.error, '종료하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.'), { type: 'error' });
               return;
             }
             setCloseOpen(false);
@@ -365,7 +367,7 @@ export function BuyerDealRoomBody({
           try {
             const r = await (demo ? demo.close('cancelled') : cancelRfpAction({ rfpId: rfp.code }));
             if (!r.ok) {
-              toast(`취소하지 못했어요 — ${r.error}`, { type: 'error' });
+              toast(rfpActionErrorMessage(r.error, '취소하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.'), { type: 'error' });
               return;
             }
             setCancelOpen(false);

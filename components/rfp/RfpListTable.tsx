@@ -7,7 +7,8 @@ import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
-import { formatDate } from '@/lib/utils/format';
+import { formatDate, formatDeadline } from '@/lib/utils/format';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { buyerRfpChip, type BuyerRfpProgress } from '@/lib/rfp/rfp-status';
 
@@ -98,6 +99,12 @@ export function RfpListTable({ rfps, onOpenRfp, progressByRfpId, now }: Props) {
                 </Link>
               </td>
               <td className="px-3 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)] max-md:order-3 max-md:p-0 max-md:text-right">
+                {/* 견적을 받고 있는 요청만 남은 날을 앞에 둔다. 홈 배지와 같은 KST 달력일 계산이다. */}
+                {isRfpBidWindowOpen(rfp, currentTime) && (
+                  <span className="text-[var(--md-sys-color-on-surface)]">
+                    {formatDeadline(rfp.deadline, new Date(currentTime))} ·{' '}
+                  </span>
+                )}
                 {formatDate(rfp.deadline)}
               </td>
               <td className="px-3 py-4 max-md:order-4 max-md:p-0">

@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
   { value: 'active', label: '진행중' },
+  { value: 'review', label: '검토 대기' },
   { value: 'closed', label: '마감' },
 ];
 const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
@@ -65,7 +66,11 @@ async function RfpListPageLoader({
 }) {
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
-  const rfps = filterRfps(allRfps, params, now);
+  // 검토 대기는 견적 도착 여부로 거르므로 필터 전에 sent 요청의 견적 수가 필요하다.
+  const reviewCounts = params.status === 'review'
+    ? await (await getBidRepo()).countSubmittedByRfpIds(allRfps.filter((rfp) => rfp.status === 'sent').map((rfp) => rfp.id))
+    : undefined;
+  const rfps = filterRfps(allRfps, params, now, reviewCounts);
   const rfpIds = rfps.map((rfp) => rfp.id);
   const [bidCounts, reviewStatuses] = await Promise.all([
     (await getBidRepo()).countSubmittedByRfpIds(rfpIds),
