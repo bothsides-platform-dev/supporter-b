@@ -13,6 +13,7 @@ import {
 } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { Divider } from '@/components/primitives/Divider';
+import { InfoTip } from '@/components/ui/info-tip';
 
 export type CurrentConditions = {
   feeRate?: string | null;
@@ -88,6 +89,7 @@ export function ImprovementSummary({
           <MetricRow
             testId="metric-row-card"
             label="카드 수수료"
+            infoTerm="수수료율"
             currentText={formatFeeRateDisplay(current.feeRate)}
             proposedText={
               cardRate === undefined
@@ -105,6 +107,7 @@ export function ImprovementSummary({
         <MetricRow
           testId="metric-row-cycle"
           label="정산주기"
+          infoTerm="정산주기"
           currentText={current.settlementCycle}
           proposedText={bid.settleCycle}
           trailing={qualityNode(cycleQ)}
@@ -112,6 +115,7 @@ export function ImprovementSummary({
         <MetricRow
           testId="metric-row-limit"
           label="월 정산한도"
+          infoTerm="정산한도"
           currentText={formatKrwField(current.settlementLimit)}
           proposedText={formatKRW(bid.settleLimit)}
           trailing={badgeNode(krwBadge(current.settlementLimit, bid.settleLimit, 'higher'))}
@@ -188,6 +192,7 @@ function qualityNode(quality: 'faster' | 'same' | 'slower' | null): ReactNode {
 function MetricRow({
   testId,
   label,
+  infoTerm,
   labelNote,
   currentText,
   proposedText,
@@ -198,6 +203,12 @@ function MetricRow({
 }: {
   testId: string;
   label: string;
+  /**
+   * 용어집(`lib/glossary.ts`) 키 — 작성 화면과 같은 설명을 라벨 옆 ⓘ 로 보여준다.
+   * 보증보험은 붙이지 않는다: 지금 용어집 설명이 보험료율·금액의 유불리를 말하는데,
+   * 비교 화면은 보증보험을 중립 표기한다(product-rules — 기간·보험료율·유불리 추정 금지).
+   */
+  infoTerm?: string;
   /** 라벨 밑 한 줄 단서 — 이 지표가 왜 다른지. 개선폭 열을 오염시키지 않는 자리다. */
   labelNote?: string;
   currentText?: string | null;
@@ -215,6 +226,7 @@ function MetricRow({
     >
       <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] max-md:col-span-2">
         {label}
+        {infoTerm && <InfoTip term={infoTerm} className="ml-0.5" />}
         {labelNote && (
           <span className="block text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
             {labelNote}

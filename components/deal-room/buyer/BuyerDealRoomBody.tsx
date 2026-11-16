@@ -181,6 +181,7 @@ export function BuyerDealRoomBody({
             rfpCode={rfp.code}
             requoteByPg={requoteByPg}
             buyerGrade={rfp.bizProfile?.grade}
+            contractType={rfp.contractType}
             invitedPgCount={invitedPgCount}
             draftPgCount={draftPgCount}
             deadline={rfp.deadline}

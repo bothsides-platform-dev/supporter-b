@@ -54,6 +54,11 @@ type Props = {
   requoteByPg?: Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
   /** 구매사 자신의 영중소 구간 — 비교 화면이 이 구간을 기본 선택해 먼저 보여준다. */
   buyerGrade?: MerchantTier;
+  /**
+   * 견적 유형. 신규 계약은 현재 조건을 묻지도 저장하지도 않으므로(product-rules 신규 계약 면제)
+   * "현재 조건을 입력하면…" 안내가 실행할 수 없는 약속이 된다.
+   */
+  contractType?: 'new' | 'renewal' | null;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
   hideHeader?: boolean;
   /** 견적이 아직 없을 때 구매사에게 보여줄 초대 현황. */
@@ -286,7 +291,13 @@ export function FocusComparison(props: Props) {
           )}
         </div>
 
-        <ImprovementSummary bid={active} current={current} tier={tier} flash={flash} />
+        <ImprovementSummary
+          bid={active}
+          current={current}
+          tier={tier}
+          flash={flash}
+          showCurrentHint={props.contractType !== 'new'}
+        />
 
         <Accordion>
           <AccordionItem value="rates" title={`전체 결제수단 요율 (${feeRows.length})`}>

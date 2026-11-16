@@ -103,6 +103,21 @@ beforeEach(() => awardRfpAction.mockReset());
 afterEach(cleanup);
 
 describe('FocusComparison', () => {
+  // 신규 계약은 현재 조건을 묻지도 저장하지도 않는다 — 입력하라는 안내는 할 수 없는 일을 시킨다.
+  it('신규 계약에는 현재 조건 입력 안내를 띄우지 않는다', () => {
+    render(<FocusComparison {...baseProps} current={{}} contractType="new" />);
+    expect(screen.queryByText(/현재 조건을 입력하면/)).not.toBeInTheDocument();
+    expect(screen.getByText('핵심 수치')).toBeInTheDocument();
+  });
+
+  it.each(['renewal', null, undefined] as const)(
+    '견적 유형이 %s 이고 현재 조건이 비면 입력 안내를 유지한다',
+    (contractType) => {
+      render(<FocusComparison {...baseProps} current={{}} contractType={contractType} />);
+      expect(screen.getByText(/현재 조건을 입력하면/)).toBeInTheDocument();
+    },
+  );
+
   it('renders a tab per PG and focuses the lowest card-fee bid by default', () => {
     render(<FocusComparison {...baseProps} />);
     expect(screen.getByRole('tab', { name: /토스페이먼츠/ })).toBeInTheDocument();
