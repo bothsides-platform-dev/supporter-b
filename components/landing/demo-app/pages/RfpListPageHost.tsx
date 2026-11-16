@@ -15,6 +15,7 @@ import { demoRfps, demoRfpProgress } from '../demo-app-fixtures';
 // 실제 /rfp 와 같은 상태·등급 옵션(app/(app)/rfp/page.tsx 와 동일한 파생).
 const STATUS_OPTIONS = [
   { value: 'active', label: '진행중' },
+  { value: 'review', label: '검토 대기' },
   { value: 'closed', label: '마감' },
 ];
 const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
@@ -30,7 +31,7 @@ export function RfpListPageHost({ onOpenRfp, rfps: sourceRfps = demoRfps, progre
     status: search.get('status') ?? undefined,
     deadline: search.get('deadline') ?? undefined,
     grade: search.get('grade') ?? undefined,
-  }, now);
+  }, now, new Map(Object.entries(progressByRfpId).map(([id, progress]) => [id, progress.bidCount])));
 
   const newRfpAction = (
     <Link href="/rfp-create">
