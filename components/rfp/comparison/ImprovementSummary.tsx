@@ -1,7 +1,7 @@
 import { bidConditions, formatCondition } from '@/lib/quote/terms';
 // 포커스 뷰 hero — 선택된 견적이 "지금 조건 대비 얼마나 좋아지나"를 4지표로 보여준다.
-// 카드 수수료·정산주기·월 정산한도·보증보험. 현재 조건(자유 텍스트)이 파싱되면 개선폭
-// 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
+// 갱신은 구매사의 현재 조건과 비교하고, 신규는 같은 PG·등급의 홈페이지 판가와
+// 카드 수수료만 비교한다. 비교 근거가 없으면 받은 견적만 보여준다.
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
@@ -29,10 +29,12 @@ const CYCLE_QUALITY_LABEL: Record<'faster' | 'same' | 'slower', string> = {
 
 export function ImprovementSummary({
   bid,
-  current,
+  current: savedCurrent,
   tier = 'general',
   flash,
   showCurrentHint = true,
+  contractType,
+  homepageCardRate,
 }: {
   bid: Bid;
   current: CurrentConditions;
@@ -40,7 +42,16 @@ export function ImprovementSummary({
   flash?: boolean;
   /** 선정 완료 화면에서는 수정할 수 없는 현재 조건 입력 안내를 숨긴다. */
   showCurrentHint?: boolean;
+  contractType?: 'new' | 'renewal' | null;
+  /** 같은 PG·조회 구간의 홈페이지 카드 판가. 소수 요율·부가세 별도이며 0도 유효하다. */
+  homepageCardRate?: number | null;
 }) {
+  const homepageComparison = contractType === 'new';
+  // 과거 데이터에 신규의 현재 조건이 남아 있어도 비교 근거로 사용하지 않는다.
+  const current: CurrentConditions = homepageComparison ? {} : savedCurrent;
+  const homepageRate = typeof homepageCardRate === 'number' && Number.isFinite(homepageCardRate)
+    && homepageCardRate >= 0 && homepageCardRate <= 1 ? homepageCardRate : null;
+  const baselineCardRate = homepageComparison ? homepageRate : parseCurrentValue(current.feeRate, 'percent');
   const hasAnyCurrent = Boolean(
     current.feeRate ||
     current.settlementCycle ||
@@ -53,14 +64,20 @@ export function ImprovementSummary({
   const cycleQ = cycleQuality(current.settlementCycle, bid.settleCycle);
   const verdicts = [
     cardRate !== undefined
-      ? metricVerdict(parseCurrentValue(current.feeRate, 'percent'), cardRate, 'lower')
+      ? metricVerdict(baselineCardRate, cardRate, 'lower')
       : null,
     cycleQ,
     metricVerdict(parseCurrentValue(current.settlementLimit, 'krw'), bid.settleLimit, 'higher'),
   ];
   const anyWorse = verdicts.some((v) => v === 'worse' || v === 'slower');
 
-  const heading = !hasAnyCurrent
+  const heading = homepageComparison
+    ? homepageRate === null
+      ? '핵심 수치'
+      : verdicts[0] === 'better'
+        ? '홈페이지 판가보다 이만큼 좋아져요'
+        : '홈페이지 판가와 비교한 조건이에요'
+    : !hasAnyCurrent
     ? '핵심 수치'
     : anyWorse || !verdicts.some((v) => v === 'better' || v === 'faster')
       ? '지금 조건과 비교하면 이렇게 달라져요'
@@ -73,11 +90,18 @@ export function ImprovementSummary({
           {heading}
         </h2>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          수수료는 부가세 별도예요.
+          {homepageComparison && homepageRate !== null
+            ? '같은 등급의 카드 수수료를 비교해요. 부가세는 별도예요.'
+            : '수수료는 부가세 별도예요.'}
         </p>
       </div>
 
-      {!hasAnyCurrent && showCurrentHint && (
+      {homepageComparison && homepageRate === null && (
+        <p className="mb-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          이 구간의 홈페이지 판가가 없어 받은 견적만 보여드려요.
+        </p>
+      )}
+      {!homepageComparison && !hasAnyCurrent && showCurrentHint && (
         <p className="mb-3 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
           현재 조건을 입력하면 개선폭을 보여드려요.
         </p>
@@ -92,7 +116,10 @@ export function ImprovementSummary({
             label="카드 수수료"
             emphasized
             infoTerm="수수료율"
-            currentText={formatFeeRateDisplay(current.feeRate)}
+            currentLabel={homepageComparison ? '홈페이지 판가' : '현재 조건'}
+            currentText={homepageComparison
+              ? homepageRate === null ? undefined : formatPct(homepageRate)
+              : formatFeeRateDisplay(current.feeRate)}
             proposedText={
               cardRate === undefined
                 ? formatCondition(bidConditions(bid).fees[`card:${tier}`], '%')
@@ -100,7 +127,7 @@ export function ImprovementSummary({
             }
             proposedNumeric={cardRate !== undefined}
             trailing={
-              cardRate === undefined ? null : badgeNode(feeBadge(current.feeRate, cardRate))
+              cardRate === undefined ? null : badgeNode(feeBadge(baselineCardRate, cardRate))
             }
             proposedFlash={flash}
             proposedFlashTestId="flash-card-fee"
@@ -137,7 +164,7 @@ export function ImprovementSummary({
         <MetricRow
           testId="metric-row-signup"
           label="가입비"
-          labelNote="한 번만 내는 비용이라 위 비교에 넣지 않았어요"
+          labelNote={homepageComparison ? '처음 한 번만 내는 비용이에요' : '한 번만 내는 비용이라 위 비교에 넣지 않았어요'}
           proposedText={formatCondition(bidConditions(bid).signupFee)}
           proposedNumeric={bidConditions(bid).signupFee.state === 'confirmed'}
         />
@@ -146,10 +173,9 @@ export function ImprovementSummary({
   );
 }
 
-function feeBadge(currentText: string | null | undefined, proposed: number) {
-  const current = parseCurrentValue(currentText, 'percent');
+function feeBadge(current: number | null, proposed: number) {
   const imp = improvement(current, proposed, 'lower');
-  if (!imp || current === null) return null;
+  if (!imp || current === null || imp.deltaAbs === 0) return null;
   return {
     text: `${(imp.deltaAbs * 100).toFixed(2)}%p`,
     down: proposed < current,
@@ -197,6 +223,7 @@ function MetricRow({
   infoTerm,
   labelNote,
   currentText,
+  currentLabel = '현재 조건',
   proposedText,
   trailing,
   proposedFlash,
@@ -215,6 +242,7 @@ function MetricRow({
   /** 라벨 밑 한 줄 단서 — 이 지표가 왜 다른지. 개선폭 열을 오염시키지 않는 자리다. */
   labelNote?: string;
   currentText?: string | null;
+  currentLabel?: string;
   proposedText: string;
   trailing?: ReactNode;
   proposedFlash?: boolean;
@@ -242,7 +270,7 @@ function MetricRow({
       </dt>
       {currentText ? (
         <dd className="min-w-0 text-[14px] text-right text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere] @max-[620px]/summary:text-left">
-          <span className="mb-1 block text-[12px]">현재 조건</span>
+          <span className="mb-1 block text-[12px]">{currentLabel}</span>
           <span className="md-numeric">{currentText}</span>
         </dd>
       ) : (

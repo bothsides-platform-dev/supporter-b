@@ -104,6 +104,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 수정 견적 이력은 구매사에게 해당 요청의 전체 제출 회차만, PG에게 자기 워크스페이스의 제출 회차만 제공한다(`loadBuyerRfpDetail`/`loadPgRfpDetail`). PG 응답에는 경쟁 PG의 견적 ID·조건·첨부가 들어가지 않는다. 기존 견적서 PDF 재사용은 원본 첨부의 소유 bid를 유지하고 새 bid가 `proposal_source_bid_id`로 직접 가리킨다. 재제출 트랜잭션은 RFP 행 잠금 뒤 현재 수정 요청 ID·마감 판본·직전 bid ID를 비교하며, 재사용할 ready 첨부의 실제 소유 bid가 같은 요청·PG인지 다시 확인한다. 규범: `lib/server/__tests__/rfp-detail-loader.test.ts`, `lib/server/services/__tests__/bidSubmit.test.ts`, `lib/server/repositories/drizzle/__tests__/bid.test.ts`.
 
+신규 견적의 홈페이지 판가 비교는 소유 구매사 로더에서 제출 견적이 있는 PG의 카드 요율 5개 구간만 명시적으로 투영한다. 관리자 표준 수수료 전체·다른 결제수단·맞춤 항목·미제출 PG 요율을 전달하지 않으며, PG 응답과 오픈 게시판의 공개 범위는 늘리지 않는다. 중복·누락·범위 밖 값은 비교에서 제외한다. 규범: `lib/server/__tests__/rfp-detail-loader.test.ts`의 홈페이지 판가·소유권 검증. 운영 원본의 갱신과 구간별 공개에 따른 잔여 위험은 AR-10을 따른다.
+
 **견적 수정 요청 운영계정 수신 (2026-10-19)**: `RfpService.requote`만 대상 PG 승인 멤버에 서버 `MASTER_ACCOUNT_EMAILS` allowlist의 등록 사용자를 추가한다. 기존 정규화(trim·소문자·중복 제거)를 공유하고 DB 조회는 `userId/email`만 반환한다. 탈퇴(`deletedAt`)·로그인 불가(`passwordHash='!'`) 계정은 제외하며 `isSystemAccount`는 실제 운영계정에도 사용하므로 제외 기준이 아니다. 멤버십·마지막 선택 workspace에 관계없이 수정 내용이 운영계정 이메일로 전달되는 의도적 수신 범위다. 같은 사용자는 대상 PG별 한 번만 수신하고 앱 알림은 해당 PG workspace에 귀속해 기존 조회 격리를 유지한다. 요청·앱 알림·메일 outbox는 같은 트랜잭션으로 저장하고 커밋 뒤에만 실시간 전달·메일 flush를 실행한다. 이메일 링크는 자동 workspace 전환이나 접근 권한을 부여하지 않으며 기존 서버 ACL을 통과해야 한다. 다른 알림 정책·과거 요청은 변경하지 않는다. 규범: `lib/server/services/__tests__/requote.test.ts`.
 
 ### 3.2 SnowSign 전자서명
@@ -371,3 +373,7 @@ assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·
 ### AR-9 — 운영자 콘솔 허용 목록의 공유 DB 이전 (수용, 2026-11-15)
 
 admin-supporter-b의 관리자 허용 목록을 서버 환경변수에서 공유 DB의 `admin_users`로 옮겼다. 두 앱이 같은 `supporter_b` DB 역할을 쓰므로 DB 쓰기 권한을 얻은 주체는 행을 추가해 해당 Google 계정으로 로그인하고 TOTP를 직접 등록할 수 있다. 또 미등록 행은 그 Google 계정으로 처음 로그인한 사람이 등록한다(TOFU). DB 쓰기 권한이 있으면 이미 모든 업무 데이터를 바꿀 수 있어서 늘어나는 위험은 작다고 보고 수용한다. 관리자 추가·삭제·2차 인증 초기화는 `admin_audit_logs`에 `entity_type=admin_user`로 남는다. 테이블 전용 DB 역할·grant 분리나 admin 전용 키로 서명한 행 무결성 MAC 도입, 또는 공유 DB 역할 노출이 확인되면 재검토한다.
+
+### AR-10 — 신규 구매사의 홈페이지 카드 판가 비교 (수용, 2026-11-16)
+
+홈페이지 판가 대비 조건을 안내하기 위해 소유 구매사에게 제출 PG의 5개 카드 구간 요율을 제공한다. 원본은 관리자가 유지하는 `pg_agreement_rates`의 `card:<tier>`이며 홈페이지를 실시간 조회하지 않는다. 운영 원본이 실제 홈페이지와 다르면 개선폭도 달라질 수 있고, 조회 시점의 값이므로 계약 발송 스냅샷과 다를 수 있다. 등록되지 않은 구간은 다른 PG·등급·단일 카드 요율로 추정하지 않는다. 선정·계약 조건을 이 비교값으로 바꾸지 않으며 갱신 견적은 구매사 현재 조건을 사용한다. 원본의 의미가 달라지거나 판가 갱신 누락·공개 범위 확대가 발생하면 재검토한다. 가드: `lib/server/__tests__/rfp-detail-loader.test.ts`, `components/rfp/comparison/__tests__/ImprovementSummary.test.tsx`.

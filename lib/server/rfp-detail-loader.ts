@@ -6,6 +6,7 @@
 // pglite + seed 로 auth mock 없이 단위 테스트 가능하다.
 import {
   getPgMatchingRepo,
+  getAgreementRepo,
   getAttachmentRepo,
   getBidRepo,
   getInvitationRepo,
@@ -22,7 +23,7 @@ import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { isPgBidWindowOpen, isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
-import type { Bid } from '@/lib/types/bid';
+import { MERCHANT_TIERS, type Bid, type TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
@@ -54,6 +55,8 @@ export type BuyerRfpDetailData = {
   inviteList: { ws: WorkspaceDisplay; status: InvitationStatus }[];
   /** pgWsId → 워크스페이스 신원(상호명·유형·로고 버전). 이름 맵과 로고 맵을 나누지 않는다. */
   pgWsById: Record<string, WorkspaceDisplay>;
+  /** 신규 구매사에게만 제공하는 제출 PG별 홈페이지 카드 판가(소수 요율·부가세 별도). */
+  homepageCardRatesByPg?: Record<string, TierRates>;
   /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
   pendingRequests: { id: string; pgWs: WorkspaceDisplay; message: string; createdAt: string }[];
   /** pgWsId → 최신 재요청 요약(없으면 키 없음). */
@@ -255,6 +258,25 @@ export async function loadBuyerRfpDetail(args: {
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
   const submitted = allBids.filter((b) => b.status === 'submitted');
   const bids = pickCurrentBids(submitted);
+  // 현재 조건이 없는 신규 계약은 PG 홈페이지 판가의 관리 원본인 표준 수수료를
+  // 사용한다. 제출 PG의 카드·동일 구간만 명시적으로 투영하고 다른 요율/조건은 싣지 않는다.
+  const homepageCardRatesByPg: Record<string, TierRates> = {};
+  if (rfp.contractType === 'new' && bids.length > 0) {
+    const agreementRepo = await getAgreementRepo();
+    const ratesByPg = await Promise.all(bids.map(async (bid) => ({
+      pgWsId: bid.pgWsId,
+      record: await agreementRepo.findRates(bid.pgWsId),
+    })));
+    for (const { pgWsId, record } of ratesByPg) {
+      const cardRates: TierRates = {};
+      for (const tier of MERCHANT_TIERS) {
+        const rows = record?.rates.filter((row) => row.key === `card:${tier}`) ?? [];
+        const rate = rows.length === 1 ? rows[0].rate : undefined;
+        if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0 && rate <= 1) cardRates[tier] = rate;
+      }
+      if (Object.keys(cardRates).length > 0) homepageCardRatesByPg[pgWsId] = cardRates;
+    }
+  }
   const bidAuthorNames = await loadBidAuthorNames(submitted);
   const bidHistoryByPg: Record<string, Bid[]> = {};
   for (const bid of submitted) (bidHistoryByPg[bid.pgWsId] ??= []).push(bid);
@@ -350,6 +372,7 @@ export async function loadBuyerRfpDetail(args: {
     companyName,
     inviteList,
     pgWsById,
+    homepageCardRatesByPg,
     pendingRequests,
     requoteByPg,
     priorBidByPg,

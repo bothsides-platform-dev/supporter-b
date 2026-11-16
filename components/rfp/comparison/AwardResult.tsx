@@ -17,11 +17,15 @@ export function AwardResult({
   bid,
   current,
   tier,
+  contractType,
+  homepageCardRate,
 }: {
   pgName: string;
   bid: Bid;
   current: CurrentConditions;
   tier?: MerchantTier;
+  contractType?: 'new' | 'renewal' | null;
+  homepageCardRate?: number | null;
 }) {
   const router = useRouter();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -58,7 +62,7 @@ export function AwardResult({
 
             <Accordion className="mt-6 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-primary [&_button:focus-visible]:ring-offset-2">
               <AccordionItem value="selected-conditions" title={<span className="text-[length:var(--md-typescale-body-medium-size)] leading-[var(--md-typescale-body-medium-line-height)]">선정한 조건 보기</span>}>
-                <ImprovementSummary bid={bid} current={current} tier={tier} showCurrentHint={false} />
+                <ImprovementSummary bid={bid} current={current} tier={tier} showCurrentHint={false} contractType={contractType} homepageCardRate={homepageCardRate} />
               </AccordionItem>
             </Accordion>
 

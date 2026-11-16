@@ -184,6 +184,7 @@ export function BuyerDealRoomBody({
             requoteByPg={requoteByPg}
             buyerGrade={rfp.bizProfile?.grade}
             contractType={rfp.contractType}
+            homepageCardRatesByPg={data.homepageCardRatesByPg}
             invitedPgCount={invitedPgCount}
             draftPgCount={draftPgCount}
             deadline={rfp.deadline}
@@ -293,6 +294,8 @@ export function BuyerDealRoomBody({
       pgName={pgName(awardResult.bid.pgWsId)}
       bid={awardResult.bid}
       tier={awardResult.tier}
+      contractType={rfp.contractType}
+      homepageCardRate={data.homepageCardRatesByPg?.[awardResult.bid.pgWsId]?.[awardResult.tier]}
       current={{
         feeRate: rfp.currentFeeRate,
         settlementCycle: rfp.currentSettlementCycle,

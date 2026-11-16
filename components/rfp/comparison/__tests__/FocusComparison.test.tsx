@@ -103,6 +103,26 @@ beforeEach(() => awardRfpAction.mockReset());
 afterEach(cleanup);
 
 describe('FocusComparison', () => {
+  it('신규 견적은 선택한 PG와 구간의 홈페이지 판가를 함께 전환한다', async () => {
+    const user = userEvent.setup();
+    render(<FocusComparison {...baseProps} current={{}} contractType="new" homepageCardRatesByPg={{
+      'pg-toss': { general: 0.034, sole: 0.025 },
+      'pg-kg': { general: 0.035 },
+    }} />);
+    expect(screen.getByText('3.40%')).toBeInTheDocument();
+    expect(screen.getByText(/1\.20%p/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /KG이니시스/ }));
+    expect(screen.getByText('3.50%')).toBeInTheDocument();
+    expect(screen.getByText(/0\.70%p/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '영세' }));
+    expect(screen.queryByText('3.50%')).not.toBeInTheDocument();
+    expect(screen.queryByText(/%p/)).not.toBeInTheDocument();
+    expect(screen.getByText(/이 구간의 홈페이지 판가가 없어/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /토스페이먼츠/ }));
+    expect(screen.getByText('2.50%')).toBeInTheDocument();
+    expect(screen.getByText(/0\.30%p/)).toBeInTheDocument();
+  });
+
   it('PG 방향키 이동은 초점만 옮기고 Enter로 견적과 채팅 대상을 함께 바꾼다', async () => {
     const user = userEvent.setup();
     render(<FocusComparison {...baseProps} />);

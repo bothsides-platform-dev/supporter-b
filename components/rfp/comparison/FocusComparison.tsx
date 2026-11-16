@@ -36,6 +36,7 @@ import {
   type CustomPaymentMethod,
   type MerchantTier,
   type PaymentMethod,
+  type TierRates,
 } from '@/lib/types/bid';
 
 type Props = {
@@ -59,6 +60,8 @@ type Props = {
    * "현재 조건을 입력하면…" 안내가 실행할 수 없는 약속이 된다.
    */
   contractType?: 'new' | 'renewal' | null;
+  /** PG별 홈페이지 카드 판가. 신규 비교에서 조회 중인 구간만 사용한다. */
+  homepageCardRatesByPg?: Record<string, TierRates>;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
   hideHeader?: boolean;
   /** 딜룸은 선정 행동을 스크롤 밖의 전용 영역에서 제공한다. */
@@ -319,6 +322,8 @@ export function FocusComparison(props: Props) {
           tier={tier}
           flash={flash}
           showCurrentHint={props.contractType !== 'new'}
+          contractType={props.contractType}
+          homepageCardRate={props.homepageCardRatesByPg?.[active.pgWsId]?.[tier]}
         />
 
         <Accordion>

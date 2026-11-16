@@ -6,11 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import { bids, bidNotes, columns, rfpAllowedPg, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps, users, workspaces } from '@/lib/db/schema';
+import { bids, bidNotes, columns, pgAgreementRates, rfpAllowedPg, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps, users, workspaces } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getAgreementRepo,
   getBidQuoteTemplateRepo,
   getInvitationRepo,
   getUserRepo,
@@ -48,6 +49,7 @@ async function setup() {
       currentFeeRate?: string;
       currentFeeVisibleToPg?: boolean;
       hiddenFromPg?: string[];
+      contractType?: 'new' | 'renewal';
     } = {},
   ) {
     const id = randomUUID();
@@ -67,6 +69,7 @@ async function setup() {
       status: 'sent',
       createdBy: buyer.id,
       sentAt: new Date(),
+      contractType: opts.contractType,
       currentTerms:
         opts.currentFeeRate != null ? { _v: 1, feeRate: opts.currentFeeRate } : { _v: 1 },
       hiddenFromPg: hidden,
@@ -187,6 +190,56 @@ afterEach(() => {
 });
 
 describe('loadBuyerRfpDetail', () => {
+  it('신규 구매사에게 제출 PG의 유효한 등급별 홈페이지 카드 판가만 제공한다', async () => {
+    const rfpId = await ctx.seedRfp('HOMEPAGE-NEW', { contractType: 'new' });
+    const tossInvitation = await ctx.seedInvitation(rfpId, ctx.tossId);
+    const inicisInvitation = await ctx.seedInvitation(rfpId, ctx.inicisId);
+    await ctx.seedBid(rfpId, ctx.tossId, tossInvitation);
+    await ctx.seedBid(rfpId, ctx.inicisId, inicisInvitation, 'draft');
+    await ctx.db.insert(pgAgreementRates).values([
+      { pgWsId: ctx.tossId, rates: [
+        { key: 'card:sole', rate: 0 }, { key: 'card:sme2', rate: 0.034 },
+        { key: 'card:sme1', rate: -0.01 }, { key: 'card:sme3', rate: 1.1 },
+        { key: 'card:general', rate: 0.03 }, { key: 'card:general', rate: 0.04 },
+        { key: 'card', rate: 0.099 }, { key: 'bank_transfer', rate: 0.02 },
+        { key: 'custom:비공개 조건', rate: 0.05 },
+      ] },
+      { pgWsId: ctx.inicisId, rates: [{ key: 'card:sme2', rate: 0.05 }] },
+    ]);
+    const args = { code: 'HOMEPAGE-NEW', workspaceId: ctx.buyerWsId, userId: ctx.buyerId, userName: ctx.buyerName };
+    const result = await loadBuyerRfpDetail(args);
+    expect(result?.homepageCardRatesByPg).toEqual({ [ctx.tossId]: { sole: 0, sme2: 0.034 } });
+    const pgResult = await loadPgRfpDetail({ code: args.code, workspaceId: ctx.tossId });
+    expect(pgResult).not.toBeNull();
+    expect(pgResult).not.toHaveProperty('homepageCardRatesByPg');
+  });
+
+  it('신규 견적의 판가가 미등록이면 빈 맵을 반환한다', async () => {
+    const rfpId = await ctx.seedRfp('HOMEPAGE-MISSING', { contractType: 'new' });
+    const invitation = await ctx.seedInvitation(rfpId, ctx.tossId);
+    await ctx.seedBid(rfpId, ctx.tossId, invitation);
+    const result = await loadBuyerRfpDetail({ code: 'HOMEPAGE-MISSING', workspaceId: ctx.buyerWsId, userId: ctx.buyerId, userName: ctx.buyerName });
+    expect(result?.homepageCardRatesByPg).toEqual({});
+  });
+
+  it.each(['renewal', undefined] as const)('기존 조건을 쓰는 견적은 홈페이지 판가를 조회하지 않는다 (%s)', async (contractType) => {
+    const rfpId = await ctx.seedRfp('HOMEPAGE-RENEWAL', { contractType });
+    const invitation = await ctx.seedInvitation(rfpId, ctx.tossId);
+    await ctx.seedBid(rfpId, ctx.tossId, invitation);
+    const findRates = vi.spyOn(await getAgreementRepo(), 'findRates');
+    const result = await loadBuyerRfpDetail({ code: 'HOMEPAGE-RENEWAL', workspaceId: ctx.buyerWsId, userId: ctx.buyerId, userName: ctx.buyerName });
+    expect(result?.homepageCardRatesByPg).toEqual({});
+    expect(findRates).not.toHaveBeenCalled();
+  });
+
+  it('소유하지 않은 신규 요청은 홈페이지 판가 조회 전에 거절한다', async () => {
+    await ctx.seedRfp('HOMEPAGE-PRIVATE', { contractType: 'new' });
+    const findRates = vi.spyOn(await getAgreementRepo(), 'findRates');
+    const result = await loadBuyerRfpDetail({ code: 'HOMEPAGE-PRIVATE', workspaceId: ctx.otherWsId, userId: ctx.buyerId, userName: ctx.buyerName });
+    expect(result).toBeNull();
+    expect(findRates).not.toHaveBeenCalled();
+  });
+
   it('존재하지 않는 code → null', async () => {
     const res = await loadBuyerRfpDetail({
       code: 'P-9999-9999',
