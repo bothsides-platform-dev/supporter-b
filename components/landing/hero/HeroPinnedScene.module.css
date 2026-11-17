@@ -13,8 +13,6 @@
   z-index: 20;
   flex-shrink: 0;
   width: 100%;
-  border-top: 1px solid var(--md-sys-color-outline-variant);
-  background: var(--md-sys-color-surface);
 }
 .actionBarInner {
   width: 100%;
@@ -31,8 +29,8 @@
   height: 48px;
   padding-inline: 24px;
   border-radius: var(--md-sys-shape-small);
-  background: var(--md-sys-color-on-surface);
-  color: var(--md-sys-color-surface);
+  background: var(--md-sys-color-inverse-primary);
+  color: var(--md-sys-color-inverse-surface);
   font-size: var(--md-typescale-label-large-size);
   font-weight: 600;
   line-height: inherit;
@@ -41,7 +39,7 @@
 }
 .primaryAction:hover { opacity: 0.85; }
 .primaryAction:focus-visible {
-  outline: 2px solid var(--md-sys-color-primary);
+  outline: 2px solid var(--md-sys-color-inverse-primary);
   outline-offset: 4px;
 }
 @media (max-height: 700px) {
