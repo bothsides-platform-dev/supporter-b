@@ -8,11 +8,37 @@
   gap: clamp(16px, 3svh, 32px);
 }
 .partners { width: 100%; pointer-events: auto; }
+.actions { display: flex; gap: 24px; }
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 188px;
+  height: 48px;
+  padding-inline: 24px;
+  border-radius: var(--md-sys-shape-small);
+  background: var(--md-sys-color-inverse-primary);
+  color: var(--md-sys-color-inverse-surface);
+  font-size: var(--md-typescale-label-large-size);
+  font-weight: 600;
+  line-height: inherit;
+  white-space: nowrap;
+  transition: opacity 140ms;
+}
+.primaryAction:hover { opacity: 0.85; }
+.primaryAction:focus-visible {
+  outline: 2px solid var(--md-sys-color-inverse-primary);
+  outline-offset: 4px;
+}
 @media (max-height: 700px) {
   .withPartners .content { padding-top: calc(var(--hero-header-bottom) + 24px); padding-bottom: 24px; gap: 16px; }
 }
 @media (max-width: 767px) {
   .withPartners .content { padding-left: 24px; padding-right: 24px; }
+}
+@media (max-width: 639px) {
+  .actions { gap: 12px; }
+  .primaryAction { flex: 1; min-width: 0; padding-inline: 16px; }
 }
 
 /* Reserve only the visible part; the scene clips the rest at the fold. */

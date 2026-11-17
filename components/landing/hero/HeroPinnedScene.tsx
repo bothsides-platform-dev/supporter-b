@@ -2,9 +2,8 @@
 import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { motion, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
-import { Button } from '@/components/primitives/Button';
+import { ConsultButton } from '@/components/landing/ConsultButton';
 import { ChevronDownIcon } from '@/components/icons';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
 import { EASE_OUT } from '@/lib/landing/ease';
@@ -51,16 +50,14 @@ const BUYER_SUBCOPY = (
   </>
 );
 
-// 다크 씬 위 CTA — primary 토큰만 inverse로 뒤집어 다크 테마 primary 버튼과 동일한 대비
-// (#9ECAFF 위 잉크 텍스트)를 얻는다. 마그네틱 호버 래퍼는 씬이 소유하므로 여기엔 토큰 반전만 둔다.
 const BUYER_CTA = (
-  <span className="inline-flex flex-wrap items-center gap-3 [--md-sys-color-primary:var(--md-sys-color-inverse-primary)] [--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]">
-    <QuoteStartLink>
-      <Button size="lg">맞춤 PG 견적 무료로 받기 →</Button>
+  <span className={styles.actions}>
+    <QuoteStartLink className={styles.primaryAction}>
+      PG 무료 견적 받기
     </QuoteStartLink>
-    <Link href="#process" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
-      데모 체험하기
-    </Link>
+    <ConsultButton variant="secondary" className="h-12 min-w-0 flex-1 px-4 font-sans text-sm leading-[inherit] font-semibold tracking-normal normal-case sm:min-w-[188px] sm:flex-none sm:px-6">
+      이용 문의
+    </ConsultButton>
   </span>
 );
 
@@ -213,13 +210,10 @@ export function HeroPinnedScene({
               transition={{ duration: 0.36, delay: 0.5, ease: EASE_OUT }}
               className="flex flex-col items-start gap-[var(--s-4)]"
             >
-              {/* 마그네틱 호버(±6px, pointer:fine 전용) 래퍼만 씬이 소유한다. 다크 씬 대비를
-                  위한 토큰 반전은 각 CTA 노드가 스스로 책임진다(구매사 기본=BUYER_CTA,
-                  PG=on-dark 버튼). */}
               <motion.span
                 ref={magnetRef}
                 style={{ x: magnetX, y: magnetY }}
-                className="inline-block"
+                className="inline-block w-full sm:w-auto"
               >
                 {cta}
               </motion.span>
