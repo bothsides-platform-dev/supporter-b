@@ -126,7 +126,7 @@ describe('LandingNav', () => {
     render(<LandingNav authed={false} />);
     expect(screen.getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login');
     expect(screen.queryByRole('link', { name: "서포트비로 이동해요 →" })).toBeNull();
-    expect(screen.getByRole('link', { name: '맞춤 견적 받기' })).toHaveAttribute('href', '/quote-start');
+    expect(screen.queryByRole('link', { name: '맞춤 견적 받기' })).not.toBeInTheDocument();
   });
 
   it('shows an app link to /home when authenticated', () => {

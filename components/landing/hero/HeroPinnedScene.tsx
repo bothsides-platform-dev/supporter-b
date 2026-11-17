@@ -2,9 +2,8 @@
 import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { motion, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
-import { Button } from '@/components/primitives/Button';
+import { ConsultButton } from '@/components/landing/ConsultButton';
 import { ChevronDownIcon } from '@/components/icons';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
 import { EASE_OUT } from '@/lib/landing/ease';
@@ -35,6 +34,8 @@ export type HeroContent = {
   headline?: ReactNode;
   subCopy?: ReactNode;
   cta?: ReactNode;
+  /** 구매사는 제목·설명 아래에 별도 CTA 띠를, PG는 기존 인라인 CTA를 사용한다. */
+  ctaPlacement?: 'inline' | 'below-content';
   productWindow?: ReactNode;
   /** 제품 창 바로 위 리드 카피(선택). 라이트 리빌 때 창과 함께 페이드+라이즈로 자리잡는다.
    *  PG 히어로만 주입 — 구매사 히어로는 미지정(렌더 안 함). */
@@ -51,16 +52,14 @@ const BUYER_SUBCOPY = (
   </>
 );
 
-// 다크 씬 위 CTA — primary 토큰만 inverse로 뒤집어 다크 테마 primary 버튼과 동일한 대비
-// (#9ECAFF 위 잉크 텍스트)를 얻는다. 마그네틱 호버 래퍼는 씬이 소유하므로 여기엔 토큰 반전만 둔다.
 const BUYER_CTA = (
-  <span className="inline-flex flex-wrap items-center gap-3 [--md-sys-color-primary:var(--md-sys-color-inverse-primary)] [--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]">
-    <QuoteStartLink>
-      <Button size="lg">맞춤 PG 견적 무료로 받기 →</Button>
+  <span className={styles.actions}>
+    <QuoteStartLink className={styles.primaryAction}>
+      PG 무료 견적 받기
     </QuoteStartLink>
-    <Link href="#process" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
-      데모 체험하기
-    </Link>
+    <ConsultButton variant="secondary" className="h-12 min-w-0 flex-1 px-4 font-sans text-sm leading-[inherit] font-semibold tracking-normal normal-case sm:min-w-[188px] sm:flex-none sm:px-6">
+      이용 문의
+    </ConsultButton>
   </span>
 );
 
@@ -68,6 +67,7 @@ export function HeroPinnedScene({
   headline = <HeroKineticHeadline rollingPosition="before" />,
   subCopy = BUYER_SUBCOPY,
   cta = BUYER_CTA,
+  ctaPlacement = 'inline',
   productWindow = <HeroProductWindow />,
   productLead,
   partners,
@@ -156,6 +156,25 @@ export function HeroPinnedScene({
   const cueOpacity = useTransform(scrollYProgress, [0, 0.06, 1], [1, 0, 0]);
 
   const [magnetRef, magnetX, magnetY] = useMagneticHover<HTMLSpanElement>(6);
+  const ctaBlock = (
+    <motion.div
+      style={{ y: ctaY, opacity: ctaOpacity, pointerEvents: ctaPointerEvents }}
+      className={ctaPlacement === 'below-content' ? styles.actionBar : undefined}
+    >
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.36, delay: 0.5, ease: EASE_OUT }}
+        className={ctaPlacement === 'below-content' ? styles.actionBarInner : 'flex flex-col items-start gap-[var(--s-4)]'}
+      >
+        {ctaPlacement === 'below-content' ? cta : (
+          <motion.span ref={magnetRef} style={{ x: magnetX, y: magnetY }} className="inline-block">
+            {cta}
+          </motion.span>
+        )}
+      </motion.div>
+    </motion.div>
+  );
 
   // 헤더 톤 스위치 — 다크 레이어 페이드(0.55–0.85) 중간점을 지나면 헤더가 라이트 톤으로 복귀.
   // 마운트 직후 동기화가 있어 앵커 딥링크(#pricing 등)로 진입해도 헤더가 올바른 톤에서 시작한다.
@@ -206,26 +225,10 @@ export function HeroPinnedScene({
             </motion.p>
           </motion.div>
 
-          <motion.div style={{ y: ctaY, opacity: ctaOpacity, pointerEvents: ctaPointerEvents }}>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.36, delay: 0.5, ease: EASE_OUT }}
-              className="flex flex-col items-start gap-[var(--s-4)]"
-            >
-              {/* 마그네틱 호버(±6px, pointer:fine 전용) 래퍼만 씬이 소유한다. 다크 씬 대비를
-                  위한 토큰 반전은 각 CTA 노드가 스스로 책임진다(구매사 기본=BUYER_CTA,
-                  PG=on-dark 버튼). */}
-              <motion.span
-                ref={magnetRef}
-                style={{ x: magnetX, y: magnetY }}
-                className="inline-block"
-              >
-                {cta}
-              </motion.span>
-            </motion.div>
-          </motion.div>
+          {ctaPlacement === 'inline' && ctaBlock}
         </div>
+
+        {ctaPlacement === 'below-content' && ctaBlock}
 
         {partners ? (
           <>

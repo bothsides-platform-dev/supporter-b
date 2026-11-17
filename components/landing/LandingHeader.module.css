@@ -61,6 +61,14 @@
   text-underline-offset: 6px;
 }
 .auth { border: 1px solid color-mix(in srgb, var(--header-fg) 60%, transparent); padding-inline: 14px; }
+.buyerAuth {
+  border: 0;
+  padding-inline: 20px;
+  background: var(--header-fg);
+  color: var(--header-bg);
+  transition: opacity 140ms;
+}
+.buyerAuth:hover { background: var(--header-fg); opacity: 0.85; }
 .header .cta {
   display: inline-flex;
   align-items: center;

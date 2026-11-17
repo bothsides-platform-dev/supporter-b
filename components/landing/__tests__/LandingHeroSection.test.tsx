@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('motion/react', () => {
   const makeEl = (tag: string) => {
@@ -21,10 +21,6 @@ vi.mock('motion/react', () => {
   };
 });
 
-vi.mock('@/components/primitives/Button', () => ({
-  Button: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
-}));
-
 import { LandingHeroSection } from '../LandingHeroSection';
 
 describe('LandingHeroSection', () => {
@@ -33,9 +29,18 @@ describe('LandingHeroSection', () => {
     expect(screen.getByRole('region', { name: '파트너 로고' })).toBeInTheDocument();
     expect(screen.queryByText('Scroll')).not.toBeInTheDocument();
   });
-  it('scrolls from the hero to the embedded demo section', () => {
-    render(<LandingHeroSection />);
-    expect(screen.getByRole('link', { name: '데모 체험하기' })).toHaveAttribute('href', '#process');
+  it('opens support from the inquiry CTA instead of linking to the demo', () => {
+    const showMessenger = vi.fn();
+    const previous = window.ChannelIO;
+    window.ChannelIO = showMessenger;
+    try {
+      render(<LandingHeroSection ctaPlacement="below-content" />);
+      fireEvent.click(screen.getByRole('button', { name: '이용 문의' }));
+      expect(showMessenger).toHaveBeenCalledWith('showMessenger');
+      expect(screen.queryByRole('link', { name: '데모 체험하기' })).not.toBeInTheDocument();
+    } finally {
+      window.ChannelIO = previous;
+    }
   });
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);
@@ -44,7 +49,7 @@ describe('LandingHeroSection', () => {
 
   it('routes the hero CTA to /quote-start', () => {
     render(<LandingHeroSection />);
-    const cta = screen.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
+    const cta = screen.getByRole('link', { name: 'PG 무료 견적 받기' });
     expect(cta).toHaveAttribute('href', '/quote-start');
   });
 });

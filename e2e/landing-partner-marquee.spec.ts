@@ -23,12 +23,12 @@ test.describe('buyer landing partner strip', () => {
       const partners = page.getByRole('region', { name: '제휴 PG사' });
       await expect(partners).toBeVisible();
       await expect(partners.getByRole('img')).toHaveCount(2);
-      const cta = hero.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
-      const demo = hero.getByRole('link', { name: '데모 체험하기' });
+      const cta = hero.getByRole('link', { name: 'PG 무료 견적 받기' });
+      const inquiry = hero.getByRole('button', { name: '이용 문의' });
       await expect(cta).toBeVisible();
-      await expect(demo).toBeVisible();
+      await expect(inquiry).toBeVisible();
       const stripBox = (await partners.boundingBox())!;
-      for (const button of [cta, demo]) {
+      for (const button of [cta, inquiry]) {
         const box = (await button.boundingBox())!;
         expect(box.y + box.height).toBeLessThanOrEqual(stripBox.y);
       }

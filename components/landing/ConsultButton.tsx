@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { siteConfig } from '@/lib/site-config';
 
-type ConsultVariant = 'primary' | 'on-dark' | 'ghost';
+type ConsultVariant = 'primary' | 'secondary' | 'on-dark' | 'ghost';
 type ConsultSize = 'lg' | 'sm';
 
 type ConsultButtonProps = {
@@ -26,6 +26,8 @@ const variantCls: Record<ConsultVariant, string> = {
   // 파란 채움 — 밝은 섹션의 메인 CTA
   primary:
     'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]',
+  secondary:
+    'bg-[var(--md-sys-color-surface-container-highest)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-dim)]',
   // 다크(반전) 섹션 위의 밝은 버튼
   'on-dark':
     'bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] hover:opacity-85',
