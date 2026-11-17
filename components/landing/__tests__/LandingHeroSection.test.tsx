@@ -34,7 +34,7 @@ describe('LandingHeroSection', () => {
     const previous = window.ChannelIO;
     window.ChannelIO = showMessenger;
     try {
-      render(<LandingHeroSection ctaPlacement="below-content" />);
+      render(<LandingHeroSection />);
       fireEvent.click(screen.getByRole('button', { name: '이용 문의' }));
       expect(showMessenger).toHaveBeenCalledWith('showMessenger');
       expect(screen.queryByRole('link', { name: '데모 체험하기' })).not.toBeInTheDocument();

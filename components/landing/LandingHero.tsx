@@ -54,7 +54,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
       <main className="flex-1 pt-[var(--landing-header-height)]">
 
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
-        <LandingHeroSection ctaPlacement="below-content" partners={<LandingPartnerMarquee />} />
+        <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
         {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
         <section className={sectionCls}>

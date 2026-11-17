@@ -8,18 +8,6 @@
   gap: clamp(16px, 3svh, 32px);
 }
 .partners { width: 100%; pointer-events: auto; }
-.actionBar {
-  position: relative;
-  z-index: 20;
-  flex-shrink: 0;
-  width: 100%;
-}
-.actionBarInner {
-  width: 100%;
-  max-width: 1080px;
-  margin-inline: auto;
-  padding: 32px;
-}
 .actions { display: flex; gap: 24px; }
 .primaryAction {
   display: inline-flex;
@@ -47,7 +35,6 @@
 }
 @media (max-width: 767px) {
   .withPartners .content { padding-left: 24px; padding-right: 24px; }
-  .actionBarInner { padding: 24px; }
 }
 @media (max-width: 639px) {
   .actions { gap: 12px; }

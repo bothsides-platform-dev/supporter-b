@@ -34,8 +34,6 @@ export type HeroContent = {
   headline?: ReactNode;
   subCopy?: ReactNode;
   cta?: ReactNode;
-  /** 구매사는 제목·설명 아래에 별도 CTA 띠를, PG는 기존 인라인 CTA를 사용한다. */
-  ctaPlacement?: 'inline' | 'below-content';
   productWindow?: ReactNode;
   /** 제품 창 바로 위 리드 카피(선택). 라이트 리빌 때 창과 함께 페이드+라이즈로 자리잡는다.
    *  PG 히어로만 주입 — 구매사 히어로는 미지정(렌더 안 함). */
@@ -67,7 +65,6 @@ export function HeroPinnedScene({
   headline = <HeroKineticHeadline rollingPosition="before" />,
   subCopy = BUYER_SUBCOPY,
   cta = BUYER_CTA,
-  ctaPlacement = 'inline',
   productWindow = <HeroProductWindow />,
   productLead,
   partners,
@@ -156,25 +153,6 @@ export function HeroPinnedScene({
   const cueOpacity = useTransform(scrollYProgress, [0, 0.06, 1], [1, 0, 0]);
 
   const [magnetRef, magnetX, magnetY] = useMagneticHover<HTMLSpanElement>(6);
-  const ctaBlock = (
-    <motion.div
-      style={{ y: ctaY, opacity: ctaOpacity, pointerEvents: ctaPointerEvents }}
-      className={ctaPlacement === 'below-content' ? styles.actionBar : undefined}
-    >
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.36, delay: 0.5, ease: EASE_OUT }}
-        className={ctaPlacement === 'below-content' ? styles.actionBarInner : 'flex flex-col items-start gap-[var(--s-4)]'}
-      >
-        {ctaPlacement === 'below-content' ? cta : (
-          <motion.span ref={magnetRef} style={{ x: magnetX, y: magnetY }} className="inline-block">
-            {cta}
-          </motion.span>
-        )}
-      </motion.div>
-    </motion.div>
-  );
 
   // 헤더 톤 스위치 — 다크 레이어 페이드(0.55–0.85) 중간점을 지나면 헤더가 라이트 톤으로 복귀.
   // 마운트 직후 동기화가 있어 앵커 딥링크(#pricing 등)로 진입해도 헤더가 올바른 톤에서 시작한다.
@@ -225,10 +203,23 @@ export function HeroPinnedScene({
             </motion.p>
           </motion.div>
 
-          {ctaPlacement === 'inline' && ctaBlock}
+          <motion.div style={{ y: ctaY, opacity: ctaOpacity, pointerEvents: ctaPointerEvents }}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.36, delay: 0.5, ease: EASE_OUT }}
+              className="flex flex-col items-start gap-[var(--s-4)]"
+            >
+              <motion.span
+                ref={magnetRef}
+                style={{ x: magnetX, y: magnetY }}
+                className="inline-block w-full sm:w-auto"
+              >
+                {cta}
+              </motion.span>
+            </motion.div>
+          </motion.div>
         </div>
-
-        {ctaPlacement === 'below-content' && ctaBlock}
 
         {partners ? (
           <>
