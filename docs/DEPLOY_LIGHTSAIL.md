@@ -8,6 +8,19 @@
 
 `dev` 브랜치에 동기화하는 별도 테스트 서버는 [스테이징 자동 배포 런북](STAGING.md)을 따른다. 운영 VM·DB와 분리하고, 새 서버 설정 후에만 GitHub의 staging 배포를 활성화한다.
 
+## 운영자 콘솔 패스키 — DDL 선행 (2026-11-21)
+
+admin-supporter-b가 TOTP에 더해 패스키(WebAuthn: 지문·얼굴·기기 잠금)를 2차 인증 수단으로 받는다. 자격증명은 `admin_passkeys` 테이블에 저장하고 본 서비스는 이 테이블을 읽거나 쓰지 않는다. 이 변경은 `lib/db/schema`·`scripts/migrations`를 바꾸므로 운영 CI의 스키마 fingerprint가 달라진다.
+
+1. 이 스키마가 **`main`에 들어간 뒤에** 테이블을 만든다. 이유와 `schema-ready` 확인에서 멈추는 동작은 아래 `admin_users` 절과 같다.
+2. `scripts/migrations/20261121-admin-passkeys.sql`을 적용한다. `admin_users`를 FK로 참조하므로 그 테이블이 먼저 있어야 한다. 시드는 없다. 구 admin은 이 테이블을 무시하므로 admin 배포 전에 적용해도 안전하다.
+3. 검증한 manifest의 `schema` 값을 `shared/schema-ready`에 기록해 본 서비스 배포를 이어 간다.
+4. 그다음 admin을 배포한다. 새 admin은 2차 인증 화면에서 이 테이블을 조회하므로, 테이블 없이 먼저 배포하면 패스키를 쓰지 않는 관리자의 **TOTP 로그인까지 실패한다.** 스테이징도 같은 순서를 지킨다. 앱 롤백 때도 테이블과 행은 남긴다.
+
+```bash
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261121-admin-passkeys.sql
+```
+
 ## 운영자 콘솔 관리자 계정·2차 인증 — DDL 선행 (2026-11-15)
 
 admin-supporter-b가 `ADMIN_EMAILS` 환경변수 대신 `admin_users` 테이블로 관리자 허용 목록과 TOTP 2차 인증을 관리한다. 본 서비스는 이 테이블을 읽거나 쓰지 않는다. 이 변경은 `lib/db/schema`·`scripts/migrations`를 바꾸므로 운영 CI의 스키마 fingerprint가 달라진다.
