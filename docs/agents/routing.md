@@ -65,4 +65,4 @@ SEO 보고서 반영(2026-11-09): buyer 사이트맵은 공개 법적 고지 네
 
 ## PG 가입 신청
 
-`/quote-start`에서 비회원도 예상 견적을 조회한다. `/instant-quotes`와 하위 상세는 페이지에서 실제 워크스페이스·사용자·멤버·이메일 인증을 검사한다. 구매사 심사 대기 사용자는 자신의 신청에서 가입·재신청과 상태 확인이 가능하다. `/contact-confirm/instant/[id]/[step]`은 공개 메일 회신 페이지다.
+PG 접수가 열려 있으면 `/quote-start`에서 비회원도 예상 견적을 조회한다. 열림 판정은 `lib/server/services/instant-intake.ts` 하나가 맡고 요청마다 DB에서 읽는다. `/instant-quotes`와 하위 상세는 페이지에서 실제 워크스페이스·사용자·멤버·이메일 인증을 검사한다. 구매사 심사 대기 사용자는 자신의 신청에서 가입·재신청과 상태 확인이 가능하다. `/contact-confirm/instant/[id]/[step]`은 공개 메일 회신 페이지다.

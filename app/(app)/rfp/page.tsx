@@ -11,6 +11,7 @@ import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { getBidRepo, getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { filterRfps, type BoardFilterParams } from '@/lib/server/board/filterRfps';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
+import { showInstantEntry } from '@/lib/server/services/instant-intake';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,7 @@ export default async function RfpListPage({ searchParams }: Props) {
   const sp = await searchParams;
   const wsId = session.user.workspaceId;
 
+  const showInstant = await showInstantEntry({ userId: session.user.id, workspaceId: wsId }, 'buyer');
   const newRfpAction = (
     <Link href="/rfp-create">
       <Button size="sm" icon={<PlusIcon />}>
@@ -40,7 +42,8 @@ export default async function RfpListPage({ searchParams }: Props) {
   );
 
   return (
-    <div className="flex flex-col h-full"><Link className="px-5 pt-3 text-sm underline" href="/instant-quotes">PG 가입 신청</Link>
+    <div className="flex flex-col h-full">
+      {showInstant && <Link className="px-5 pt-3 text-sm underline" href="/instant-quotes">PG 가입 신청</Link>}
       <Suspense
         fallback={
           <>

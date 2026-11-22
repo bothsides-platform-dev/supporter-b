@@ -1,4 +1,4 @@
-import { websiteFirstIntake } from '@/lib/rfp/assignment';
+import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
 import { z } from 'zod';
 import { assistResultSchema } from './suggestions';
 import { quoteSavingsSchema } from './quote-savings';
@@ -20,6 +20,6 @@ export const quoteContextSchema = z.object({
   savings: quoteSavingsSchema.optional(),
 }).strict();
 export type QuoteContext = z.infer<typeof quoteContextSchema>;
-export const newQuoteContext = (): QuoteContext => ({
-  version: 1, stage: websiteFirstIntake() ? 'website' : 'business', bizNo: '', companyName: '', confirmed: [], userFields: [], analysisState: 'idle',
+export const newQuoteContext = (websiteFirst = assignmentIntakeEnabled()): QuoteContext => ({
+  version: 1, stage: websiteFirst ? 'website' : 'business', bizNo: '', companyName: '', confirmed: [], userFields: [], analysisState: 'idle',
 });

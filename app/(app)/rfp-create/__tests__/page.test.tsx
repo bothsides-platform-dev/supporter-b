@@ -42,6 +42,9 @@ vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   RfpCreateWizard: () => null,
 }));
 
+const mockIntakeOpen = vi.hoisted(() => vi.fn(async () => false));
+vi.mock('@/lib/server/services/instant-intake', () => ({ instantIntakeOpen: mockIntakeOpen }));
+
 import RfpNewPage from '../page';
 
 const BUYER_SESSION = {
@@ -93,6 +96,20 @@ describe('RfpNewPage — 인증 가드', () => {
 
     const el = await RfpNewPage({ searchParams: Promise.resolve({}) });
     expect(el).not.toBeNull();
+  });
+
+  it('즉시 견적 접수가 열렸을 때만 바로 가입 견적 링크를 보여준다', async () => {
+    mockAuth.mockResolvedValue(BUYER_SESSION);
+    mockRequireBuyerPage.mockResolvedValue(BUYER_SESSION);
+    // 서버 컴포넌트가 돌려준 엘리먼트 트리에서 링크 주소만 모은다.
+    const hrefs = (node: unknown): string[] => {
+      if (Array.isArray(node)) return node.flatMap(hrefs);
+      const props = (node as { props?: { href?: string; children?: unknown } } | null)?.props;
+      return props ? [...(props.href ? [props.href] : []), ...hrefs(props.children)] : [];
+    };
+    expect(hrefs(await RfpNewPage({ searchParams: Promise.resolve({}) }))).not.toContain('/quote-start');
+    mockIntakeOpen.mockResolvedValueOnce(true);
+    expect(hrefs(await RfpNewPage({ searchParams: Promise.resolve({}) }))).toContain('/quote-start');
   });
 });
 
