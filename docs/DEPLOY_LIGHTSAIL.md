@@ -186,6 +186,12 @@ cd bidit && bash scripts/deploy/lightsail-deploy.sh
 git pull → install → DB 기동 대기 → 영업일 달력 적재·coverage 확인(`scripts/calendar/sync.ts` → `scripts/calendar/check.ts`, 필요한 연도가 비면 중단) → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
+>
+> ⚠️ 확인 화면에서 **Esc 로 취소하지 않는다** — drizzle-kit 0.31.10 은 Esc 를 받으면 계획을
+> 그대로 실행한다. `No, abort` + Enter 또는 Ctrl-C 로 중단한다. push 는 트랜잭션 없이 실행하고
+> SQL 오류에도 exit 0 이므로 종료코드로 성공을 판단하지 않는다. SQL 로 enum 값을 추가한 DB 는
+> 순서 차이 때문에 `DROP TYPE` 이 계획에 나올 수 있다 — 이때는 중단한다(실행하면 앞선
+> `DROP CONSTRAINT` 만 남고 실패할 수 있다).
 
 > **v0.6.1.0 (워크스페이스 이름 변경 심사) — 양쪽 앱 배포 전에 additive DDL을 먼저 적용한다**:
 > 고객 앱과 운영자 콘솔이 새 요청 테이블을 직접 읽으므로, 테이블 없이 앱을 먼저 배포하면

@@ -13,4 +13,8 @@ export default {
   dialect: 'postgresql',
   dbCredentials: { url: process.env.DATABASE_URL! },
   casing: 'snake_case',
+  // Without these, push runs non-data-loss DDL (DROP CONSTRAINT, DROP TYPE) with
+  // no plan or prompt. `--force` still skips the prompt for disposable CI DBs.
+  strict: true,
+  verbose: true,
 } satisfies Config;
