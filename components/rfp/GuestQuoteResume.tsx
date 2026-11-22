@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/primitives/Button";
 import { RfpCreateWizard } from "./RfpCreateWizard";
+import { GuestBusinessConfirmation } from './GuestBusinessConfirmation';
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
 import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
 import {
@@ -117,6 +118,7 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
         <Link href="/rfp-create">견적 작성을 시작해요</Link>
       ) : choice === "guest" ? (
         <RfpDraftProvider value={session.store}>
+          <GuestBusinessConfirmation store={session.store} context={session.draft.quoteContext}>
           <RfpCreateWizard
             {...props}
             resumedAnswers
@@ -143,6 +145,7 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
             attachmentsBusy={busy}
             onCreated={() => clear()}
           />
+          </GuestBusinessConfirmation>
         </RfpDraftProvider>
       ) : (
         <div className="space-y-4">

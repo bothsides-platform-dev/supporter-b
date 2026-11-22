@@ -40,6 +40,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     memo: row.memo,
     websiteUrl: row.websiteUrl ?? undefined,
     mainProducts: row.mainProducts ?? undefined,
+    expectedVolume: terms.expectedVolume,
     monthlyAvgPgVolume: terms.monthlyAvgPgVolume ?? undefined,
     currentFeeRate: terms.feeRate ?? undefined,
     currentSettlementLimit: terms.settlementLimit ?? undefined,

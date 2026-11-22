@@ -1,6 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
+import { VOLUME_LABELS } from '@/lib/rfp/assignment';
 import { productInfoRows, productInfoSchema } from '@/lib/rfp/product-info';
 import { cn } from '@/lib/utils';
 import { Divider } from '@/components/primitives/Divider';
@@ -75,6 +76,7 @@ export function RequestSummary({ draft, industryName, workspaceName, bizProfile,
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
           {product.success && productInfoRows(product.data).map(([label, value]) => <ReviewRow key={label} label={label} value={value ?? ''} numeric={label === '최고 상품 가격대'} />)}
+          {draft.contractType === 'new' && draft.expectedVolume && <ReviewRow label="예상 월 PG 거래액" value={VOLUME_LABELS[draft.expectedVolume]} />}
           {/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어(서버에서도 strip) 요약에서 숨긴다. */}
           {draft.contractType === 'renewal' && <ReviewRow label="현재 이용 중인 PG사" value={draft.currentPgs?.map(pg => pg.name).join(', ') ?? ''} />}
           {draft.contractType !== 'new' && (

@@ -1,4 +1,5 @@
 export type BusinessTemplate =
+  | 'pgAssignment'
   | 'rfpInvited'
   | 'bidSubmitted'
   | 'requoteRequested'
@@ -13,6 +14,7 @@ export type BusinessAlimtalk = {
   rfpCode: string | null;
   /** Counterparty workspace name for chat templates. */
   senderName?: string;
+  assignment?: {title:string;due:string};
   linkUrl:
     | string
     | ((recipient: {

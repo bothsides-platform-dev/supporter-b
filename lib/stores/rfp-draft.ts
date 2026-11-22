@@ -34,6 +34,9 @@ export type RfpDraftStore = {
   industryMode: 'registered' | 'custom';
   customIndustryName: string;
   matchingRequestKey: string;
+  expectedVolume?: import('@/lib/rfp/assignment').VolumeBand;
+  guestBusiness?: import('@/lib/guest-rfp/business-confirmation').BusinessConfirmation;
+  contactConsent?: import('@/lib/rfp/assignment').ContactConsent;
   monthlyAvgPgVolume: string;
   currentFeeRate: string;
   currentSettlementLimit: string;
@@ -44,7 +47,7 @@ export type RfpDraftStore = {
   currentSolutionDetail: string;
   memo: string;
   rfpFiles: RfpMockFile[];
-  allowedPgWorkspaceIds: PgWorkspaceItem[];
+  allowedPgWorkspaceIds: (PgWorkspaceItem & { requiresContactConsent?: boolean })[];
   requiredPaymentMethods: PaymentMethod[];
   customPaymentMethods: DraftCustomPaymentMethod[];
   deadline: string;
@@ -60,6 +63,9 @@ export type RfpDraftStore = {
 };
 
 const defaultState = {
+  expectedVolume: undefined,
+  contactConsent: undefined,
+  guestBusiness: undefined,
   currentPgs: [] as CurrentPg[],
   productInfo: {} as ProductInfoDraft,
   contentQuestion: 'website',
@@ -188,6 +194,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         industryMode: state.industryMode,
         customIndustryName: state.customIndustryName,
         matchingRequestKey: state.matchingRequestKey,
+        expectedVolume: state.expectedVolume,
         monthlyAvgPgVolume: state.monthlyAvgPgVolume,
         currentFeeRate: state.currentFeeRate,
         currentSettlementLimit: state.currentSettlementLimit,

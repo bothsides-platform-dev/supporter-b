@@ -1,4 +1,6 @@
-import { getBusinessCalendarRepo, getDb, getDeadlineNotificationRepo, getRfpRepo, getRfpRequoteRequestRepo, getPgMatchingRepo, getInvitationRepo, getBidRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { runConsultationDeadlines } from './consultation-deadlines';
+import { caseNotice } from './consultation-notices';
+import { getConsultationRepo, getBusinessCalendarRepo, getDb, getDeadlineNotificationRepo, getRfpRepo, getRfpRequoteRequestRepo, getPgMatchingRepo, getInvitationRepo, getBidRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { planDeadlineNotices } from '@/lib/rfp/deadline-notice-plan';
 import { kstDateOf } from '@/lib/utils/deadline';
 import { notify } from '@/lib/server/notifications/notify';
@@ -108,7 +110,19 @@ export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processe
             }));
             count += claimed.length;
           }
+          const repo=await getConsultationRepo();
+          const assigned=currentReview && await repo.case(currentReview.id,tx);
           for (const reminder of plan.reminders) {
+            if (assigned && reminder.pgWsId===assigned.review.pgWorkspaceId) {
+              const key='quote-reminder-'+reminder.round+'-'+reminder.deadline+'-'+assigned.assignment.revision;
+              const members=(await repo.recipients(reminder.pgWsId,'pg',tx)).filter(m=>m.userId===assigned.assignment.assignee);
+              if (members.length && await repo.event(assigned.review.id,key,'',tx)) {
+                const notices=await caseNotice(tx,assigned,'rep',members,key,'견적 마감일이 다가와요',
+                  rfp.code+' 견적 제출 마감은 '+dateLabel(reminder.deadline)+'예요.');
+                emits.push(...notices); count+=notices.length;
+              }
+              continue;
+            }
             const members = await workspaces.approvedMemberRecipients(reminder.pgWsId, tx);
             await send('reminder', members.map((member) => ({ ...member, workspaceId: reminder.pgWsId })),
               (userId) => `reminder:${id}:${reminder.pgWsId}:${currentReview?.id ?? 'legacy'}:${reminder.round}:${reminder.deadline}:${userId}`,
@@ -117,7 +131,7 @@ export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processe
           }
           const buyerMembers = await workspaces.approvedMemberRecipients(rfp.buyerWsId, tx);
           const justClosed = plan.closed && now.getTime() - effectiveDeadline.getTime() < CLOSED_NOTICE_WINDOW_MS;
-          if (justClosed && (!isMatching || (currentReview && ['requested', 'reviewing', 'quoted'].includes(currentReview.status)))) {
+          if (justClosed && (!assigned || !!assigned.assignment.quotedAt) && (!isMatching || (currentReview && ['requested', 'reviewing', 'quoted'].includes(currentReview.status)))) {
             const noCurrentQuote = isMatching && currentReview && !allBids.some((bid) =>
               bid.pgWsId === currentReview.pgWorkspaceId && bid.status === 'submitted');
             const closedBody = noCurrentQuote
@@ -153,5 +167,6 @@ export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processe
     }
     if (ids.length < 250) break;
   }
-  return { processed, notified, failed };
+  const consultation=await runConsultationDeadlines(fixedNow);
+  return { processed, notified:notified+consultation.notified, failed:failed+consultation.failed };
 }

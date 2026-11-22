@@ -1,4 +1,5 @@
 'use server';
+import { getConsultationRepo } from '@/lib/server/repositories/factory';
 
 import {
   getAttachmentRepo,
@@ -244,14 +245,18 @@ export async function loadConversationThread(
     attachmentsByMsgId.set(chatMessageId, list);
   }
 
+  const tagged=rows.filter(m=>m.rfpId && m.authorWsId===conv.pgWsId);
+  const protectedAuthors=ws.workspaceType==='buyer' && tagged.length
+    ? await (await getConsultationRepo()).messageIdentities(tagged.map(m=>m.id)) : new Map();
   const messages: ThreadMessage[] = rows.map((m) => {
+    const identity=protectedAuthors.get(m.id);
     const isSelf = m.authorWsId === ws.workspaceId;
     return {
       id: m.id,
-      authorUserId: m.authorUserId,
-      authorName: m.authorName,
-      authorEmail: m.authorEmail,
-      authorAvatarUpdatedAt: m.authorAvatarUpdatedAt
+      authorUserId: identity && !identity.selected ? '' : m.authorUserId,
+      authorName: identity && !identity.showName ? identity.name : m.authorName,
+      authorEmail: identity && !identity.selected ? '' : m.authorEmail,
+      authorAvatarUpdatedAt: (!identity || identity.selected) && m.authorAvatarUpdatedAt
         ? new Date(m.authorAvatarUpdatedAt).toISOString()
         : null,
       sender: isSelf ? 'self' : 'other',

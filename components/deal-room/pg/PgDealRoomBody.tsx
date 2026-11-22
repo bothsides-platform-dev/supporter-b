@@ -209,6 +209,7 @@ export function PgDealRoomBody({
 
   const requestContent = (
     <>
+      {rfp.status === 'sent' && data.review?.assignment && buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
       <RfpBriefPanel rfp={displayRfp} buyer={buyer} industryName={data.industryName} />
       {rfp.rfpFiles.length === 0 && (
         <p className="py-4 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">

@@ -1,3 +1,4 @@
+import { assignmentIntakeEnabled, VOLUME_LABELS } from '@/lib/rfp/assignment';
 import { formatSolutionSummary } from '@/lib/rfp/solutions';
 import { industryDisplay } from '@/lib/rfp/industry-display';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
@@ -28,6 +29,7 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
     { id: 'contract', section: '계약 조건', optional: false, title: '어떤 계약을 준비하나요?', valid: ok('contract') },
     ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: ok('current-pgs') }] : []),
     { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: ok('payment') },
+    ...(assignmentIntakeEnabled() && d.contractType === 'new' ? [{ id: 'expected-volume', section: '계약 조건', optional: false, title: '한 달에 얼마를 결제받을 예정인가요?', valid: ok('expected-volume') }] : []),
     ...(d.contractType === 'renewal' ? [
       // id 는 GA4·여정 이벤트 식별자라 값이 월 평균이어도 유지한다.
       { id: 'annual', section: '계약 조건', optional: false, title: '전년도 월 평균 PG 거래액은 얼마인가요?', valid: ok('annual') },
@@ -61,6 +63,7 @@ export function questionAnswer(id: string, d: RfpDraftStore, groups: readonly Pu
     case 'contract': value = d.contractType ? CONTRACT_TYPE_LABELS[d.contractType] : ''; break;
     case 'current-pgs': value = d.currentPgs.map(pg => pg.name).join(', '); break;
     case 'payment': value = [...d.requiredPaymentMethods.map(v => PAYMENT_METHOD_LABELS[v]), ...d.customPaymentMethods.map(v => v.label)].join(', '); break;
+    case 'expected-volume': value = d.expectedVolume && VOLUME_LABELS[d.expectedVolume]; break;
     case 'annual': value = money(d.monthlyAvgPgVolume); break;
     case 'fee': value = d.currentFeeRate ? `${d.currentFeeRate}%` : ''; break;
     case 'limit': value = money(d.currentSettlementLimit); break;

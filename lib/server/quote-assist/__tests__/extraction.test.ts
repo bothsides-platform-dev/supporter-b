@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { extractWebsiteSuggestions } from '../extraction';
+import { extractWebsiteSuggestions, websiteBusinessNumber } from '../extraction';
 
 it('명시된 구조화 상품과 알려진 솔루션만 제안하며 빈 정보로 아니요를 만들지 않는다', () => {
   const result = extractWebsiteSuggestions([{ url: 'https://shop.example', html: '<script type="application/ld+json">{"@type":"Product","name":"면 티셔츠","category":"의류"}</script><script src="https://img.echosting.cafe24.com/a.js"></script>' }],
@@ -13,4 +13,12 @@ it('상품으로 명시한 메타데이터만 사용하고 단순 외부 링크�
   const page = { url: 'https://shop.example.com', html: '<meta content="product" property="og:type"><meta property="og:title" content="면 &amp; 린넨 셔츠"><a href="https://cafe24.com/">관련 기사</a>' };
   expect(extractWebsiteSuggestions([page], [])).toMatchObject([{ field: 'mainProducts', value: '면 & 린넨 셔츠' }]);
   expect(extractWebsiteSuggestions([{ ...page, html: '<meta property="og:title" content="상점"><a href="https://cafe24.com/">기사</a>' }], [])).toEqual([]);
+});
+
+it('페이지 끝의 등록번호도 검사하며 서로 다른 유효 번호가 둘이면 제안하지 않는다',()=>{
+ const page=(html:string)=>({url:'https://example.test',html});
+ const footer=page('상품 '.repeat(9000)+'<footer>사업자등록번호 220-81-62517</footer>');
+ expect(websiteBusinessNumber([footer,footer])).toBe('2208162517');
+ expect(websiteBusinessNumber([footer,page('사업자 번호 124-81-00998')])).toBeUndefined();
+ expect(websiteBusinessNumber([page('사업자등록번호 000-00-00000 <script>사업자등록번호 220-81-62517</script>')])).toBeUndefined();
 });

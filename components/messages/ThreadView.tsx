@@ -528,7 +528,7 @@ export function ThreadView({
               >
                 {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <UserProfileCard name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
+                    {m.authorUserId && <UserProfileCard name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />}
                     <span
                       title={m.authorEmail || undefined}
                       className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]"

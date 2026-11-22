@@ -1,5 +1,6 @@
 // components/rfp/RfpStep2Content.tsx
 'use client';
+import { assignmentIntakeEnabled, VOLUME_BANDS, VOLUME_LABELS } from '@/lib/rfp/assignment';
 
 import { useId, useState } from 'react';
 import Image from 'next/image';
@@ -222,6 +223,13 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         })}
         error={paymentError}
       />)}
+      {assignmentIntakeEnabled() && draft.contractType === 'new' && (!question || question === 'expected-volume') && <fieldset className="space-y-2">
+        <legend className="md-label-medium">예상 월 PG 거래액</legend>
+        {VOLUME_BANDS.map(band => <label key={band} className="flex items-center gap-2 py-1">
+          <input type="radio" name="expected-volume" checked={draft.expectedVolume === band} onChange={() => draft.setField('expectedVolume', band)} />
+          {VOLUME_LABELS[band]}
+        </label>)}
+      </fieldset>}
       {showPgHistoryFields && (
       <>{/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어 숨김 */}
       {(!question || question === 'annual') && (<CurrencyInput

@@ -20,6 +20,7 @@ export type Suggestion = z.infer<typeof suggestionSchema>;
 export const assistResultSchema = z.object({
   status: z.enum(['complete', 'partial', 'manual']),
   suggestions: z.array(suggestionSchema).max(10),
+  suggestedBizNo: z.string().regex(/^\d{10}$/).optional(),
   needsConfirmation: z.array(z.string().max(40)).max(15),
   business: z.object({
     bizNo: z.string().regex(/^\d{10}$/),

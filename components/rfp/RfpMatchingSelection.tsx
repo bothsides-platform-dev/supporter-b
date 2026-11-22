@@ -1,4 +1,6 @@
 'use client';
+import { assignmentSize } from '@/lib/rfp/assignment';
+import { ContactConsentField } from './ContactConsentField';
 import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
@@ -99,6 +101,8 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   const demo = useBuyerDemo();
   const draftApi = useRfpDraftApi();
   const selected = useRfpDraft(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
+  const size = useRfpDraft(assignmentSize);
+  const consent = useRfpDraft(s => s.contactConsent);
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
   const visibleResult = !demo && !state.error && !!state.result && elapsed >= MIN_MATCHING_LOADING_MS;
@@ -110,6 +114,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }, [demo, state.error]);
   useEffect(() => {
     let canceled = false;
+    draftApi.getState().setField('contactConsent',undefined);
     draftApi.getState().setField('allowedPgWorkspaceIds', []);
     // The presentation is a minimum duration, never a server progress percentage.
     const timers = [1000, 2000, 4700, MIN_MATCHING_LOADING_MS].map(ms => setTimeout(() => setElapsed(ms), ms));
@@ -144,12 +149,24 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
     return <RfpMatchingLoading phase={phase} business={state.business} industryName={industryName}>{back}</RfpMatchingLoading>;
   }
   const recommendation = state.result;
+  const chosen = recommendation.candidates.find(candidate => candidate.pgWorkspaceId === selected);
+  const needsConsent = chosen && size && recommendation.assignmentPgIds?.includes(selected);
+  function selectPg(id: string) {
+    const pg = recommendation.candidates.find(candidate => candidate.pgWorkspaceId === id);
+    if (!pg) return;
+    const { setField } = draftApi.getState();
+    setField('contactConsent', undefined);
+    setField('allowedPgWorkspaceIds', [{
+      id, displayName: pg.name, logoUpdatedAt: null,
+      ...(recommendation.assignmentPgIds?.includes(id) && { requiresContactConsent: true }),
+    }]);
+  }
   return (
     <MatchingReviewLayout pane={pane} recommendation={
-      <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
-        const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
-        if (pg) draftApi.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
-      }} />
+      <div className="space-y-4">
+        <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={selectPg} />
+        {needsConsent && <ContactConsentField pg={chosen} consent={consent} onChange={value => draftApi.getState().setField('contactConsent', value)} />}
+      </div>
     }>{children}</MatchingReviewLayout>
   );
 }

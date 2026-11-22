@@ -23,6 +23,8 @@ import {
   isTitleValid,
 } from '@/lib/rfp/required-fields';
 
+import { assignmentIntakeEnabled, VOLUME_BANDS, type VolumeBand } from './assignment';
+
 export type SendReadinessInput = {
   title?: string;
   websiteUrl?: string;
@@ -31,6 +33,7 @@ export type SendReadinessInput = {
   industryMode?: 'registered' | 'custom';
   industryGroupId?: string;
   customIndustryName?: string;
+  expectedVolume?: VolumeBand;
   monthlyAvgPgVolume?: string;
   deliveryServicePeriod?: string;
   requiredPaymentMethods: readonly unknown[];
@@ -54,6 +57,7 @@ export type SendReadinessRule =
   | 'product-sales'
   | 'industry'
   | 'current-pgs'
+  | 'expected-volume'
   | 'monthly-avg-volume'
   | 'payment'
   | 'deadline'
@@ -113,6 +117,8 @@ const RULES: readonly Rule[] = [
   { rule: 'current-pgs', step: 2, questionId: 'current-pgs', path: 'currentPgs', message: '현재 이용 중인 PG사를 입력해요', questionFlowOnly: true,
     unmet: ({ input }) => input.contractType === 'renewal' && !currentPgsSchema.min(1).safeParse(input.currentPgs).success },
   // 신규 계약은 전년도 PG 거래액이 존재할 수 없어 필수에서 제외한다(predicate 가 판정).
+  { rule: 'expected-volume', step: 2, questionId: 'expected-volume', path: 'expectedVolume', message: '예상 월 PG 거래액을 선택해주세요', questionFlowOnly: false,
+    unmet: ({ input }) => assignmentIntakeEnabled() && input.contractType === 'new' && !VOLUME_BANDS.includes(input.expectedVolume!) },
   { rule: 'monthly-avg-volume', step: 2, questionId: 'annual', path: 'monthlyAvgPgVolume', message: '전년도 월 평균 PG 거래액을 입력해주세요', questionFlowOnly: false,
     unmet: ({ input }) => !isMonthlyAvgPgVolumeSatisfied(input.monthlyAvgPgVolume ?? '', input.contractType) },
   { rule: 'payment', step: 2, questionId: 'payment', path: 'requiredPaymentMethods', message: '견적 받을 결제수단을 1개 이상 선택해주세요', questionFlowOnly: false,

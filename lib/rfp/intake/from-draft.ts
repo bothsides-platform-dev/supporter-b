@@ -39,6 +39,8 @@ export function createRfpInputFromDraft(
     title: draft.title.trim(),
     websiteUrl: text(draft.websiteUrl),
     mainProducts: text(draft.mainProducts),
+    ...(draft.contractType === 'new' && draft.expectedVolume ? { expectedVolume: draft.expectedVolume } : {}),
+    ...(draft.contactConsent ? { contactConsent: draft.contactConsent } : {}),
     monthlyAvgPgVolume: text(draft.monthlyAvgPgVolume),
     currentFeeRate: text(draft.currentFeeRate),
     currentSettlementLimit: text(draft.currentSettlementLimit),
@@ -75,12 +77,12 @@ const _FORWARDED_DRAFT_KEYS = [
   'deliveryServicePeriod', 'currentSolution', 'currentSolutionDetail', 'memo', 'deadline',
   'allowedPgWorkspaceIds', 'requiredPaymentMethods', 'customPaymentMethods', 'boardVisible',
   'currentFeeVisibleToPg', 'contractType', 'currentPgs', 'industryMode', 'industryGroupId',
-  'customIndustryName',
+  'customIndustryName', 'expectedVolume', 'contactConsent',
 ] as const satisfies readonly (keyof RfpDraftData)[];
 // 제출 시점에 다른 이름으로 전달: matchingRequestKey → requestKey, rfpFiles → rfpAttachmentIds.
 const _SUBMISSION_DRAFT_KEYS = ['matchingRequestKey', 'rfpFiles'] as const satisfies readonly (keyof RfpDraftData)[];
 // 화면 상태 — 서버는 받지 않는다.
-const _UI_ONLY_DRAFT_KEYS = ['contentQuestion', 'deadlineChoice', 'pgSelectionInitialized'] as const satisfies readonly (keyof RfpDraftData)[];
+const _UI_ONLY_DRAFT_KEYS = ['guestBusiness', 'contentQuestion', 'deadlineChoice', 'pgSelectionInitialized'] as const satisfies readonly (keyof RfpDraftData)[];
 type _UnclassifiedDraftKey = Exclude<
   keyof RfpDraftData,
   | (typeof _FORWARDED_DRAFT_KEYS)[number]
