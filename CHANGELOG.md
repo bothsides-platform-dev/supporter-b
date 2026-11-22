@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.1.2] - 2026-11-23
+
+### Fixed
+
+- 같은 계정·같은 IP의 로그인 요청이 동시에 들어오면 로그인 시도 기록 정리가 DB 교착에 걸려, 비밀번호가 맞아도 "이메일 또는 비밀번호를 확인해요."로 실패할 수 있던 문제를 고쳤다. 로그인 잠금 기준은 그대로다.
+
 ## [0.49.1.1] - 2026-11-22
 
 ### Fixed

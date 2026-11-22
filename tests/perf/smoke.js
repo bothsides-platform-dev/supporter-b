@@ -15,7 +15,7 @@ const BUYER_EMAIL    = __ENV.TEST_BUYER_EMAIL    || 'perf-buyer@supporter-b.test
 const BUYER_PASSWORD = __ENV.TEST_BUYER_PASSWORD || 'perf-password-123';
 const PG_EMAIL       = __ENV.TEST_PG_EMAIL       || 'perf-pg-1@supporter-b.test';
 const PG_PASSWORD    = __ENV.TEST_PG_PASSWORD    || 'perf-password-123';
-const RFP_ID         = __ENV.TEST_RFP_ID         || '';
+const RFP_CODE       = __ENV.TEST_RFP_CODE       || 'P-PERF-0001';
 
 export const options = {
   vus: 2,
@@ -52,11 +52,12 @@ export default function smokeScenario() {
     'inbox authenticated (not /login)': (r) => !r.url.includes('/login'),
   });
 
-  if (RFP_ID) {
-    // 인박스 상세 (견적 작성 페이지)
-    const detailRes = http.get(`${BASE_URL}/inbox/${RFP_ID}`, { tags: { name: 'inbox-detail' } });
-    check(detailRes, { 'inbox-detail 200': (r) => r.status === 200 });
-  }
+  // 인박스 상세 (견적 작성 페이지) — notFound() 도 스트리밍이라 200 이므로 본문을 본다.
+  const detailRes = http.get(`${BASE_URL}/inbox/${RFP_CODE}`, { tags: { name: 'inbox-detail' } });
+  check(detailRes, {
+    'inbox-detail 200': (r) => r.status === 200,
+    'inbox-detail rendered (not 404)': (r) => r.body.includes('퍼프테스트 RFP'),
+  });
 
   sleep(1);
 }

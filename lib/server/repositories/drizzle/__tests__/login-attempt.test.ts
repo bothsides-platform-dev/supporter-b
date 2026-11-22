@@ -2,7 +2,9 @@
 //   - findByKey() reads the counter row (count + lockedUntil); miss → undefined.
 //   - upsert() inserts a new row then updates it by key.
 //   - clear() deletes the listed keys; empty array is a safe no-op.
-import { beforeEach, describe, expect, it } from 'vitest';
+//   - clear()/release() take row locks in reserve()'s key order, atomically.
+import { sql } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { DrizzleLoginAttemptRepository } from '../login-attempt';
@@ -101,5 +103,59 @@ describe('DrizzleLoginAttemptRepository', () => {
         { key: 'ip:203.0.113.8', count: 1, lockedUntil: null },
       ]),
     );
+  });
+
+  describe.each([
+    { method: 'clear', event: 'DELETE', returning: 'OLD' },
+    { method: 'release', event: 'UPDATE', returning: 'NEW' },
+  ] as const)('$method() write ordering', ({ method, event, returning }) => {
+    // Already unsorted, and stored in the opposite order to reserve()'s locks.
+    const keys = ['ip:192.0.2.1', 'email:order@example.com'];
+    const write = () =>
+      method === 'clear' ? ctx.repo.clear(keys) : ctx.repo.release(keys, 10);
+
+    async function onWrite(body: string) {
+      await ctx.db.execute(sql.raw(`
+        CREATE OR REPLACE FUNCTION probe_login_write() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN ${body} RETURN ${returning}; END $$`));
+      await ctx.db.execute(sql.raw(`
+        CREATE TRIGGER probe_login_write BEFORE ${event} ON login_attempts
+        FOR EACH ROW EXECUTE FUNCTION probe_login_write()`));
+    }
+
+    beforeEach(async () => {
+      // A heap scan makes the set-based failure independent of planner statistics.
+      await ctx.db.execute(sql.raw('SET enable_indexscan = off'));
+      await ctx.db.execute(sql.raw('SET enable_bitmapscan = off'));
+      await ctx.db.execute(sql.raw('CREATE TEMP TABLE write_order (seq serial, key text)'));
+      for (const key of keys) {
+        await ctx.repo.upsert(key, { count: 2, lockedUntil: null, updatedAt: new Date() });
+      }
+    });
+    afterEach(async () => {
+      await ctx.db.execute(sql.raw('DROP TRIGGER IF EXISTS probe_login_write ON login_attempts'));
+      await ctx.db.execute(sql.raw('DROP TABLE IF EXISTS write_order'));
+      await ctx.db.execute(sql.raw('RESET enable_indexscan'));
+      await ctx.db.execute(sql.raw('RESET enable_bitmapscan'));
+    });
+
+    // PGlite has one connection and cannot deadlock. A BEFORE row trigger runs in
+    // lock-acquisition order, so it exposes the order that prevents the deadlock.
+    it('locks rows in the same key order as reserve()', async () => {
+      await onWrite('INSERT INTO write_order (key) VALUES (OLD.key);');
+
+      await write();
+
+      const { rows } = await ctx.db.execute(sql.raw('SELECT key FROM write_order ORDER BY seq'));
+      expect(rows).toEqual([{ key: 'email:order@example.com' }, { key: 'ip:192.0.2.1' }]);
+    });
+
+    it('changes neither bucket when the second write fails', async () => {
+      await onWrite("IF OLD.key LIKE 'ip:%' THEN RAISE EXCEPTION 'second write failed'; END IF;");
+
+      await expect(write()).rejects.toThrow();
+
+      for (const key of keys) expect((await ctx.repo.findByKey(key))?.count).toBe(2);
+    });
   });
 });

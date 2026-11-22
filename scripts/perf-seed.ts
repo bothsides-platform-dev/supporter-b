@@ -5,7 +5,7 @@
  * 실행: pnpm perf:seed
  *
  * 출력 (stdout JSON):
- * { buyerEmail, buyerPassword, pgEmails, pgPassword, rfpIds, buyerWsId, pgWsIds }
+ * { buyerEmail, buyerPassword, pgEmails, pgPassword, rfpIds, rfpCodes, buyerWsId, pgWsIds }
  */
 import 'dotenv/config';
 
@@ -26,22 +26,27 @@ import { hashPassword } from '@/lib/auth/password';
 import { generateToken, hashToken } from '@/lib/server/token';
 import type { DB } from '@/lib/db/client';
 
-const BUYER_USER_ID = 'beef0000-0000-0000-0000-000000000001';
-const BUYER_WS_ID   = 'beef0000-0000-0000-0000-000000000010';
+// Must stay RFC 4122 (version 4, variant 8): the session refresh validates the
+// workspace id with z.uuid() and silently drops the claim otherwise.
+const BUYER_USER_ID = 'beef0000-0000-4000-8000-000000000001';
+const BUYER_WS_ID   = 'beef0000-0000-4000-8000-000000000010';
 
 const PG_COUNT = 10;
 const pgUserIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `beef0000-0000-0000-0001-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-4000-8001-${String(i + 1).padStart(12, '0')}`,
 );
 const pgWsIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `beef0000-0000-0000-0002-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-4000-8002-${String(i + 1).padStart(12, '0')}`,
 );
 const rfpIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `beef0000-0000-0000-0003-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-4000-8003-${String(i + 1).padStart(12, '0')}`,
 );
 const invitationIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `beef0000-0000-0000-0004-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-4000-8004-${String(i + 1).padStart(12, '0')}`,
 );
+
+// /inbox/[rfpId] takes the code, not the id.
+const rfpCodes = Array.from({ length: PG_COUNT }, (_, i) => `P-PERF-${String(i + 1).padStart(4, '0')}`);
 
 const BUYER_EMAIL    = 'perf-buyer@supporter-b.test';
 const BUYER_PASSWORD = 'perf-password-123';
@@ -100,7 +105,7 @@ export async function runPerfSeed(db: DB) {
   await db.insert(rfps).values(
     rfpIds.map((id, i) => ({
       id,
-      code:      `P-PERF-${String(i + 1).padStart(4, '0')}`,
+      code:      rfpCodes[i],
       buyerWsId: BUYER_WS_ID,
       title:     `퍼프테스트 RFP ${i + 1}`,
       deadline,
@@ -130,7 +135,7 @@ export async function runPerfSeed(db: DB) {
     })),
   );
 
-  return { buyerEmail: BUYER_EMAIL, buyerPassword: BUYER_PASSWORD, buyerWsId: BUYER_WS_ID, pgEmails, pgPassword: PG_PASSWORD, pgWsIds, rfpIds, invitationIds };
+  return { buyerEmail: BUYER_EMAIL, buyerPassword: BUYER_PASSWORD, buyerWsId: BUYER_WS_ID, pgEmails, pgPassword: PG_PASSWORD, pgWsIds, rfpIds, rfpCodes, invitationIds };
 }
 
 const invokedDirectly = (() => {
