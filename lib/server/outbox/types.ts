@@ -52,7 +52,7 @@ export type ClaimedOutboxEntry = OutboxEntry & {
   claimExpiresAt: string;
 };
 export type OutboxClaimResult =
-  | { ok: true }
+  | { ok: true; providerMessageId?: string }
   | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date };
 
 // SendResult — outcome of a single email send. On failure the sender classifies
@@ -62,7 +62,7 @@ export type OutboxClaimResult =
 // retryable (the historical default), so legacy `{ ok: false, error }` returns
 // keep their existing maxAttempts-bounded retry behaviour.
 export type SendResult =
-  | { ok: true }
+  | { ok: true; providerMessageId?: string }
   | { ok: false; error: string; retryable?: boolean; retryAfterMs?: number };
 
 /** Single-email sender (per-entry). Used by the digest flushers + dev fallback. */

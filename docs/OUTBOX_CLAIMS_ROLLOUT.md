@@ -27,6 +27,10 @@ rtk proxy psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f scripts/migrations/20261
 
 기존 일반 이메일 처리기가 `scheduled_at`에 남긴 5분 리스는 그대로 둔다. 시간이 되면 새 처리기가 선점한다. 이를 앞당기는 일괄 UPDATE는 하지 않는다.
 
+## 운영자가 예약한 견적 마감 안내
+
+운영 어드민은 기존 `rfp.deadline_reminder` 이메일과 같은 수신자·PG·상담·견적 회차·기한 키를 사용한다. 자동 안내의 인앱 알림은 기존 일정에 생성된다. 공유 DB에 `scripts/migrations/20261122-reminder-receipts.sql`을 먼저 적용하고 새 메인 서비스 메일 처리기를 배포한다. 처리기는 마감 안내에 outbox ID 태그를 붙이고 성공 응답의 이메일 ID를 선점 결과와 함께 저장한다. 일괄 응답에서 입력과 이메일 ID를 대응시킬 수 없는 건은 ID를 비워 둔다. 운영 어드민은 명시적인 조회 시 수신자와 태그가 일치하는 이메일의 상태와 조회 시각을 저장한다. [Resend 이메일 조회](https://resend.com/docs/api-reference/emails/retrieve-email)
+
 ## 롤백과 복구
 
 앱 롤백 시 추가 컬럼·CHECK·선점 기록을 삭제하지 않는다. cron과 새 요청 유입을 멈추고 신 앱의 진행 작업을 배출·종료한 다음 구 앱을 시작한다. 구 앱이 시작된 뒤에는 기존 cron `flock`이 다이제스트 중첩을 막는 필수 방어가 된다. 구·신 실행기를 동시에 두지 않는다.

@@ -140,6 +140,7 @@ export const ResendSender: Sender = async (entry) => {
         to: entry.to,
         subject: entry.subject,
         html: entry.html,
+        ...(entry.event === 'rfp.deadline_reminder' ? { tags: [{ name: 'outbox_id', value: entry.id }] } : {}),
       },
       // Idempotency key = the outbox row id. If markResult fails after a
       // successful send, the next flush re-sends with the same key and Resend
@@ -169,7 +170,8 @@ export const ResendSender: Sender = async (entry) => {
       messageId: (result as { data?: { id?: string } | null }).data?.id ?? null,
       durationMs: Date.now() - t0,
     });
-    return { ok: true };
+    const providerMessageId = result.data?.id;
+    return entry.event === 'rfp.deadline_reminder' && providerMessageId ? { ok: true, providerMessageId } : { ok: true };
   } catch (e) {
     Sentry.captureException(e, {
       extra: {
@@ -220,6 +222,7 @@ export const ResendBatchSender: BatchSender = async (entries) => {
     to: e.to,
     subject: e.subject,
     html: e.html,
+    ...(e.event === 'rfp.deadline_reminder' ? { tags: [{ name: 'outbox_id', value: e.id }] } : {}),
   }));
 
   try {
@@ -261,12 +264,16 @@ export const ResendBatchSender: BatchSender = async (entries) => {
       durationMs: Date.now() - t0,
     });
 
-    return entries.map((_, i) =>
-      failedIndices.has(i)
-        ? // A per-entry validation failure (bad payload/recipient) is permanent.
-          { ok: false as const, error: 'batch_validation_failed', retryable: false }
-        : { ok: true as const },
-    );
+    const ids = success?.data;
+    const completeMapping = ids?.length === entries.length - failedIndices.size;
+    let accepted = 0;
+    return entries.map((entry, i) => {
+      if (failedIndices.has(i)) return { ok: false as const, error: 'batch_validation_failed', retryable: false };
+      const id = ids?.[accepted++]?.id;
+      return entry.event === 'rfp.deadline_reminder' && completeMapping && id
+        ? { ok: true as const, providerMessageId: id }
+        : { ok: true as const };
+    });
   } catch (e) {
     Sentry.captureException(e, { extra: { count: entries.length } });
     // Transport-level failure for the whole call — retryable for every entry.
