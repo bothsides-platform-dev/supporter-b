@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.0.1] - 2026-11-22
+
+### Fixed
+
+- `gtag.js`가 세션 조회보다 먼저 실행되면 그 화면의 GA4 이벤트가 전부 빠지던 초기화 오류를 고쳤다. 인사이트에서 넘어온 `docs_main_arrival`도 기록된다.
+- PG·운영계정은 gtag가 스스로 보내는 자동 이벤트까지 GA4로 전송하지 않는다.
+
 ## [0.49.0.0] - 2026-11-22
 
 - 월 PG 거래액 5,000만 원 미만 구매사가 보장된 수수료·보증보험·정산 조건을 확인하고 전용 링크에서 가입할 수 있다.
