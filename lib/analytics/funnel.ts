@@ -6,6 +6,10 @@ const ROUTES = ['/', '/quote-start', '/rfp-create', '/signup/buyer', '/signup/bu
 export function safePagePath(value: string): string {
   try { const url = new URL(value, 'https://support-b.com'); return ROUTES.includes(url.pathname) ? url.pathname : '/other'; } catch { return '/other'; }
 }
+// Partner host, demo and tutorial are outside the buyer funnel, whoever is visiting.
+function excludedSurface(value: string): boolean {
+  try { const url = new URL(value, 'https://support-b.com'); return url.hostname !== 'support-b.com' || /^\/(demo|tutorial)(\/|$)/.test(url.pathname); } catch { return true; }
+}
 type Identity = { id?: string; workspaceType?: string; isMaster?: boolean } | null;
 function attribution(location: string, referrer: string) {
   const out: Record<string, string> = {};
@@ -22,9 +26,10 @@ function attribution(location: string, referrer: string) {
 }
 type Send = (...args: unknown[]) => void;
 type Pending = { name: FunnelEvent | 'page_view' | 'docs_main_arrival'; params: Record<string, unknown>; key?: string };
-export function createFunnelAnalytics(options: { production: boolean; send: Send; storage: () => Pick<Storage, 'getItem' | 'setItem'>; observe?: (name: FunnelEvent, params: FunnelParams) => void }) {
+export function createFunnelAnalytics(options: { production: boolean; send: Send; storage: () => Pick<Storage, 'getItem' | 'setItem'>; observe?: (name: FunnelEvent, params: FunnelParams) => void; setDisabled?: (id: string, disabled: boolean) => void }) {
   const docs = createDocsAssist(options.storage);
   let measurementId = '';
+  let excluded = false;
   let identity: Identity | undefined;
   let pending: Pending[] = [];
   let campaign: Record<string, string> = {};
@@ -58,7 +63,7 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
       }
       return arrival.location;
     },
-    configure(id: string, location = '/', referrer = '') { measurementId = /^G-[A-Z0-9]+$/.test(id) ? id : ''; campaign = attribution(location, referrer); },
+    configure(id: string, location = '/', referrer = '') { excluded = excludedSurface(location); measurementId = /^G-[A-Z0-9]+$/.test(id) ? id : ''; campaign = attribution(location, referrer); },
     pageView(location: string, referrer = '') {
       if (!allowed()) return;
       const page = safePagePath(location);
@@ -70,6 +75,8 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
     identify(user: Identity) {
       const changed = JSON.stringify(identity) !== JSON.stringify(user);
       identity = user;
+      // gtag sends automatic events on its own, so excluded accounts and surfaces need it off before config.
+      if (options.production && measurementId) options.setDisabled?.(measurementId, excluded || !allowed());
       if (options.production && measurementId && changed) safeSend('config', measurementId, {
         user_id: allowed() ? user?.id ?? null : null, send_page_view: false,
         page_location: 'https://support-b.com/', page_referrer: '', page_title: '/',
@@ -110,9 +117,13 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
 }
 
 // The standard gtag arguments queue works before the remote SDK has loaded.
+// gtag.js creates dataLayer itself, so an existing queue does not mean 'js' was sent.
+// Without 'js', gtag sends nothing for the whole document.
+let started = false;
 function send(...args: unknown[]) {
   const target = window as Window & { dataLayer?: unknown[] };
-  if (!target.dataLayer) { target.dataLayer = []; send('js', new Date()); }
+  target.dataLayer ??= [];
+  if (!started) { started = true; send('js', new Date()); }
   // gtag's queue consumes IArguments commands, not GTM event objects.
   // eslint-disable-next-line prefer-rest-params -- Required gtag queue representation.
   function command(..._values: unknown[]) { return arguments; }
@@ -121,6 +132,7 @@ function send(...args: unknown[]) {
 export const funnelAnalytics = createFunnelAnalytics({
   production: process.env.NODE_ENV === 'production', send,
   storage: () => localStorage,
+  setDisabled: (id, disabled) => { Object.assign(window, { [`ga-disable-${id}`]: disabled }); },
   observe: (name, params) => window.dispatchEvent(new CustomEvent('support-b:funnel', { detail: { name, params } })),
 });
 export const getFunnelIdentifier = (measurementId: string, field: string, callback: (value: unknown) => void) => send('get', measurementId, field, callback);
