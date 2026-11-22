@@ -52,6 +52,15 @@ describe('outbox delivery execution', () => {
     expect(firstStateDuringSecond).toBe('sent');
   });
 
+  it('commits the provider ID and successful status together under the reminder claim', async () => {
+    const { db, repo } = await setup();
+    const reminder = (await repo.enqueue({event:'rfp.deadline_reminder',to:'pg@example.test',subject:'test',html:'test'}))!;
+    await flushGenericOutbox(repo, async entries => entries.map(entry => entry.id === reminder.id
+      ? {ok:true,providerMessageId:'receipt'} : {ok:true}));
+    const [row] = await db.select().from(outboxEntries).where(eq(outboxEntries.id,reminder.id));
+    expect(row).toMatchObject({status:'sent',providerMessageId:'receipt',providerEvent:null});
+  });
+
   it('does not send an expired claim after slow digest preparation', async () => {
     const { db, repo } = await setup();
     const claims = await repo.claimDue('generic', 10);

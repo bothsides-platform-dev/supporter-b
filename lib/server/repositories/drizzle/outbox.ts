@@ -254,6 +254,7 @@ export class DrizzleOutboxRepository implements OutboxRepo {
           ? {
               status: 'sent' as const,
               sentAt: sql`now()`,
+              ...(result.providerMessageId ? { providerMessageId: result.providerMessageId } : {}),
             }
           : {
               status:

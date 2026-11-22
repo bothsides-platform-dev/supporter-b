@@ -36,7 +36,7 @@ export async function deliverClaimedEntries(
         entry.id,
         entry.claimToken,
         result.ok
-          ? { ok: true }
+          ? result
           : {
               ok: false,
               error: result.error,
