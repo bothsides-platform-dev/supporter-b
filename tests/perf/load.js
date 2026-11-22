@@ -19,7 +19,6 @@ const BASE_URL       = __ENV.BASE_URL            || 'http://localhost:3002';
 const BUYER_EMAIL    = __ENV.TEST_BUYER_EMAIL    || 'perf-buyer@supporter-b.test';
 const BUYER_PASSWORD = __ENV.TEST_BUYER_PASSWORD || 'perf-password-123';
 const PG_PASSWORD    = __ENV.TEST_PG_PASSWORD    || 'perf-password-123';
-const RFP_ID         = __ENV.TEST_RFP_ID         || '';
 
 export const options = {
   stages: [
@@ -56,10 +55,13 @@ export default function loadScenario() {
     'inbox authenticated (not /login)': (r) => !r.url.includes('/login'),
   });
 
-  if (RFP_ID) {
-    const detailRes = http.get(`${BASE_URL}/inbox/${RFP_ID}`, { tags: { name: 'inbox-detail' } });
-    check(detailRes, { 'inbox-detail 200': (r) => r.status === 200 });
-  }
+  // 봉인 입찰이라 PG 는 자기에게 배정된 RFP 만 열 수 있다 (seed: perf-pg-N ↔ P-PERF-000N).
+  const rfpCode = `P-PERF-${String(vuIdx + 1).padStart(4, '0')}`;
+  const detailRes = http.get(`${BASE_URL}/inbox/${rfpCode}`, { tags: { name: 'inbox-detail' } });
+  check(detailRes, {
+    'inbox-detail 200': (r) => r.status === 200,
+    'inbox-detail rendered (not 404)': (r) => r.body.includes('퍼프테스트 RFP'),
+  });
 
   sleep(3);
 }

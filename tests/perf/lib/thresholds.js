@@ -7,6 +7,8 @@
  *    본질적으로 느리기 때문(CI 단일 요청 ~700-800ms, 동시성 하에선 더). 그래서
  *    login·server-action 은 페이지 기준과 분리한 별도 상한으로 회귀만 잡는다.
  *  - 에러율 < 1%.
+ *  - check 통과율 > 99%. k6 는 check 가 실패해도 exit 0 이고, 미인증 리다이렉트·스트리밍
+ *    404 는 HTTP 200 이라 http_req_failed 에도 안 잡힌다.
  *
  * 업계 표준(저부하 기준): 페이지 p95 < 500ms, Server Action p95 < 800ms.
  */
@@ -18,6 +20,7 @@
 function makeThresholds({ page, login, action }) {
   return {
     http_req_failed: ['rate<0.01'],
+    checks: ['rate>0.99'],
 
     // 페이지 로드 — auth.js/scenario 의 tags.name 과 일치해야 한다.
     'http_req_duration{name:home}': [`p(95)<${page}`],
