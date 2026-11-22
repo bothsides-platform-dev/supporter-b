@@ -1,3 +1,4 @@
+import { instantIntakeEnabled } from '@/lib/rfp/instant-quote';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 export default async function QuoteStartPage() {
   const session = await auth();
   const autoRequestEnabled = process.env.GUEST_RFP_AUTO_SEND_ENABLED === 'true';
-  if (session?.user?.workspaceType === 'buyer' && !autoRequestEnabled)
+  if (session?.user?.workspaceType === 'buyer' && !autoRequestEnabled && !instantIntakeEnabled())
     redirect('/rfp-create');
   if (session?.user && session.user.workspaceType !== 'buyer')
     return (
@@ -45,7 +46,7 @@ export default async function QuoteStartPage() {
         <Logo />
         <ConsultButton size="sm" className="min-h-11 bg-transparent font-sans text-[14px] normal-case tracking-normal text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]">문의하기</ConsultButton>
       </header>
-      <GuestQuoteStart recovery={recovery && recovery.workspaceId ? { ...recovery, workspaceId: recovery.workspaceId } : undefined} autoRequestEnabled={autoRequestEnabled} pgList={pgList} industryGroups={industryGroups} />
+      <GuestQuoteStart loggedIn={!!session?.user?.id} recovery={recovery && recovery.workspaceId ? { ...recovery, workspaceId: recovery.workspaceId } : undefined} autoRequestEnabled={autoRequestEnabled} pgList={pgList} industryGroups={industryGroups} />
     </main>
   );
 }

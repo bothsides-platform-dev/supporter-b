@@ -166,6 +166,7 @@ export async function getGuestRequestService() {
             throw new Error("GUEST_REQUEST_FROZEN");
           return;
         }
+        if (draft.completedAt) throw new Error('GUEST_DRAFT_UNAVAILABLE');
         const { recommendation: options } = await recommendation(draft, tx);
         const newIntake = assignmentIntakeEnabled();
         const { data, quoteContext } = draft.answers;

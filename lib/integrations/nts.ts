@@ -87,7 +87,7 @@ export interface NtsClient {
    * `pool` 은 레이트리밋 몫을 가른다. 기본값은 더 제한적인 `'interactive'` —
    * 새 호출부가 지정을 잊어도 쓰기 몫을 갉아먹지 않는 쪽으로 실패한다.
    */
-  lookup(bizNo: string, opts?: { pool?: NtsLookupPool }): Promise<NtsLookupResult>;
+  lookup(bizNo: string, opts?: { pool?: NtsLookupPool; requireEcho?: boolean }): Promise<NtsLookupResult>;
 }
 
 // ─── leaky-bucket (in-process) ────────────────────────────────────────────
@@ -355,7 +355,7 @@ export class RealNtsClient implements NtsClient {
 
   async lookup(
     bizNo: string,
-    opts: { pool?: NtsLookupPool } = {},
+    opts: { pool?: NtsLookupPool; requireEcho?: boolean } = {},
   ): Promise<NtsLookupResult> {
     const reserve = opts.pool === 'write' ? 0 : WRITE_RESERVED_TOKENS;
     const key = process.env.NTS_SERVICE_KEY;
@@ -447,7 +447,7 @@ export class RealNtsClient implements NtsClient {
       // 정상 결과이므로 valid:false 반환 — MockNtsClient·액션 docstring과
       // 같은 계약 (throw 하면 UI가 '시스템 오류'로 오안내).
       const row = json?.data?.[0];
-      if (!row || !row.b_stt_cd) {
+      if (!row || !row.b_stt_cd || (opts.requireEcho && (json.data?.length !== 1 || row.b_no !== digits))) {
         return { valid: false };
       }
       const status = statusFromCode(row.b_stt_cd);

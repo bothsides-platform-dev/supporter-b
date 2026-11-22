@@ -48,7 +48,7 @@ function errorCopy(code: string) {
           "합의서를 처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
         );
 }
-export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
+export function PlatformAgreementPanel({ signing }: { signing: {contract: Pick<SigningView['contract'],'id'|'status'>} }) {
   const demo = useBuyerDemo();
   const router = useRouter();
   const id = signing.contract.id;

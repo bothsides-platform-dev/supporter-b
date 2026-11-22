@@ -22,6 +22,7 @@ import {
   type SnowSignContractDetail,
 } from '@/lib/server/signing/snowsign-client';
 import { captureSigningError } from '@/lib/server/signing/observability';
+import { signingRequest } from './signing-request';
 import type { RFP } from '@/lib/types/rfp';
 import type { Notification } from '@/lib/types/notification';
 import type {
@@ -101,7 +102,7 @@ export class SigningReconciliation {
     }
 
     if(contract.kind==='platform_buyer') {
-      const rfp=await this.deps.rfpRepo.findById(contract.rfpId);
+      const rfp=await signingRequest(this.deps.rfpRepo, contract);
       const buyer=rfp?await this.deps.userRepo.findContactById(rfp.createdBy):undefined;
       if(!buyer || !observedParticipantsMeetAuthoritativePolicy(detail.participants,buyer.email,new Set(),'platform_buyer')) {
         await this.deps.signingRepo.patchContract(contractId,{lastPolledAt:new Date().toISOString()});
@@ -208,7 +209,7 @@ export class SigningReconciliation {
         { cancelReason: '제공자 측 취소' },
       );
       if (transitioned) {
-        const rfp = await this.deps.rfpRepo.findById(contract.rfpId);
+        const rfp = await signingRequest(this.deps.rfpRepo, contract);
         if (rfp) {
           // 앱 내 cancel() 과 **다른 action** — 같은 action 을 쓰면 활동 기록이
           // '아무개가 취소했어요'로 읽힌다(실제로는 스노우싸인 콘솔 취소). actor 는
@@ -222,7 +223,7 @@ export class SigningReconciliation {
               actorUserId: rfp.createdBy,
               actorWorkspaceId: rfp.buyerWsId,
               action: 'signing.canceled_by_provider',
-              entityType: 'rfp',
+              entityType: rfp.instantAttemptId ? 'instant_attempt' : 'rfp',
               entityId: rfp.code,
               metadata: { contractId, reason: '제공자 측 취소' },
             },
@@ -275,8 +276,8 @@ export class SigningReconciliation {
           actorUserId: found.contract.createdBy,
           actorWorkspaceId: rfp?.buyerWsId ?? found.contract.createdBy,
           action: 'signing.completed',
-          entityType: 'rfp',
-          entityId: rfp?.code ?? found.contract.rfpId,
+          entityType: rfp.instantAttemptId ? 'instant_attempt' : 'rfp',
+          entityId: rfp.code,
           metadata: { contractId },
         },
         tx,
@@ -358,16 +359,16 @@ export class SigningReconciliation {
   }
 
   private async notifyTerminal(
-    rfpId: string,
+    rfpId: string|null,
     status: 'declined' | 'expired',
     round: number | undefined,
     // 감사 로그용 — 전이는 시스템(폴링/웹훅)이 발견하므로 사람 actor 가 없고,
     // 기록 앵커는 아래에서 rfp 담당자로 잡는다.
     auditRef: { contractId: string },
   ): Promise<void> {
-    const rfp = await this.deps.rfpRepo.findById(rfpId);
-    if (!rfp) return;
     const found=await this.deps.signingRepo.findById(auditRef.contractId);
+    const rfp = found ? await signingRequest(this.deps.rfpRepo,found.contract) : rfpId ? await this.deps.rfpRepo.findById(rfpId) : undefined;
+    if (!rfp) return;
     // CAS(transitionIfActive)에 이긴 호출자만 여기 도달하므로 정확히 1회 기록된다
     // (거절/만료도 계약 이력의 일부다). **알림 tx 밖**이다 — ensureFinalized 와 달리
     // 이 경로의 CAS 는 tx 밖에서 이미 커밋됐으므로, 감사 실패를 tx 에 묶으면 전이는
@@ -381,7 +382,7 @@ export class SigningReconciliation {
         actorUserId: rfp.createdBy,
         actorWorkspaceId: rfp.buyerWsId,
         action: `signing.${status}`,
-        entityType: 'rfp',
+        entityType: found?.contract.instantAttemptId ? 'instant_attempt' : 'rfp',
         entityId: rfp.code,
         metadata: { contractId: auditRef.contractId },
       },

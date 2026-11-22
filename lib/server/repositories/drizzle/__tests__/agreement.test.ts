@@ -20,7 +20,7 @@ async function setup() {
   return {
     db,
     repo: new DrizzleAgreementRepository(db),
-    contract,
+    contract: { ...contract, rfpId: rfp.id },
     pg,
     parties: { buyer: party, pg: party },
   };
@@ -101,7 +101,7 @@ describe('합의서 회사 정보 재사용', () => {
     }).returning();
     await db.update(rfps).set({ status: 'awarded', awardedBidId: bid.id }).where(eq(rfps.id, rfp.id));
     const [contract] = await db.insert(signingContracts).values({ rfpId: rfp.id, createdBy }).returning();
-    return contract;
+    return { ...contract, rfpId: rfp.id };
   }
   async function draft(
     db: Awaited<ReturnType<typeof setup>>['db'],

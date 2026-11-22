@@ -20,7 +20,7 @@ export function BuyerSignupProfileForm({
   onComplete,
 }: { onComplete?: () => void } = {}) {
   const entryPath =
-    readSignupDraft().next === "/rfp-create?resume=guest" ? "guest" : "direct";
+    ["/quote-start", "/rfp-create?resume=guest"].includes(readSignupDraft().next ?? "") ? "guest" : "direct";
   const router = useRouter();
   const { setProfile } = useSignupDraftStore();
 

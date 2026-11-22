@@ -1,14 +1,19 @@
 import { selectGuestAnswers } from "./answers";
-import { loadGuestDraft, type GuestDraft } from "./draft";
+import { INSTANT_RESUME_KEY, loadGuestDraft, type GuestDraft } from "./draft";
 import { guestFiles } from "./files";
 import { withGuestProof } from "./proof-client";
 export const GUEST_SIGNUP_DRAFT_KEY = "support-b-guest-signup-draft";
 const QUOTE_SIGNUP_KEY = 'support-b-quote-signup';
-export function signupQuotePrefill(): { id: string; bizNo: string; wsName: string } | undefined {
+export function signupQuotePrefill(instant = false): { id: string; bizNo: string; wsName: string } | undefined {
   try {
     const binding = JSON.parse(sessionStorage.getItem(QUOTE_SIGNUP_KEY) ?? 'null');
     const draft = loadGuestDraft();
     const context = draft?.quoteContext;
+    if (instant) {
+      if (draft && !draft.owner && sessionStorage.getItem(INSTANT_RESUME_KEY) === draft.id && context?.bizNo && context.confirmed.includes('business-number'))
+        return { id: draft.id, bizNo: context.bizNo, wsName: context.companyName };
+      return;
+    }
     if (!context || draft?.owner || !binding || binding.id !== draft.id || binding.id !== signupGuestDraftId()
       || binding.bizNo !== context.bizNo) return;
     return { id: draft.id, bizNo: context.bizNo, wsName: context.companyName };

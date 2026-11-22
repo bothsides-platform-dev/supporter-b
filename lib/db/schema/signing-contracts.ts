@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { signingContractStatusEnum } from './_enums';
+import { instantAttempts } from './instant-quotes';
 import { rfps } from './rfps';
 import { users } from './users';
 
@@ -24,8 +25,8 @@ export const signingContracts = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     kind: text('kind').$type<'pg_buyer' | 'platform_buyer'>().notNull().default('pg_buyer'),
+    instantAttemptId: uuid('instant_attempt_id').unique().references(() => instantAttempts.id),
     rfpId: uuid('rfp_id')
-      .notNull()
       .references(() => rfps.id, { onDelete: 'cascade' }),
     providerRef: text('provider_ref'),
     /**
@@ -144,6 +145,7 @@ export const signingContracts = pgTable(
     cancelReason: text('cancel_reason'),
   },
   (t) => [
+    check('signing_one_source', sql`(${t.rfpId} IS NOT NULL AND ${t.instantAttemptId} IS NULL) OR (${t.rfpId} IS NULL AND ${t.instantAttemptId} IS NOT NULL AND ${t.kind} = 'platform_buyer')`),
     check('signing_contracts_kind_check', sql`${t.kind} in ('pg_buyer', 'platform_buyer')`),
     // 활성 계약은 RFP당 1건. 완료/취소/만료/거절 후에는 새 라운드(재발송) 허용.
     uniqueIndex('signing_contracts_active_rfp_uniq')

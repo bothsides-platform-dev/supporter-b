@@ -15,7 +15,7 @@ import { captureSigningError } from '@/lib/server/signing/observability';
 import type { SnowSignContractDetail } from '@/lib/server/signing/snowsign-client';
 import { PROVIDER_ENFORCED_SECURITY_METHOD } from '@/lib/signing/security-method';
 import type { Notification } from '@/lib/types/notification';
-import type { RFP } from '@/lib/types/rfp';
+import type { SigningRequest } from './signing-request';
 import type {
   SentContractSnapshot,
   SigningContract,
@@ -34,7 +34,7 @@ export class SigningSentCommitConflict extends Error {
 
 type CreatedCommitInput = {
   active: SigningContract;
-  rfp: RFP;
+  rfp: SigningRequest;
   actor: Actor;
   now: Date;
   providerRef: string;
@@ -50,7 +50,7 @@ type CreatedCommitInput = {
 type ObservedCommitInput = {
   sentDocument?: SentContractSnapshot;
   active: SigningContract;
-  rfp: RFP;
+  rfp: SigningRequest;
   detail: SnowSignContractDetail;
   providerContractId: string;
   actor: Actor;
@@ -120,7 +120,7 @@ export class SigningSentCommit {
           actorUserId: input.actor.userId,
           actorWorkspaceId: input.actor.workspaceId,
           action: 'signing.sent',
-          entityType: 'rfp',
+          entityType: input.rfp.instantAttemptId ? 'instant_attempt' : 'rfp',
           entityId: input.rfp.code,
           metadata: input.auditMetadata,
         },
@@ -226,7 +226,7 @@ export class SigningSentCommit {
             actorUserId: input.actor.userId,
             actorWorkspaceId: input.actor.workspaceId,
             action: 'signing.sent',
-            entityType: 'rfp',
+            entityType: input.rfp.instantAttemptId ? 'instant_attempt' : 'rfp',
             entityId: input.rfp.code,
             metadata: {
               contractId: input.active.id,

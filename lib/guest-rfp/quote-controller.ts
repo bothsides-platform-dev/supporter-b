@@ -1,7 +1,7 @@
 'use client';
 import { confirmedBusiness } from './business-confirmation';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
-import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
+import { websiteFirstIntake } from '@/lib/rfp/assignment';
 import { isValidBizNo } from '@/lib/validation/biz-no';
 import { isWebsiteValid } from '@/lib/rfp/required-fields';
 import type { GuestSession } from '@/components/rfp/useGuestDraft';
@@ -41,7 +41,7 @@ export class GuestQuoteController {
       session.draft.quoteContext = { ...session.draft.quoteContext, analysisState: 'manual' };
   }
   resumeRequiredInputs() {
-    if (!assignmentIntakeEnabled()) return;
+    if (!websiteFirstIntake()) return;
     const context = this.snapshot();
     const draft = this.session.store.getState();
     let stage = context.stage;
@@ -59,7 +59,7 @@ export class GuestQuoteController {
     this.listeners.forEach(listener => listener());
   }
   private afterAnalysis(kind: 'website'|'business'):QuoteContext['stage'] {
-    return assignmentIntakeEnabled() ? (kind === 'website' ? 'business' : 'review') : (kind === 'business' ? 'website' : 'review');
+    return websiteFirstIntake() ? (kind === 'website' ? 'business' : 'review') : (kind === 'business' ? 'website' : 'review');
   }
   snapshot = (): QuoteContext => this.session.draft.quoteContext!;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener); };
@@ -127,7 +127,7 @@ export class GuestQuoteController {
     this.stop();
     this.session.store.getState().setField('websiteUrl', url);
     this.invalidate(this.snapshot().websiteResult);
-    if (assignmentIntakeEnabled()) {
+    if (websiteFirstIntake()) {
       this.invalidate(this.snapshot().businessResult);
       this.update({bizNo:'',confirmedWebsite:undefined,businessResult:undefined,confirmed:this.snapshot().confirmed.filter(q=>q!=='business-number')});
     }
@@ -136,9 +136,9 @@ export class GuestQuoteController {
   }
   manual(kind: 'business' | 'website') {
     this.stop();
-    if (assignmentIntakeEnabled() && kind==='business' && !isValidBizNo(this.snapshot().bizNo)) return;
+    if (websiteFirstIntake() && kind==='business' && !isValidBizNo(this.snapshot().bizNo)) return;
     this.update({ analysisState: 'manual', stage:this.afterAnalysis(kind),
-      ...(assignmentIntakeEnabled() && kind==='business' ? {confirmedWebsite:normalizeWebsiteUrl(this.session.store.getState().websiteUrl.trim()),confirmed:[...new Set([...this.snapshot().confirmed,'business-number'])]} : {}) });
+      ...(websiteFirstIntake() && kind==='business' ? {confirmedWebsite:normalizeWebsiteUrl(this.session.store.getState().websiteUrl.trim()),confirmed:[...new Set([...this.snapshot().confirmed,'business-number'])]} : {}) });
   }
   async analyze(kind: 'business' | 'website', retry = false) {
     if (this.busy) return;
@@ -157,8 +157,8 @@ export class GuestQuoteController {
       }, this.abort.signal));
       if (generation !== this.generation) return;
       this.update({ ...(kind === 'business' ? { businessResult: response } : { websiteResult: response, analyzedWebsite: input }),
-        ...(assignmentIntakeEnabled() && kind==='website' && response.suggestedBizNo && !this.snapshot().bizNo ? {bizNo:response.suggestedBizNo} : {}),
-        ...(assignmentIntakeEnabled() && kind==='business' ? {confirmedWebsite:normalizeWebsiteUrl(this.session.store.getState().websiteUrl.trim()),confirmed:[...new Set([...this.snapshot().confirmed,'business-number'])]} : {}),
+        ...(websiteFirstIntake() && kind==='website' && response.suggestedBizNo && !this.snapshot().bizNo ? {bizNo:response.suggestedBizNo} : {}),
+        ...(websiteFirstIntake() && kind==='business' ? {confirmedWebsite:normalizeWebsiteUrl(this.session.store.getState().websiteUrl.trim()),confirmed:[...new Set([...this.snapshot().confirmed,'business-number'])]} : {}),
         analysisState: response.status, stage:this.afterAnalysis(kind) });
     } catch {
       if (generation === this.generation) this.manual(kind);

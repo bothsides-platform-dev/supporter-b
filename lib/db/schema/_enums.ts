@@ -76,6 +76,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'rfp.deadline_changed',
   'rfp.matching_buyer_ended',
   'rfp.consultation',
+  'pg.instant_quote',
   'rfp.deadline_reminder',
   'rfp.bidding_closed',
   'rfp.calendar_changed',

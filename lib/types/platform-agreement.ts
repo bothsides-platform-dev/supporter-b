@@ -23,7 +23,8 @@ export type PlatformAgreementSnapshot = Extract<
   agreement: {
     version: string;
     rateVersion: number;
-    bidId: string;
+    bidId?: string;
+    instantQuote?: { id: string; code: string; policyVersion: number; validUntil: string };
     pgWsId: string;
     pgName: string;
     signer: AgreementSigner;

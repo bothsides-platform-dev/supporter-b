@@ -14,7 +14,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!authorized) return new NextResponse('Unauthorized', { status: 401 });
   try {
     const { runRfpDeadlineNotices } = await import('@/lib/server/services/rfp-deadlines');
-    return NextResponse.json(await runRfpDeadlineNotices());
+    const regular = await runRfpDeadlineNotices();
+    const { runInstantFollowups } = await import('@/lib/server/services/instant-quote-mail');
+    await runInstantFollowups();
+    return NextResponse.json(regular);
   } catch (error) {
     logger.error('cron.rfp_deadlines_failed', { err: String(error) });
     return NextResponse.json({ error: 'rfp_deadlines_failed' }, { status: 500 });

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { InboxPageContent } from '@/components/inbox/InboxPageContent';
 import { requirePgPage } from '@/lib/auth/page-guards';
@@ -20,7 +21,7 @@ export default async function InboxPage({ searchParams }: Props) {
   const sp = parseInboxParams(await searchParams);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full"><Link className="px-5 pt-3 text-sm underline" href="/instant-quotes">받은 PG 가입 신청</Link>
       <Suspense
         fallback={
           <>

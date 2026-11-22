@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { FunnelView } from '@/lib/analytics/use-funnel';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
@@ -40,5 +41,5 @@ export default async function PendingApprovalPage() {
     redirect('/home');
   }
 
-  return <>{session.user.workspaceType === 'buyer' && !session.user.isMaster && <FunnelView funnel="signup" step="approval_pending" />}<ApprovalWaitingScreen /></>;
+  return <>{session.user.workspaceType === 'buyer' && !session.user.isMaster && <FunnelView funnel="signup" step="approval_pending" />}{session.user.workspaceType==='buyer'&&<Link className="block p-4 text-center underline" href="/instant-quotes">내 PG 가입 신청 확인</Link>}<ApprovalWaitingScreen /></>;
 }
