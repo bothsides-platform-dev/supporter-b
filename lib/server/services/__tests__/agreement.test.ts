@@ -88,7 +88,7 @@ describe('AgreementService', () => {
     const f = await agreementFixture();
     await f.db.insert(pgProfiles).values({ workspaceId: f.actor.workspaceId, bizNo: '987-65-43210' });
     const [profile] = await f.db.insert(bizProfiles).values({ bizNo: '111-22-33333', gradeSource: 'unset' }).returning();
-    await f.db.update(rfps).set({ bizProfileId: profile.id }).where(eq(rfps.id, f.contract.rfpId));
+    await f.db.update(rfps).set({ bizProfileId: profile.id }).where(eq(rfps.id, f.rfp.id));
     const service = await getAgreementService();
     const reference = { buyer: '1112233333', pg: '9876543210' };
     expect(await service.load(f.contract.id, f.actor)).toMatchObject({ referenceBizNo: reference });
@@ -98,7 +98,7 @@ describe('AgreementService', () => {
   });
   it('등록된 사업자번호가 없으면 비교 기준을 비워 둔다', async () => {
     const f = await agreementFixture();
-    await f.db.update(rfps).set({ bizProfileId: null }).where(eq(rfps.id, f.contract.rfpId));
+    await f.db.update(rfps).set({ bizProfileId: null }).where(eq(rfps.id, f.rfp.id));
     const service = await getAgreementService();
     const view = await service.load(f.contract.id, f.actor);
     expect(view).toMatchObject({ ok: true });

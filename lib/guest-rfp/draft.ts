@@ -17,6 +17,7 @@ import {
 export const GUEST_DRAFT_KEY = "support-b-guest-rfp-v1";
 export const GUEST_REQUEST_KEY = "support-b-auto-request";
 export const RESUME_KEY = "support-b-guest-rfp-resume";
+export const INSTANT_RESUME_KEY = 'instant-quote-resume';
 export const GUEST_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 const CLEANUP_PREFIX = "support-b-guest-rfp-cleanup:";
 export const RESUME_PATH = "/rfp-create?resume=guest";
@@ -139,12 +140,10 @@ export function loadGuestDraft(): GuestDraft | null {
     completed: z.boolean(),
     owner: z.object({ userId: z.string(), workspaceId: z.string() }).optional(),
   }).parse(value);
-  value.data = Object.fromEntries(
-    Object.entries(defaults).map(([key, fallback]) => [
-      key,
-      key in value.data ? value.data[key as keyof DraftData] : fallback,
-    ]),
-  ) as DraftData;
+  // JSON omits undefined defaults, including the optional first-contract volume.
+  const restored = Object.entries(defaults).map(([key, fallback]) => [key, key in value.data ? value.data[key as keyof DraftData] : fallback]);
+  if (value.data.expectedVolume !== undefined) restored.push(['expectedVolume', value.data.expectedVolume]);
+  value.data = Object.fromEntries(restored) as DraftData;
   if (value.quoteContext) {
     const context = quoteContextSchema.safeParse(value.quoteContext);
     if (context.success) value.quoteContext = context.data;
@@ -227,6 +226,7 @@ export function validateGuestFile(
 }
 export function guestResumeTarget(fallback = "/home"): string {
   try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(INSTANT_RESUME_KEY) && sessionStorage.getItem(INSTANT_RESUME_KEY) === loadGuestDraft()?.id) return '/quote-start';
     if (localStorage.getItem(GUEST_REQUEST_KEY)) return "/quote-start";
     loadGuestDraft();
     return localStorage.getItem(RESUME_KEY) === "1" ? RESUME_PATH : fallback;

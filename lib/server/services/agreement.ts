@@ -43,7 +43,7 @@ export class AgreementService {
 
   private async context(contractId: string, actor: Actor, tx?: Tx) {
     const found = await this.deps.signing.findById(contractId, tx);
-    const rfp = found ? await this.deps.rfp.findById(found.contract.rfpId, tx) : undefined;
+    const rfp = found?.contract.rfpId ? await this.deps.rfp.findById(found.contract.rfpId, tx) : undefined;
     const bid = rfp?.awardedBidId ? await this.deps.bid.findById(rfp.awardedBidId, tx) : undefined;
     if (
       !found ||

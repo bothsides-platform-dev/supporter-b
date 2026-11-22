@@ -25,6 +25,7 @@ export const assistResultSchema = z.object({
   business: z.object({
     bizNo: z.string().regex(/^\d{10}$/),
     status: z.enum(['active', 'suspended', 'closed']).optional(),
+    age: z.enum(['new','established']).optional(),
     taxType: z.enum(['general', 'simple', 'exempt']).optional(),
   }).strict().optional(),
 }).strict();

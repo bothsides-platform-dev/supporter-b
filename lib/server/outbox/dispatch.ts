@@ -1,4 +1,5 @@
 import type { OutboxRepo } from '@/lib/server/repositories/types';
+import { prepareInstantMail } from '../services/instant-quote-mail';
 import { prepareConsultationMail } from '../services/consultation-notices';
 import { computeBackoff } from './backoff';
 import { sendEntriesInBatches } from './batch-send';
@@ -17,7 +18,7 @@ export async function deliverClaimedEntries(
     const claims = chunk.map((entry) => claimsById.get(entry.id)!);
     const owned = new Set(await outbox.renewClaims(claims));
     const candidates = claims.filter((entry) => owned.has(entry.id));
-    const prepared = await Promise.all(candidates.map(prepareConsultationMail));
+    const prepared = await Promise.all(candidates.map(entry => entry.event === 'pg.instant_quote' ? prepareInstantMail(entry) : prepareConsultationMail(entry)));
     const suppressed = new Set(candidates.filter((_, i) => !prepared[i]).map((entry) => entry.id));
     const deliverable = prepared.filter((entry) => entry !== null);
     const sent = deliverable.length > 0 ? await sender(deliverable) : [];

@@ -1,14 +1,15 @@
 import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import type { WorkspaceRepo } from '@/lib/server/repositories/types';
-import type { RFP } from '@/lib/types/rfp';
+import type { SigningRequest } from './signing-request';
 
 export type SigningRecipient = { userId: string; workspaceId: string; email: string };
 
 // 구매사 딜룸은 계약 탭이 기본이라 bare 링크, PG 딜룸은 요청 조건이 기본이라 계약 탭을 지정한다.
 export function signingPartyLink(
   recipient: { workspaceId: string | null },
-  rfp: RFP,
+  rfp: SigningRequest,
 ): string {
+  if (rfp.instantAttemptId) return '/instant-quotes/' + rfp.instantAttemptId;
   return recipient.workspaceId === rfp.buyerWsId
     ? `/rfp/${rfp.code}`
     : pgDealRoomLink(rfp.code, 'contract');
@@ -16,7 +17,7 @@ export function signingPartyLink(
 
 export async function signingPartyRecipients(
   workspaceRepo: WorkspaceRepo,
-  rfp: RFP,
+  rfp: SigningRequest,
   pgWsId: string | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,

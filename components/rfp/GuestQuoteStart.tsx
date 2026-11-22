@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createStore, type StoreApi } from 'zustand';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
-import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
+import { websiteFirstIntake } from '@/lib/rfp/assignment';
 import { draftData } from '@/lib/guest-rfp/draft';
 import { Button } from "@/components/primitives/Button";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
@@ -24,6 +24,9 @@ import { RfpQuestionFlow } from "./RfpQuestionFlow";
 import { contentQuestions } from "./content-questions";
 import { useGuestDraft } from "./useGuestDraft";
 import { GuestQuoteController, suggestionQuestions } from '@/lib/guest-rfp/quote-controller';
+import { clearInstantResume } from '@/lib/guest-rfp/instant-resume';
+import { InstantIntake } from './InstantIntake';
+import { instantIntakeEnabled } from '@/lib/rfp/instant-quote';
 import { GuestQuoteIntake } from './GuestQuoteIntake';
 import { GuestAttachments } from "./GuestAttachments";
 const subscribeEmpty = () => () => {};
@@ -32,8 +35,9 @@ export function GuestQuoteStart({
   industryGroups,
   pgList = [],
   autoRequestEnabled = false,
-  recovery,
+  recovery, loggedIn=false,
 }: {
+  loggedIn?: boolean;
   autoRequestEnabled?: boolean;
   recovery?: { id: string; revision: number; workspaceId: string };
   industryGroups: PublicIndustry[];
@@ -51,6 +55,7 @@ export function GuestQuoteStart({
     });
     return () => { unsubscribe(); quote.stop(); };
   }, [quote, setError]);
+  const [consult,setConsult]=useState(false);
   const [autoStarted, setAutoStarted] = useState<boolean | null>(null);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate the browser-only reservation marker after the local draft loads.
   useEffect(() => { if (session) setAutoStarted(autoRequestEnabled && localStorage.getItem(GUEST_REQUEST_KEY) === session.draft.id); }, [autoRequestEnabled, session]);
@@ -129,7 +134,7 @@ export function GuestQuoteStart({
         return JSON.stringify(value) !== JSON.stringify(quote.value(s.field));
       }).map(s => s.field) ?? [];
       const previousWebsite = session.store.getState().websiteUrl;
-      const websiteChanged = assignmentIntakeEnabled() && !!quote && after.websiteUrl !== previousWebsite;
+      const websiteChanged = websiteFirstIntake() && !!quote && after.websiteUrl !== previousWebsite;
       session.commitEdit(after, websiteChanged);
       if (websiteChanged) {
         quote.website(after.websiteUrl, previousWebsite);
@@ -224,6 +229,8 @@ export function GuestQuoteStart({
         ) : quote && context?.stage !== 'questions' ? (
           <GuestQuoteIntake quote={quote} industryGroups={industryGroups}
             onConfirmed={() => trackQuestionProgress('next', 'website', 'write', session.store.getState().contractType, session.store.getState().websiteUrl)} />
+        ) : quote && instantIntakeEnabled() && !consult && !session.draft.completed ? (
+          <InstantIntake quote={quote} industries={industryGroups} pgList={pgList} loggedIn={loggedIn} onConsult={()=>{clearInstantResume(session.draft.id);setConsult(true);}}/>
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">

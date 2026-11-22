@@ -1,3 +1,5 @@
+import { instantAward, buyerIdentity } from "../repositories/drizzle/instant-quotes";
+import { conditionLines, feeRows } from "@/lib/rfp/instant-quote";
 import { createHash, randomUUID } from "node:crypto";
 import { PLATFORM_SEAL, loadPlatformSeal } from "@/lib/server/signing/platform-seal";
 export { PLATFORM_SEAL } from "@/lib/server/signing/platform-seal";
@@ -109,11 +111,19 @@ export class PlatformAgreementService {
   private async context(id: string, actor: Actor, tx?: Tx) {
     const found = await this.deps.signing.findById(id, tx);
     if (found?.contract.kind !== "platform_buyer") return undefined;
+    if (found.contract.instantAttemptId) {
+      const instant = await instantAward(found.contract.instantAttemptId, tx);
+      if (!instant || instant.request.buyerWsId !== actor.workspaceId) return;
+      const member = await buyerIdentity(tx ?? this.deps.db, actor).catch(() => undefined);
+      if (member?.status !== 'active') return;
+      return { ...found, rfp: instant.request, pgWsId: instant.terms.pgId, bizNo: instant.bizNo, instant, bid: undefined, customMethods: undefined };
+    }
+    if (!found.contract.rfpId) return;
     const rfp = await this.deps.rfp.findById(found.contract.rfpId, tx);
     if (!rfp?.awardedBidId || rfp.buyerWsId !== actor.workspaceId)
       return undefined;
     const bid = await this.deps.bid.findById(rfp.awardedBidId, tx);
-    return bid ? { ...found, rfp, bid } : undefined;
+    return bid ? { ...found, rfp, instant:undefined, pgWsId: bid.pgWsId, bizNo: rfp.bizProfile?.bizNo, bid, customMethods: rfp.customPaymentMethods } : undefined;
   }
   async load(
     id: string,
@@ -142,25 +152,25 @@ export class PlatformAgreementService {
     }
     const [ws, pg, signer, rates] = await Promise.all([
       this.deps.workspace.findById(ctx.rfp.buyerWsId, tx),
-      this.deps.workspace.findById(ctx.bid.pgWsId, tx),
+      this.deps.workspace.findById(ctx.pgWsId, tx),
       this.deps.user.findContactById(ctx.rfp.createdBy, tx),
-      this.deps.agreement.findRates(ctx.bid.pgWsId, tx),
+      ctx.instant ? undefined : this.deps.agreement.findRates(ctx.pgWsId, tx),
     ]);
     if (!ws || !pg || !signer) return { ok: false, error: "CONTACT_NOT_FOUND" };
     const parties = {
       buyer: draft?.parties.buyer ?? {
         company: ws.name,
-        bizNo: ctx.rfp.bizProfile?.bizNo ?? "",
+        bizNo: ctx.bizNo ?? "",
         address: "",
         representative: "",
       },
       platform: platformAgreementParty(),
     };
-    const fees = buildAgreementFees(
+    const fees = ctx.instant ? { ok: true as const, rows: feeRows(ctx.instant.terms) } : buildAgreementFees(
       {
         paymentFees: ctx.bid.paymentFees,
         customFees: ctx.bid.customFees,
-        customMethods: ctx.rfp.customPaymentMethods,
+        customMethods: ctx.customMethods,
       },
       rates?.rates ?? [],
     );
@@ -169,19 +179,34 @@ export class PlatformAgreementService {
       email: signer.email,
       phone: signer.phone ?? undefined,
     };
+    const pgName = ctx.instant?.terms.pgName ?? pg.name;
+    const doc = buildPlatformAgreementDocument(parties.buyer.company, pgName);
+    if (ctx.instant) {
+      const {terms, input, validUntil} = ctx.instant;
+      doc.clauses.push({
+        id: "instant-conditions",
+        kind: "text",
+        heading: "가입 견적 조건",
+        body: [
+          ctx.rfp.code + " · 약정 " + terms.policyVersion + "판 / 표준 " + terms.rateVersion + "판",
+          "가입 신청 기한 " + validUntil.toLocaleString("ko-KR", {timeZone:"Asia/Seoul"}) + " (한국시간)",
+          ...conditionLines(terms, input).map(pair => pair.join(" · ")),
+        ].join("\n"),
+      });
+    }
     const snapshot: PlatformAgreementSnapshot = {
       _v: 1,
       kind: "platform_buyer",
       parties,
       seal: PLATFORM_SEAL,
-      doc: buildPlatformAgreementDocument(parties.buyer.company, pg.name),
+      doc,
       feeRows: fees.ok ? fees.rows : [],
       agreement: {
         version: PLATFORM_AGREEMENT_VERSION,
-        rateVersion: rates?.version ?? 0,
-        bidId: ctx.bid.id,
+        rateVersion: ctx.instant?.terms.rateVersion ?? rates?.version ?? 0,
+        ...(ctx.instant ? { instantQuote: { id: ctx.contract.instantAttemptId!, code: ctx.rfp.code, policyVersion: ctx.instant.terms.policyVersion, validUntil: ctx.instant.validUntil.toISOString() } } : { bidId: ctx.bid.id }),
         pgWsId: pg.id,
-        pgName: pg.name,
+        pgName,
         signer: contact,
       },
     };
@@ -264,7 +289,7 @@ export class PlatformAgreementService {
             providerContractId: ref,
             actor,
             source: "self_heal",
-            pgWsId: ctx.bid.pgWsId,
+            pgWsId: ctx.pgWsId,
           });
           if (!result.ok) return result;
           if (result.shouldFinalize) {
@@ -293,7 +318,7 @@ export class PlatformAgreementService {
         async (
           tx: Tx,
         ): Promise<ServiceResult<{ snapshot: PlatformAgreementSnapshot }>> => {
-          await this.deps.agreement.lockPg(ctx.bid.pgWsId, tx);
+          await this.deps.agreement.lockPg(ctx.pgWsId, tx);
           await this.deps.agreement.lockContract(id, tx);
           const lease = await this.deps.signing.findSendLease(id, tx);
           if (

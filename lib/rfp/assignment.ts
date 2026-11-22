@@ -9,6 +9,7 @@ export const VOLUME_LABELS: Record<VolumeBand, string> = {
 };
 
 export const assignmentIntakeEnabled = () => process.env.NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED === 'true';
+export const websiteFirstIntake = () => assignmentIntakeEnabled() || process.env.NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED === 'true';
 export const CONTACT_CONSENT_VERSION = '2026-11-22';
 export const contactConsentText = (pg: string) =>
   `${pg}의 배정 담당자에게 첫 연락을 위해 요청 작성자의 이름, 이메일, 전화번호를 제공하는 데 동의해요.`;

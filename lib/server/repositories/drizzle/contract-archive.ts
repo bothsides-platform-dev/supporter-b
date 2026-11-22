@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
-import { contractArchives, rfps, signingContracts, workspaces } from '@/lib/db/schema';
+import { contractArchives, instantAttempts, rfps, signingContracts, workspaces } from '@/lib/db/schema';
 import type { ContractArchive, ContractArchiveCursor } from '@/lib/types/contract-archive';
 import type { ContractArchiveRepo, Tx } from '../types';
 
@@ -356,7 +356,8 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       .select({ id: signingContracts.id })
       .from(signingContracts)
       .leftJoin(contractArchives, eq(contractArchives.signingContractId, signingContracts.id))
-      .innerJoin(rfps, eq(rfps.id, signingContracts.rfpId))
+      .leftJoin(rfps, eq(rfps.id, signingContracts.rfpId))
+      .leftJoin(instantAttempts, eq(instantAttempts.id, signingContracts.instantAttemptId))
       .where(
         and(
           eq(signingContracts.status, 'completed'),
@@ -364,7 +365,7 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
           // 낙찰 포인터(awardedBidId)가 없으면 createPendingForContract 가 항상
           // RFP_NOT_FOUND 로 실패한다(재요청/삭제로 소실된 경우 등) — 후보에
           // 남기면 이 스윕이 영구 실패 건에 예산을 매번 뺏겨 다른 건을 굶긴다.
-          isNotNull(rfps.awardedBidId),
+          or(isNotNull(rfps.awardedBidId), isNotNull(instantAttempts.selectedAt)),
         ),
       )
       .orderBy(asc(signingContracts.completedAt))

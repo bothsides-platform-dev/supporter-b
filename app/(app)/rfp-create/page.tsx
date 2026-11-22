@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 import { GuestQuoteResume } from '@/components/rfp/GuestQuoteResume';
 import { redirect } from 'next/navigation';
@@ -53,6 +54,7 @@ export default async function RfpNewPage({ searchParams }: { searchParams: Promi
   // ws.bizProfile 미등록이어도 RFP 작성 허용 (사전 제안 모드)
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--md-sys-color-surface)]">
+      {!resume && process.env.NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED === "true" && <Link className="px-5 py-2 text-sm underline" href="/quote-start">월 PG 거래액 5,000만 원 미만이면 바로 가입 견적 확인</Link>}
       <div className={`min-h-0 flex-1 ${resume ? 'p-4 sm:p-6' : ''}`}>
         {resume ? <GuestQuoteResume serverDrafts={serverDrafts} actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} bizProfile={ws?.bizProfile ?? undefined} workspaceName={ws?.name ?? ''} pgList={pgList} industryGroups={industryGroups} /> : <RfpCreateWizard
           bizProfile={ws?.bizProfile ?? undefined}

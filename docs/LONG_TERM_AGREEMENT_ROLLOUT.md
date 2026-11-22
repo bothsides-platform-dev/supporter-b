@@ -49,3 +49,10 @@
 - `pnpm test lib/db/__tests__/agreement-migration.test.ts`
 - `pnpm e2e e2e/long-term-agreement.spec.ts` — 전용 테스트 DB 재시드, 외부 발송 없이 양측 화면·PDF·모바일 확인
 - admin: `pnpm test lib/server/actions/admin/__tests__/agreementRates.test.ts`
+
+## 즉시 가입 견적 시범 운영
+
+1. 서비스 저장소의 `scripts/migrations/20261122-instant-quotes.sql`을 양쪽 앱 배포 전에 적용한다. 기존 서명 행은 RFP 출처를 유지한다. 신규 즉시 가입 합의서는 선정 회차를 직접 참조한다.
+2. 두 앱을 배포하고 관리자 **PG 즉시 가입 견적**에서 화이트 업종과 PG를 고른다. 동의 문구, 카드 전 등급 약정·표준 요율과 부가세 기준, 보증보험·정산·가입비, 심사 예외 및 달력일 단위 기한을 참여 PG와 확인한다. 직접 가입 비교값은 확인한 항목만 등록한다. HTTPS 전용 링크는 부가 쿼리 없이 등록하고 PG가 `quote` 매개변수를 보존하여 사업자번호와 대조하는지 확인한다.
+3. 운영 알림 수신처 `ADMIN_NOTIFY_EMAIL`과 정정 창구를 확인한다. PG가 승인한 수신처에서 메일 수신·외부 접수 대조·결과·등급 회신까지 시험한다. 구매사가 받은 조건과 외부 계약의 금액·단위가 일치하는지 확인하고 PG별 신규 접수를 연다. 환경별 빌드 변수 `NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED=true`와 같은 런타임 값을 설정한다. 기본값은 꺼짐이다.
+4. 신규 접수 중단 후에도 발급한 견적·PG 회신·정정과 합의서는 이용할 수 있다. 수신처가 바뀌면 변경 전 링크의 회신과 재발송은 닫히므로 운영자는 해당 건을 PG와 대조한다. 관리자에서 접수 누락, 합의서 미시작·미서명, 미정정 건을 확인한다.

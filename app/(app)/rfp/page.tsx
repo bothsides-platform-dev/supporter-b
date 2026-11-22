@@ -40,7 +40,7 @@ export default async function RfpListPage({ searchParams }: Props) {
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full"><Link className="px-5 pt-3 text-sm underline" href="/instant-quotes">PG 가입 신청</Link>
       <Suspense
         fallback={
           <>

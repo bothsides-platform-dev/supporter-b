@@ -1,6 +1,6 @@
 /** Public ingress: bound both allocated bytes and time spent waiting on chunks. */
-export async function readBoundedBody(request: Request): Promise<string | 408 | 413> {
-  if (Number(request.headers.get('content-length')) > 65536) return 413;
+export async function readBoundedBody(request: Request, maxBytes = 65536): Promise<string | 408 | 413> {
+  if (Number(request.headers.get('content-length')) > maxBytes) return 413;
   const reader = request.body?.getReader();
   if (!reader) return '';
   let expired = false;
@@ -16,7 +16,7 @@ export async function readBoundedBody(request: Request): Promise<string | 408 | 
       if (expired) return 408;
       if (done) return Buffer.concat(chunks).toString('utf8');
       bytes += value.byteLength;
-      if (bytes > 65536) {
+      if (bytes > maxBytes) {
         void reader.cancel().catch(() => {});
         return 413;
       }

@@ -41,6 +41,7 @@ const SIGNING_CONTRACT_COLUMNS = {
   id: signingContracts.id,
   kind: signingContracts.kind,
   rfpId: signingContracts.rfpId,
+  instantAttemptId: signingContracts.instantAttemptId,
   providerRef: signingContracts.providerRef,
   providerDraftOrigin: signingContracts.providerDraftOrigin,
   snowsignTemplateId: signingContracts.snowsignTemplateId,
@@ -67,6 +68,7 @@ function rowToContract(r: CRow): SigningContract {
     id: r.id,
     ...(r.kind === 'platform_buyer' ? { kind: r.kind } : {}),
     rfpId: r.rfpId,
+    ...(r.instantAttemptId ? { instantAttemptId: r.instantAttemptId } : {}),
     providerRef: r.providerRef ?? undefined,
     snowsignTemplateId: r.snowsignTemplateId ?? undefined,
     status: r.status,
@@ -106,6 +108,7 @@ function contractToRow(c: SigningContract) {
     id: c.id,
     kind: c.kind ?? 'pg_buyer',
     rfpId: c.rfpId,
+    instantAttemptId: c.instantAttemptId,
     providerRef: c.providerRef ?? null,
     snowsignTemplateId: c.snowsignTemplateId ?? null,
     status: c.status,
@@ -713,6 +716,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .where(
         and(
           eq(signingContracts.status, 'awaiting_pg_template'),
+          isNotNull(signingContracts.rfpId),
           lt(signingContracts.createdAt, nudgeBefore),
           or(
             isNull(signingContracts.lastPolledAt),
