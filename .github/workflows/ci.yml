@@ -172,7 +172,6 @@ jobs:
       NEXT_PUBLIC_PARTNER_ORIGIN: https://partner.dev.support-b.com
       NEXT_PUBLIC_CENTRIFUGO_WS_URL: wss://dev.support-b.com/connection/websocket
       NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED: ${{ vars.STAGING_NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED }}
-      NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED: ${{ vars.STAGING_NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED }}
     outputs:
       artifact-name: ${{ steps.package.outputs.artifact-name }}
       release-id: ${{ steps.package.outputs.release-id }}
@@ -320,7 +319,6 @@ jobs:
       NEXT_PUBLIC_MASTER_OAUTH_ENABLED: ${{ vars.PRODUCTION_NEXT_PUBLIC_MASTER_OAUTH_ENABLED }}
       NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED: ${{ vars.PRODUCTION_NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED }}
       NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED: ${{ vars.PRODUCTION_NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED }}
-      NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED: ${{ vars.PRODUCTION_NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED }}
     outputs:
       artifact-name: ${{ steps.package.outputs.artifact-name }}
       release-id: ${{ steps.package.outputs.release-id }}

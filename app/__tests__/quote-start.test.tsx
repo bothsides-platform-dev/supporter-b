@@ -10,8 +10,20 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/components/rfp/GuestQuoteStart", () => ({
-  GuestQuoteStart: () => null,
+  GuestQuoteStart: (props: unknown) => {
+    startProps(props);
+    return null;
+  },
 }));
+const { intakeOpen, startProps } = vi.hoisted(() => ({ intakeOpen: vi.fn(async () => false), startProps: vi.fn() }));
+vi.mock("@/lib/server/services/instant-intake", () => ({ instantIntakeOpen: intakeOpen }));
+vi.mock("@/lib/server/repositories/factory", () => ({
+  getGuestRfpRepo: async () => ({ industries: async () => [] }),
+  getWorkspaceRepo: async () => ({ listCanonicalPgWorkspaces: async () => [] }),
+  getGuestRequestRepo: async () => ({ recover: async () => [] }),
+}));
+vi.mock("@/components/shell/ChannelTalkHideButton", () => ({ ChannelTalkHideButton: () => null }));
+vi.mock("@/components/landing/ConsultButton", () => ({ ConsultButton: () => null }));
 import QuoteStartPage from "../quote-start/page";
 it("opens the member wizard for an authenticated buyer without requiring a public draft", async () => {
   await expect(QuoteStartPage()).rejects.toThrow(/^redirect:\/rfp-create$/);
@@ -22,4 +34,9 @@ it("offers authenticated PG users a Support B link to home", async () => {
   render(await QuoteStartPage());
   expect(screen.getByRole("link", { name: "서포트비로 이동해요" })).toHaveAttribute("href", "/home");
   expect(screen.getByRole("link", { name: "로그아웃해요" })).toHaveAttribute("href", "/logout");
+});
+it("keeps an authenticated buyer on the quote page while a PG accepts instant signups", async () => {
+  intakeOpen.mockResolvedValueOnce(true);
+  render(await QuoteStartPage());
+  expect(startProps).toHaveBeenLastCalledWith(expect.objectContaining({ instantOpen: true }));
 });

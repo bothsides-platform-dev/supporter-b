@@ -1,4 +1,4 @@
-import { INSTANT_RESUME_KEY, loadGuestDraft, deleteGuestDraft } from './draft';
+import { INSTANT_CONSULT_KEY, INSTANT_RESUME_KEY, loadGuestDraft, deleteGuestDraft } from './draft';
 import { inputSchema, type InstantInput } from '@/lib/rfp/instant-quote';
 import type { BusinessConfirmation } from './business-confirmation';
 
@@ -24,6 +24,21 @@ export function rememberInstantInput(id: string, input: InstantInput) {
     sessionStorage.setItem(INSTANT_RESUME_KEY, id);
   } catch {
     /* The current preview remains usable. */
+  }
+}
+// 초안 스키마는 서버·이전 빌드와 공유하고 strict라서, 상담 선택은 초안 밖에 초안 ID로만 남긴다.
+export function rememberConsult(id: string) {
+  try {
+    localStorage.setItem(INSTANT_CONSULT_KEY, id);
+  } catch {
+    /* The current page still continues the consultation. */
+  }
+}
+export function choseConsult(id: string) {
+  try {
+    return localStorage.getItem(INSTANT_CONSULT_KEY) === id;
+  } catch {
+    return false;
   }
 }
 export function clearInstantResume(id: string, completed = false) {

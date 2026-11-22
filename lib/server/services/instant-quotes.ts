@@ -7,7 +7,6 @@ import {
   commitment,
   inputSchema,
   instantConsentVersion,
-  instantIntakeEnabled,
   instantVolumeEligible,
   needsReview,
   reviewQuestions,
@@ -92,7 +91,7 @@ async function choices(
     offers: Candidate[];
     questions: Offers['questions'];
   } = { risk: 'unconfigured', offers: [], questions: [] };
-  if (!instantIntakeEnabled() || !instantVolumeEligible(input)) return result;
+  if (!instantVolumeEligible(input)) return result;
   const selection = {
     kind: 'selection' as const,
     industry: input.groupId

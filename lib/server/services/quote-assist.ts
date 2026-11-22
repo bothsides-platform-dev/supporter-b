@@ -8,6 +8,7 @@ import { manualResult } from '@/lib/guest-rfp/suggestions';
 import { logger } from '@/lib/observability/logger';
 import type { Tx } from '@/lib/server/repositories/types';
 import { assertPublicDraft } from './guest-drafts';
+import { instantIntakeOpen } from './instant-intake';
 import { assistResultSchema, type AssistResult } from '@/lib/guest-rfp/suggestions';
 export type QuoteAssistInput = { id: string; revision: number; kind: 'business' | 'website'; input: string; retry?: string };
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -27,7 +28,7 @@ export class QuoteAssistService {
     try {
       const groups = await (await getGuestRfpRepo()).industries();
       if (input.kind === 'business') {
-        const lookup = await lookupQuoteBusiness(input.input, groups);
+        const lookup = await lookupQuoteBusiness(input.input, groups, undefined, await instantIntakeOpen());
         cost = lookup.cost;
         const { cost: _cost, ...projection } = lookup;
         result = projection;

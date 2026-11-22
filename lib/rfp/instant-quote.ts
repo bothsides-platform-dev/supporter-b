@@ -21,8 +21,6 @@ import {
 } from './product-info';
 import { VOLUME_BANDS, VOLUME_LABELS } from './assignment';
 
-export const instantIntakeEnabled = () =>
-  process.env.NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED === 'true';
 export const instantConsentVersion = '2026-11-22.1';
 export const commitment =
   '실제 PG 이용 시작일부터 2년간 선택한 PG를 독점 이용하고, 약정 위반 시 실제 할인받은 수수료를 반환해요.';

@@ -6,7 +6,6 @@ import { Chip } from '@/components/primitives/Chip';
 import { publicInputClass } from '@/components/forms/inputs';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import { isWebsiteValid } from '@/lib/rfp/required-fields';
-import { websiteFirstIntake } from '@/lib/rfp/assignment';
 import { isValidBizNo } from '@/lib/validation/biz-no';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
 import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
@@ -39,7 +38,7 @@ export function GuestQuoteIntake({ quote, industryGroups, onConfirmed }: {
   const analyze = (kind: 'business' | 'website', retry = false) => {
     void quote.analyze(kind, retry).catch(() => setError('확인한 정보만 채웠어요. 나머지는 직접 입력해주세요.'));
   };
-  const websiteFirst=websiteFirstIntake();
+  const websiteFirst=quote.websiteFirst;
   const websiteReady = () => {
     const url = normalizeWebsiteUrl(draft.websiteUrl.trim());
     if (!isWebsiteValid(url)) { setError('홈페이지 주소를 확인해요. 예: example.com'); return false; }

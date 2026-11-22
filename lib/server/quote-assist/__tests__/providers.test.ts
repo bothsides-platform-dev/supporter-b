@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+vi.unmock('@/lib/server/buyer-approval/new-business');
 import { lookupQuoteBusiness, createQuoteAi } from '../providers';
 import { suggestionSchema } from '@/lib/guest-rfp/suggestions';
 const groups = [{ id: '10000000-0000-4000-8000-000000000001', name: '의류', mccCode: undefined }];
@@ -24,6 +25,15 @@ it('국세청 장애에도 APICK 회사명·정확히 연결된 업종을 유지
   expect(JSON.stringify(result)).not.toContain('비공개');
   expect(result.status).toBe('partial');
   expect(result.cost).toBe(5);
+});
+it('개업 시기는 즉시 견적 접수가 열렸을 때만 결과에 싣는다', async () => {
+  vi.stubEnv('APICK_API_KEY', 'key');
+  const providers = {
+    request: async () => Response.json({ api: { success: true }, data: { success: 1, 사업자등록번호: '1248100998', 상세정보확보: 'Y', 설립일: '20200101' } }),
+    nts: async () => ({ valid: true as const, status: 'active' as const }),
+  };
+  expect((await lookupQuoteBusiness('1248100998', groups, providers)).business?.age).toBeUndefined();
+  expect((await lookupQuoteBusiness('1248100998', groups, providers, true)).business?.age).toBe('established');
 });
 it('AI 응답 형식이 틀리면 유료 호출을 반복하지 않고 제안만 버린다', async () => {
   vi.stubEnv('APICK_API_KEY', 'key');

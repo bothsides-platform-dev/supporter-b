@@ -38,6 +38,7 @@ import { provisionalTier } from '@/lib/server/quote-assist/savings';
 import type { MerchantTier } from '@/lib/types/bid';
 import type { InstantInput } from '@/lib/rfp/instant-quote';
 import { deny } from '@/lib/server/services/instant-error';
+import { isTestPgName } from '@/lib/features/test-pg';
 export const instantDb = async (): Promise<Tx> => getDb();
 export async function buyerIdentity(tx: Tx, actor: Actor, lock = false) {
   const q = tx
@@ -234,6 +235,30 @@ export async function configs(tx: Tx, group: string, lock: boolean) {
       ),
     );
   return lock ? await q.for('share') : await q;
+}
+/**
+ * 접수 스위치. 켜진 채널만으로는 열지 않는다: 업종이 화이트에서 빠지거나 후보에서 빠진 PG,
+ * 추천에서 제외되는 테스트 PG는 견적을 낼 수 없어 방문자에게 빈 화면만 남기기 때문이다.
+ */
+export async function intakeOpen(tx: Tx, pgId?: string): Promise<boolean> {
+  const rows: { name: string }[] = await tx
+    .selectDistinct({ name: workspaces.name })
+    .from(policies)
+    .innerJoin(channels, eq(channels.pgId, policies.pgId))
+    .innerJoin(pgAgreementRates, eq(pgAgreementRates.pgWsId, policies.pgId))
+    .innerJoin(workspaces, eq(workspaces.id, policies.pgId))
+    .innerJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, policies.groupId))
+    .where(
+      and(
+        eq(channels.enabled, true),
+        eq(workspaces.status, 'active'),
+        eq(workspaces.type, 'pg'),
+        sql`${pgMatchingPolicies.policy}->>'risk' = 'white'`,
+        sql`${pgMatchingPolicies.policy}->'candidates' @> jsonb_build_array(jsonb_build_object('pgWorkspaceId', ${policies.pgId}::text))`,
+        pgId ? eq(policies.pgId, pgId) : undefined,
+      ),
+    );
+  return rows.some((row) => !isTestPgName(row.name));
 }
 export async function lockMatching(tx: Tx, group: string) {
   await tx
