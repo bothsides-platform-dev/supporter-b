@@ -7,6 +7,7 @@ import { auth } from '@/auth';
 import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
+import { instantIntakeOpen } from '@/lib/server/services/instant-intake';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
 import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
@@ -51,10 +52,11 @@ export default async function RfpNewPage({ searchParams }: { searchParams: Promi
 
   const ws = await workspaceRepo.findById(session.user.workspaceId);
   const serverDrafts = resume ? await (await getGuestDraftService()).listOwned({ userId: session.user.id, workspaceId: session.user.workspaceId }) : [];
+  const showInstantLink = !resume && await instantIntakeOpen();
   // ws.bizProfile 미등록이어도 RFP 작성 허용 (사전 제안 모드)
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--md-sys-color-surface)]">
-      {!resume && process.env.NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED === "true" && <Link className="px-5 py-2 text-sm underline" href="/quote-start">월 PG 거래액 5,000만 원 미만이면 바로 가입 견적 확인</Link>}
+      {showInstantLink && <Link className="px-5 py-2 text-sm underline" href="/quote-start">월 PG 거래액 5,000만 원 미만이면 바로 가입 견적 확인</Link>}
       <div className={`min-h-0 flex-1 ${resume ? 'p-4 sm:p-6' : ''}`}>
         {resume ? <GuestQuoteResume serverDrafts={serverDrafts} actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} bizProfile={ws?.bizProfile ?? undefined} workspaceName={ws?.name ?? ''} pgList={pgList} industryGroups={industryGroups} /> : <RfpCreateWizard
           bizProfile={ws?.bizProfile ?? undefined}

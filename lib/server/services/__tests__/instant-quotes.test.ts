@@ -114,7 +114,6 @@ const screen = {
 const secret = 'browser-proof-test',
   business = { bizNo: '1248100998', website: 'https://example.com' };
 async function fixture() {
-  vi.stubEnv('NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED', 'true');
   vi.stubEnv('AUTH_SECRET', 'instant-fixture-secret');
   vi.stubEnv('ADMIN_NOTIFY_EMAIL', 'ops@example.test');
   const db = await setupServerTestEnv({ nts: true });
@@ -355,6 +354,23 @@ it('미리보기 소유권·휴폐업·판본 변경·예약과 심사 예외에
   await expect(previewInstant(f.input, secret)).rejects.toThrow(/예약/);
   expect(await f.db.select().from(outboxEntries)).toHaveLength(0);
 });
+it('접수가 열린 PG가 없으면 견적과 신청을 만들지 않는다', async () => {
+  const f = await fixture();
+  await f.db.update(instantPgChannels).set({ enabled: false });
+  expect((await previewInstant(f.input, secret)).offers).toEqual([]);
+  await expect(confirmInstant(f.confirmation, f.actor, secret)).rejects.toThrow(/조건이 바뀌/);
+  expect(await f.db.select().from(instantRequests)).toHaveLength(0);
+  expect(await f.db.select().from(outboxEntries)).toHaveLength(0);
+});
+it('접수를 닫아도 신청을 받은 PG에는 목록 링크가 남는다', async () => {
+  const f = await fixture();
+  await confirmInstant(f.confirmation, f.actor, secret);
+  await f.db.update(instantPgChannels).set({ enabled: false });
+  const { showInstantEntry } = await import('../instant-intake');
+  const entry = (pg: string) => showInstantEntry({ userId: f.actor.userId, workspaceId: pg }, 'pg');
+  expect(await entry(f.pgs[0].id)).toBe(true);
+  expect(await entry(f.pgs[1].id)).toBe(false);
+});
 it('개업일 조회 결과를 기준으로 표시 등급을 결정한다', async () => {
   const f = await fixture(),
     now = new Date();
@@ -498,7 +514,8 @@ it('한 회차를 고정하고 수신처별 확인·거절 후 재신청·가입
   expect(await f.db.select().from(bids)).toHaveLength(0);
   expect(await f.db.select().from(rfps)).toHaveLength(0);
   await f.db.update(pgAgreementRates).set({ version: 2, rates: [] });
-  vi.stubEnv('NEXT_PUBLIC_PG_INSTANT_QUOTE_ENABLED', 'false');
+  // 신규 접수를 닫아도 발급한 견적의 회신과 합의서는 이어진다.
+  await f.db.update(instantPgChannels).set({ enabled: false });
   const send = vi.fn(async () => ({ contractId: 'instant-signature' }));
   __setSnowSignClientForTest({
     createUploadSession: async () => ({

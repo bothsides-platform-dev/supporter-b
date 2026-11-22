@@ -28,6 +28,16 @@ export async function instantInbox(tx: Tx, actor: Actor, pg: boolean) {
     )
     .orderBy(desc(a.consentAt));
 }
+export async function hasInstantCases(tx: Tx, actor: Actor, pg: boolean) {
+  const rows = pg
+    ? await tx.select({ id: a.id }).from(a).where(eq(a.pgId, actor.workspaceId)).limit(1)
+    : await tx
+        .select({ id: r.id })
+        .from(r)
+        .where(and(eq(r.buyerId, actor.workspaceId), eq(r.creator, actor.userId)))
+        .limit(1);
+  return rows.length > 0;
+}
 export async function issuedMail(tx: Tx, id: string) {
   return (
     await tx

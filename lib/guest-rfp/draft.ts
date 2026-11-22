@@ -18,6 +18,7 @@ export const GUEST_DRAFT_KEY = "support-b-guest-rfp-v1";
 export const GUEST_REQUEST_KEY = "support-b-auto-request";
 export const RESUME_KEY = "support-b-guest-rfp-resume";
 export const INSTANT_RESUME_KEY = 'instant-quote-resume';
+export const INSTANT_CONSULT_KEY = 'support-b-instant-consult';
 export const GUEST_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 const CLEANUP_PREFIX = "support-b-guest-rfp-cleanup:";
 export const RESUME_PATH = "/rfp-create?resume=guest";

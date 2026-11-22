@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { businessOpening } from '@/lib/server/buyer-approval/new-business';
-import { instantIntakeEnabled } from '@/lib/rfp/instant-quote';
 import { getNtsClient, type NtsLookupResult } from '@/lib/integrations/nts';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 import { industryNameKey } from '@/lib/rfp/industry-selection';
@@ -44,7 +43,7 @@ const businessResponse = z.object({
 });
 export async function lookupQuoteBusiness(bizNo: string, groups: readonly PublicIndustry[], providers: {
   request: Request; nts: (bizNo: string) => Promise<NtsLookupResult>;
-} = { request: fetch, nts: number => getNtsClient().lookup(number) }): Promise<AssistResult & { cost?: number }> {
+} = { request: fetch, nts: number => getNtsClient().lookup(number) }, withAge = false): Promise<AssistResult & { cost?: number }> {
   const suggestions: Suggestion[] = [];
   const business: NonNullable<AssistResult['business']> = { bizNo };
   let apickOk = false, ntsOk = false;
@@ -58,7 +57,7 @@ export async function lookupQuoteBusiness(bizNo: string, groups: readonly Public
         cost = result.api.cost;
         if (result.data.사업자등록번호 !== bizNo) return;
         apickOk = true;
-        if (instantIntakeEnabled() && result.data.상세정보확보==='Y' && (!result.data.정보제한여부 || result.data.정보제한여부==='N')) {
+        if (withAge && result.data.상세정보확보==='Y' && (!result.data.정보제한여부 || result.data.정보제한여부==='N')) {
           const opened=businessOpening(result.data.설립일,new Date().toISOString());
           if(opened) business.age=opened.recent?'new':'established';
         }
