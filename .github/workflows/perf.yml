@@ -91,11 +91,18 @@ jobs:
         run: |
           mkdir -p tests/perf
           # pnpm perf:seed가 출력하는 JSON을 파일 저장 + GITHUB_OUTPUT에 주입
-          SEED_JSON=$(pnpm perf:seed)
+          # --silent: pnpm 배너가 stdout 에 섞이면 JSON 이 깨진다.
+          SEED_JSON=$(pnpm --silent perf:seed)
           echo "$SEED_JSON" > tests/perf/seed-data.json
-          echo "BUYER_EMAIL=$(echo "$SEED_JSON" | jq -r '.buyerEmail')"  >> "$GITHUB_OUTPUT"
-          echo "PG_EMAIL_0=$(echo "$SEED_JSON"  | jq -r '.pgEmails[0]')" >> "$GITHUB_OUTPUT"
-          echo "RFP_ID_0=$(echo "$SEED_JSON"    | jq -r '.rfpIds[0]')"   >> "$GITHUB_OUTPUT"
+          # 대입문으로 받아야 jq 실패가 step 을 멈춘다(echo 인자 안의 치환은 실패를 삼킨다).
+          BUYER_EMAIL=$(echo "$SEED_JSON" | jq -er '.buyerEmail')
+          PG_EMAIL_0=$(echo "$SEED_JSON"  | jq -er '.pgEmails[0]')
+          RFP_CODE_0=$(echo "$SEED_JSON"  | jq -er '.rfpCodes[0]')
+          {
+            echo "BUYER_EMAIL=$BUYER_EMAIL"
+            echo "PG_EMAIL_0=$PG_EMAIL_0"
+            echo "RFP_CODE_0=$RFP_CODE_0"
+          } >> "$GITHUB_OUTPUT"
 
       # ── Next.js 빌드 + action ID 추출 ───────────────────────────────────
       - name: Build Next.js
@@ -143,7 +150,7 @@ jobs:
             -e TEST_BUYER_PASSWORD=perf-password-123 \
             -e TEST_PG_EMAIL=${{ steps.seed.outputs.PG_EMAIL_0 }} \
             -e TEST_PG_PASSWORD=perf-password-123 \
-            -e TEST_RFP_ID=${{ steps.seed.outputs.RFP_ID_0 }} \
+            -e TEST_RFP_CODE=${{ steps.seed.outputs.RFP_CODE_0 }} \
             tests/perf/smoke.js
 
       # ── Load test (main push 전용) ───────────────────────────────────────
@@ -156,7 +163,6 @@ jobs:
             -e TEST_BUYER_PASSWORD=perf-password-123 \
             -e TEST_PG_EMAIL=${{ steps.seed.outputs.PG_EMAIL_0 }} \
             -e TEST_PG_PASSWORD=perf-password-123 \
-            -e TEST_RFP_ID=${{ steps.seed.outputs.RFP_ID_0 }} \
             tests/perf/load.js
 
       # ── 결과 아티팩트 ────────────────────────────────────────────────────
