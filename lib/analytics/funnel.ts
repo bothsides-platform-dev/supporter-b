@@ -6,6 +6,10 @@ const ROUTES = ['/', '/quote-start', '/rfp-create', '/signup/buyer', '/signup/bu
 export function safePagePath(value: string): string {
   try { const url = new URL(value, 'https://support-b.com'); return ROUTES.includes(url.pathname) ? url.pathname : '/other'; } catch { return '/other'; }
 }
+// Partner host, demo and tutorial are outside the buyer funnel, whoever is visiting.
+function excludedSurface(value: string): boolean {
+  try { const url = new URL(value, 'https://support-b.com'); return url.hostname !== 'support-b.com' || /^\/(demo|tutorial)(\/|$)/.test(url.pathname); } catch { return true; }
+}
 type Identity = { id?: string; workspaceType?: string; isMaster?: boolean } | null;
 function attribution(location: string, referrer: string) {
   const out: Record<string, string> = {};
@@ -25,6 +29,7 @@ type Pending = { name: FunnelEvent | 'page_view' | 'docs_main_arrival'; params: 
 export function createFunnelAnalytics(options: { production: boolean; send: Send; storage: () => Pick<Storage, 'getItem' | 'setItem'>; observe?: (name: FunnelEvent, params: FunnelParams) => void; setDisabled?: (id: string, disabled: boolean) => void }) {
   const docs = createDocsAssist(options.storage);
   let measurementId = '';
+  let excluded = false;
   let identity: Identity | undefined;
   let pending: Pending[] = [];
   let campaign: Record<string, string> = {};
@@ -58,7 +63,7 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
       }
       return arrival.location;
     },
-    configure(id: string, location = '/', referrer = '') { measurementId = /^G-[A-Z0-9]+$/.test(id) ? id : ''; campaign = attribution(location, referrer); },
+    configure(id: string, location = '/', referrer = '') { excluded = excludedSurface(location); measurementId = /^G-[A-Z0-9]+$/.test(id) ? id : ''; campaign = attribution(location, referrer); },
     pageView(location: string, referrer = '') {
       if (!allowed()) return;
       const page = safePagePath(location);
@@ -70,8 +75,8 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
     identify(user: Identity) {
       const changed = JSON.stringify(identity) !== JSON.stringify(user);
       identity = user;
-      // gtag sends automatic events on its own, so excluded accounts need it off before config.
-      if (options.production && measurementId) options.setDisabled?.(measurementId, !allowed());
+      // gtag sends automatic events on its own, so excluded accounts and surfaces need it off before config.
+      if (options.production && measurementId) options.setDisabled?.(measurementId, excluded || !allowed());
       if (options.production && measurementId && changed) safeSend('config', measurementId, {
         user_id: allowed() ? user?.id ?? null : null, send_page_view: false,
         page_location: 'https://support-b.com/', page_referrer: '', page_title: '/',

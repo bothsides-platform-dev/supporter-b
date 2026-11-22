@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - `gtag.js`가 세션 조회보다 먼저 실행되면 그 화면의 GA4 이벤트가 전부 빠지던 초기화 오류를 고쳤다. 인사이트에서 넘어온 `docs_main_arrival`도 기록된다.
-- PG·운영계정은 gtag가 스스로 보내는 자동 이벤트까지 GA4로 전송하지 않는다.
+- PG·운영계정과 partner 호스트·데모·튜토리얼 화면은 gtag가 스스로 보내는 자동 이벤트까지 GA4로 전송하지 않는다. partner 방문이 구매사 랜딩 조회로 잡히지 않는다.
 
 ## [0.49.1.0] - 2026-11-22
 

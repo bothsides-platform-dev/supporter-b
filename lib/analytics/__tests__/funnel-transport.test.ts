@@ -51,3 +51,21 @@ it('follows identity changes inside one document', async () => {
   const states = [buyer, pg, null, pg, buyer].map(user => { analytics.identify(user); return disabled(); });
   expect(states).toEqual([false, true, false, true, false]);
 });
+
+it.each(['https://partner.support-b.com/', 'https://partner.support-b.com/login', 'https://support-b.com/demo', 'https://support-b.com/tutorial/rfp'])('switches GA off for a visitor on an excluded surface %s', async location => {
+  const analytics = await loadSite();
+  analytics.configure('G-TEST', location);
+  analytics.identify(null);
+  expect(disabled()).toBe(true);
+});
+
+it('turns GA back on after leaving the demo and keeps the buyer User-ID', async () => {
+  const analytics = await loadSite();
+  const visit = (location: string) => {
+    analytics.configure('G-TEST', location);
+    analytics.identify({ id: 'buyer', workspaceType: 'buyer' });
+    return disabled();
+  };
+  expect([visit('https://support-b.com/demo'), visit('https://support-b.com/'), visit('https://support-b.com/demo-day')]).toEqual([true, false, false]);
+  expect(page().dataLayer!.filter(args => args[0] === 'config').map(args => args[2])).toEqual([expect.objectContaining({ user_id: 'buyer' })]);
+});

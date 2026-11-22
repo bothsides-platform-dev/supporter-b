@@ -206,7 +206,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 ### 4.2 구매사 GA4 퍼널 (2026-10-18)
 
-`lib/analytics/funnel.ts`는 고정 이벤트·단계·속성 값과 정제한 경로만 GA4에 전송한다. 내부 사용자 ID는 로그인 세션의 User-ID 설정에만 쓰고, 이메일·답변·인증 토큰·견적 ID·요청 멱등 키를 이벤트에 담지 않는다. 세션 미확정 이벤트는 유한 큐에서 기다리고 PG·운영계정은 폐기한다. 세션 확인 전에는 `config`하지 않고, PG·운영계정은 `config` 전에 `ga-disable`을 켜서 gtag 자동 이벤트까지 막는다(가드: `funnel-transport.test.ts`). 개발·데모·튜토리얼도 제외한다. 유입은 허용된 캠페인 값과 referrer 도메인만 전달한다. gtag 자동 측정은 이 정제를 거치지 않으므로 URL·입력값을 보내는 항목은 꺼진 상태를 전제로 한다. 2026-11-22 실제 상태와 남은 항목은 [퍼널 분석](FUNNEL_ANALYTICS.md#ga4-설정)에 있다.
+`lib/analytics/funnel.ts`는 고정 이벤트·단계·속성 값과 정제한 경로만 GA4에 전송한다. 내부 사용자 ID는 로그인 세션의 User-ID 설정에만 쓰고, 이메일·답변·인증 토큰·견적 ID·요청 멱등 키를 이벤트에 담지 않는다. 세션 미확정 이벤트는 유한 큐에서 기다리고 PG·운영계정은 폐기한다. 세션 확인 전에는 `config`하지 않고, PG·운영계정과 partner 호스트·데모·튜토리얼 화면은 `config` 전에 `ga-disable`을 켜서 gtag 자동 이벤트까지 막는다(가드: `funnel-transport.test.ts`). 개발·데모·튜토리얼도 제외한다. 유입은 허용된 캠페인 값과 referrer 도메인만 전달한다. gtag 자동 측정은 이 정제를 거치지 않으므로 URL·입력값을 보내는 항목은 꺼진 상태를 전제로 한다. 2026-11-22 실제 상태와 남은 항목은 [퍼널 분석](FUNNEL_ANALYTICS.md#ga4-설정)에 있다.
 
 관측 데이터는 클라이언트가 위조·누락할 수 있으며 업무 성공의 감사 증빙이 아니다. SDK 차단, 저장소 초기화, 다른 기기의 익명 활동은 완전 복구하지 않는다. 규범 테스트: `lib/analytics/__tests__/funnel.test.ts`, `use-funnel.test.tsx`, `components/rfp/__tests__/RfpCreateWizard.test.tsx`. 운영 설정·보고서 의미는 [퍼널 분석](FUNNEL_ANALYTICS.md)을 따른다.
 
