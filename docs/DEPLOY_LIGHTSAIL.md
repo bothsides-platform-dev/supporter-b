@@ -8,6 +8,19 @@
 
 `dev` 브랜치에 동기화하는 별도 테스트 서버는 [스테이징 자동 배포 런북](STAGING.md)을 따른다. 운영 VM·DB와 분리하고, 새 서버 설정 후에만 GitHub의 staging 배포를 활성화한다.
 
+## 운영자 콘솔 패스키 — DDL 선행 (2026-11-21)
+
+admin-supporter-b가 TOTP에 더해 패스키(WebAuthn: 지문·얼굴·기기 잠금)를 2차 인증 수단으로 받는다. 자격증명은 `admin_passkeys` 테이블에 저장하고 본 서비스는 이 테이블을 읽거나 쓰지 않는다. 이 변경은 `lib/db/schema`·`scripts/migrations`를 바꾸므로 운영 CI의 스키마 fingerprint가 달라진다.
+
+1. 이 스키마가 **`main`에 들어간 뒤에** 테이블을 만든다. 이유와 `schema-ready` 확인에서 멈추는 동작은 아래 `admin_users` 절과 같다.
+2. `scripts/migrations/20261121-admin-passkeys.sql`을 적용한다. `admin_users`를 FK로 참조하므로 그 테이블이 먼저 있어야 한다. 시드는 없다. 구 admin은 이 테이블을 무시하므로 admin 배포 전에 적용해도 안전하다.
+3. 검증한 manifest의 `schema` 값을 `shared/schema-ready`에 기록해 본 서비스 배포를 이어 간다.
+4. 그다음 admin을 배포한다. 새 admin은 2차 인증 화면에서 이 테이블을 조회하므로, 테이블 없이 먼저 배포하면 패스키를 쓰지 않는 관리자의 **TOTP 로그인까지 실패한다.** 스테이징도 같은 순서를 지킨다. 앱 롤백 때도 테이블과 행은 남긴다.
+
+```bash
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261121-admin-passkeys.sql
+```
+
 ## 운영자 콘솔 관리자 계정·2차 인증 — DDL 선행 (2026-11-15)
 
 admin-supporter-b가 `ADMIN_EMAILS` 환경변수 대신 `admin_users` 테이블로 관리자 허용 목록과 TOTP 2차 인증을 관리한다. 본 서비스는 이 테이블을 읽거나 쓰지 않는다. 이 변경은 `lib/db/schema`·`scripts/migrations`를 바꾸므로 운영 CI의 스키마 fingerprint가 달라진다.
@@ -942,3 +955,11 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 ## 자동 요청 추가 (2026-10-25)
 
 명시적으로 확정한 초안의 자동 발송과 완료 안내는 [자동 요청 운영 문서](GUEST_RFP_AUTO_SEND.md)를 따른다. 배포는 신규 DDL → 앱 → 매분 cron → 기능 활성화 순서다. 기존 미확정 초안에는 자동 발송 동의를 적용하지 않는다.
+
+## PG 담당자 배정 시범 운영
+
+1. 공유 PostgreSQL에 `scripts/migrations/20261122-pg-consultations.sql`을 적용한다. 기존 예약·발송 건은 개별 배정 대상으로 전환하지 않는다.
+2. 서비스와 관리자 앱을 배포한다. 관리자 outbox 소비자에서 `rfp.consultation`을 제외한 버전이 배포된 뒤 시범 운영을 시작한다. 서비스의 이메일 발송과 `/api/cron/rfp-deadlines` 주기 실행, 영업일 달력, 운영 수신 주소 `ADMIN_NOTIFY_EMAIL`을 확인한다.
+3. 관리자 앱의 **PG 상담 배정·지연**에서 참여 PG별 책임자, 우선순위가 있는 담당자 명단, 업종·거래 규모, 첫 연락 기한, 반복 지연 집계 기간·건수를 등록한다. 3영업일 견적 마감 내 플랫폼 제출과 연락처 제공 문구를 PG와 확인한 뒤 자동 배정을 켠다.
+4. 새 신청 수집을 열 때 `NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED=true`로 서비스 앱을 빌드한다. CI 빌드 변수는 스테이징 `STAGING_NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED`, 운영 `PRODUCTION_NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED`다. 먼저 이메일로 검증하고 PG별 알림톡은 템플릿·수신 동의·단말 확인을 마친 뒤 연다.
+5. 신규 접수를 중지하려면 해당 PG의 자동 배정을 끈다. 이미 배정한 회차의 접근 권한, 기한, 이력과 응답 처리는 계속 유지한다. [알림톡 발송 조건](ALIMTALK_ROLLOUT.md#pg-상담-배정-알림톡)

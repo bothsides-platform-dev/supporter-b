@@ -129,6 +129,10 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
       ...demoBuyerDealData,
       rfp,
       companyName: DEMO_COMPANY,
+      // 가상 PG의 고정 예시 판가. 실제 PG 홈페이지 요율로 표시하거나 추정하지 않는다.
+      homepageCardRatesByPg: draft.contractType === 'new' ? {
+        [DEMO_PG.workspaceId]: { sole: 0.023, sme1: 0.026, sme2: 0.028, sme3: 0.03, general: 0.034 },
+      } : {},
       bids: [],
       rfpFiles: draft.rfpFiles.map((file) => ({
         ...file,
@@ -459,6 +463,10 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
             rate,
           })),
     );
+    for (const [tier, rate] of Object.entries(state.deal?.homepageCardRatesByPg?.[bid.pgWsId] ?? {})) {
+      const card = rates.find((row) => row.key === `card:${tier}`);
+      if (card) card.rate = rate;
+    }
     const result = buildAgreementFees(
       { paymentFees: bid.paymentFees, customFees: {}, customMethods: [] },
       rates,

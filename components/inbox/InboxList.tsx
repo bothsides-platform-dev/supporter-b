@@ -7,9 +7,11 @@ import type { PgContractState } from '@/lib/signing/pg-contract-action';
 import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import { Chip } from '@/components/primitives/Chip';
+import { Button } from '@/components/primitives/Button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDateTime, formatKRW } from '@/lib/utils/format';
+import { formatDateTime, formatKRW, formatTimeLeft } from '@/lib/utils/format';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
+import { VOLUME_LABELS, type VolumeBand } from '@/lib/rfp/assignment';
 import type { PgReview } from '@/lib/rfp/pg-matching';
 import type { RfpStatus } from '@/lib/types/rfp';
 import {
@@ -23,6 +25,7 @@ import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 export type InboxRow = {
   invitationId: string;
   buyerName?: string;
+  expectedVolume?: VolumeBand;
   monthlyAvgPgVolume?: string;
   receivedAt?: string;
   hasDraft?: boolean;
@@ -50,16 +53,28 @@ export type InboxRow = {
   bidWindowOpen?: boolean;
 };
 
+/** 행 안에서 스스로 클릭을 처리하는 요소 — 행 클릭으로 한 번 더 열지 않는다. */
+const ROW_CONTROL = 'button, a, input, select, textarea, label, [role="button"]';
+
 export function InboxList({
   rows,
   onOpenRfp,
   selected,
   compact = false,
+  active = -1,
+  now,
 }: {
   rows: InboxRow[];
   onOpenRfp?: (rfpId: string, tab?: 'write') => void;
   selected?: string;
   compact?: boolean;
+  /** 키보드로 강조한 행의 위치. 열기(미리보기)와 다르다 — 강조만으로는 열람 처리하지 않는다. */
+  active?: number;
+  /**
+   * 서버가 정한 현재 시각(ISO). 있으면 응답이 필요한 행에 남은 시간을 먼저 보여준다.
+   * 렌더 중에 Date.now() 로 계산하면 서버·클라이언트 문구가 갈려 하이드레이션이 깨진다.
+   */
+  now?: string;
 }) {
   const router = useRouter();
   const demoNavigate = useDemoNavigate();
@@ -111,8 +126,11 @@ export function InboxList({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const state = pgRequestState(row);
+          {rows.map((row, index) => {
+            // 서버 시각이 있으면 상태와 남은 시간을 같은 시각으로 판정한다.
+            const state = pgRequestState(row, now ? Date.parse(now) : undefined);
+            const timeLeft =
+              now && state.needsResponse ? formatTimeLeft(row.rfpDeadline, new Date(now)) : null;
             const methods = [
               ...(row.requiredPaymentMethods ?? []).map((m) => PAYMENT_METHOD_LABELS[m]),
               ...(row.customPaymentMethods ?? []).map((m) => m.label),
@@ -121,7 +139,15 @@ export function InboxList({
               <tr
                 key={row.invitationId}
                 aria-selected={selected === row.rfpId}
-                className={`border-t border-[var(--md-sys-color-outline-variant)] align-top ${selected === row.rfpId ? 'bg-[var(--md-sys-color-primary-container)]' : 'hover:bg-[var(--md-sys-color-surface-container-low)]'}`}
+                data-active={active === index}
+                // 행 어디를 눌러도 제목을 누른 것과 같다. 키보드 사용자는 제목 버튼으로 같은 일을 한다.
+                onClick={(e) => {
+                  if (e.target instanceof Element && e.target.closest(ROW_CONTROL)) return;
+                  // 요청 번호 등을 드래그해 고른 클릭은 복사하려는 것이다 — 열면 열람 처리된다.
+                  if (window.getSelection()?.toString()) return;
+                  open(row.rfpId);
+                }}
+                className={`cursor-pointer border-t border-[var(--md-sys-color-outline-variant)] align-top ${selected === row.rfpId ? 'bg-[var(--md-sys-color-primary-container)]' : 'hover:bg-[var(--md-sys-color-surface-container-low)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)]'}`}
               >
                 <td className="px-4 py-4">
                   <p className="mb-1 truncate font-semibold" title={row.buyerName}>
@@ -147,10 +173,10 @@ export function InboxList({
                     <td className="px-3 py-4">
                       <p className="break-words">{row.industryName || '업종 미제공'}</p>
                       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        전년도 월 평균 PG 거래액
+                        {row.expectedVolume ? '구매사가 적은 예상 월 PG 거래액' : '전년도 월 평균 PG 거래액'}
                       </p>
                       <p className="md-numeric">
-                        {row.contractType === 'new'
+                        {row.expectedVolume ? VOLUME_LABELS[row.expectedVolume] : row.contractType === 'new'
                           ? '해당 없음'
                           : row.monthlyAvgPgVolume
                             ? /^\d+$/.test(row.monthlyAvgPgVolume)
@@ -180,19 +206,29 @@ export function InboxList({
                   </p>
                 </td>
                 <td className="px-3 py-4">
-                  <time dateTime={row.rfpDeadline} className="md-numeric block text-[13px]">
+                  {timeLeft && (
+                    <p data-testid="time-left" className="md-numeric mb-0.5 text-[14px] font-medium">
+                      {timeLeft}
+                    </p>
+                  )}
+                  <time
+                    dateTime={row.rfpDeadline}
+                    className={`md-numeric block text-[13px] ${timeLeft ? 'text-[var(--md-sys-color-on-surface-variant)]' : ''}`}
+                  >
                     {formatDateTime(row.rfpDeadline)} KST
                   </time>
                 </td>
                 {!compact && (
                   <td className="px-3 py-4">
-                    <button
+                    <Button
                       type="button"
+                      variant="outlined"
+                      size="lg"
                       onClick={() => open(row.rfpId, state.tab === 'write' ? 'write' : undefined)}
-                      className="min-h-9 whitespace-nowrap rounded-[6px] border border-[var(--md-sys-color-outline)] px-2 text-[var(--md-sys-color-primary)] focus-visible:outline-2"
+                      className="whitespace-nowrap"
                     >
                       {state.actionLabel}
-                    </button>
+                    </Button>
                   </td>
                 )}
               </tr>

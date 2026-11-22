@@ -57,6 +57,19 @@ describe('filterRfps (status + deadline + grade, AND)', () => {
     expect(filterRfps([expired], { status: 'active' }, NOW)).toEqual([]);
     expect(filterRfps([expired], { status: 'closed' }, NOW)).toEqual([expired]);
   });
+  it('검토 대기는 견적이 도착한 sent 요청이며 마감이 지나도 남는다 (홈 KPI 와 같은 집합)', () => {
+    const open = { id: 'open', status: 'sent', deadline: new Date(NOW.getTime() + 86_400_000).toISOString() } as RFP;
+    const expired = { id: 'expired', status: 'sent', deadline: new Date(NOW.getTime() - 1000).toISOString() } as RFP;
+    const noBid = { id: 'no-bid', status: 'sent', deadline: open.deadline } as RFP;
+    const awarded = { id: 'awarded', status: 'awarded', deadline: open.deadline } as RFP;
+    const counts = new Map([['open', 2], ['expired', 1], ['no-bid', 0], ['awarded', 3]]);
+    expect(filterRfps([open, expired, noBid, awarded], { status: 'review' }, NOW, counts).map((r) => r.id))
+      .toEqual(['open', 'expired']);
+  });
+  it('견적 수를 모르면 검토 대기는 아무것도 보여주지 않는다', () => {
+    const open = { id: 'open', status: 'sent', deadline: new Date(NOW.getTime() + 86_400_000).toISOString() } as RFP;
+    expect(filterRfps([open], { status: 'review' }, NOW)).toEqual([]);
+  });
   it('마감 필터는 기존 선정·취소 요청도 계속 보여준다', () => {
     const awarded = { id: 'awarded', status: 'awarded', deadline: NOW.toISOString() } as RFP;
     const cancelled = { id: 'cancelled', status: 'cancelled', deadline: NOW.toISOString() } as RFP;

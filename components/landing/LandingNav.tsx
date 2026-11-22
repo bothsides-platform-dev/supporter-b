@@ -87,22 +87,12 @@ export function LandingNav({ authed }: { authed: boolean }) {
   // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
   // 섹션의 scroll-mt)가 처리한다.
   const authLink = authed ? (
-    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} ${styles.auth}`}>
+    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} ${styles.auth} ${styles.buyerAuth}`}>
       서포트비로 이동해요 →
     </Link>
   ) : (
-    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} ${styles.auth}`}>
+    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} ${styles.auth} ${styles.buyerAuth}`}>
       로그인
-    </Link>
-  );
-
-  // 우측 주요 CTA — B2B 헤더답게 1차 액션을 강조.
-  const primaryCta = authed ? null : (
-    <Link
-      href="/quote-start"
-      className={styles.cta}
-    >
-      맞춤 견적 받기
     </Link>
   );
 
@@ -194,9 +184,8 @@ export function LandingNav({ authed }: { authed: boolean }) {
         ))}
       </div>
 
-      {/* Auth + primary CTA */}
+      {/* Auth */}
       {authLink}
-      {primaryCta}
 
       {/* Mobile hamburger */}
       <button

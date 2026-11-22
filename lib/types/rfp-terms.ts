@@ -2,6 +2,7 @@
 // bids.paymentFees 의 getMethodRate 와 동일 철학: 읽기는 관대(어떤 _v 든 정규화),
 // 쓰기는 정규(항상 현재 버전 emit). 새 브리프 필드 추가 = 아래 타입 + zod(current-terms.ts) 두 곳.
 
+import type { VolumeBand } from '@/lib/rfp/assignment';
 import type { ProductInfo } from '@/lib/rfp/product-info';
 
 export const CURRENT_TERMS_VERSION = 1 as const;
@@ -21,6 +22,7 @@ export type CurrentTermsV1 = {
   deliveryServicePeriod?: string;
   solution?: SolutionValue;
   solutionDetail?: string;
+  expectedVolume?: VolumeBand;
   monthlyAvgPgVolume?: string;
 };
 
@@ -50,6 +52,7 @@ type DiscreteBriefFields = {
   deliveryServicePeriod?: string | null;
   currentSolution?: string | null;
   currentSolutionDetail?: string | null;
+  expectedVolume?: VolumeBand | null;
   monthlyAvgPgVolume?: string | null;
 };
 
@@ -64,6 +67,7 @@ export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1
   // solution 은 문서에서 enum 으로 좁혀지지만, 기존 데이터 보존이 우선이라 read-tolerant 캐스트.
   if (f.currentSolution != null) t.solution = f.currentSolution as SolutionValue;
   if (f.currentSolutionDetail != null) t.solutionDetail = f.currentSolutionDetail;
+  if (f.expectedVolume) t.expectedVolume = f.expectedVolume;
   if (f.monthlyAvgPgVolume != null) t.monthlyAvgPgVolume = f.monthlyAvgPgVolume;
   return t;
 }

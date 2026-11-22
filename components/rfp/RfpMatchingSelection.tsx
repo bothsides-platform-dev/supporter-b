@@ -1,4 +1,6 @@
 'use client';
+import { assignmentSize } from '@/lib/rfp/assignment';
+import { ContactConsentField } from './ContactConsentField';
 import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
@@ -47,7 +49,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect, estimat
     <div className="space-y-4">
       <div className="space-y-2">
         <Chip label={blocked ? '접수 불가' : risk === 'gray' ? '추가 검토' : risk === 'white' ? '일반 업종' : '확인 필요'} color={blocked ? 'error' : risk === 'white' ? 'tertiary' : 'warning'} />
-        <h3 className="text-[16px] font-semibold">{blocked ? '입력한 사업은 현재 신청을 진행하기 어려워요' : risk === 'gray' ? '입점 조건을 추가로 확인해야 해요' : available ? '사업에 맞는 PG사를 추천했어요' : '상담 가능한 PG사를 확인하고 있어요'}</h3>
+        <h3 className="text-[16px] font-semibold">{blocked ? '입력한 사업은 현재 신청을 진행하기 어려워요' : risk === 'gray' ? '입점 조건을 추가로 확인해야 해요' : available ? '사업에 맞는 PG사를 추천했어요' : '지금은 상담할 수 있는 PG사를 찾지 못했어요'}</h3>
         <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{available ? '상담할 PG사 한 곳을 골라주세요. PG사 검토 후 받은 견적을 확인하고 최종 선정할 수 있어요.' : '입력한 업종을 다시 확인하거나 운영팀에 문의해주세요.'}</p>
       </div>
       {available ? <>
@@ -99,6 +101,8 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   const demo = useBuyerDemo();
   const draftApi = useRfpDraftApi();
   const selected = useRfpDraft(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
+  const size = useRfpDraft(assignmentSize);
+  const consent = useRfpDraft(s => s.contactConsent);
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
   const visibleResult = !demo && !state.error && !!state.result && elapsed >= MIN_MATCHING_LOADING_MS;
@@ -110,6 +114,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }, [demo, state.error]);
   useEffect(() => {
     let canceled = false;
+    draftApi.getState().setField('contactConsent',undefined);
     draftApi.getState().setField('allowedPgWorkspaceIds', []);
     // The presentation is a minimum duration, never a server progress percentage.
     const timers = [1000, 2000, 4700, MIN_MATCHING_LOADING_MS].map(ms => setTimeout(() => setElapsed(ms), ms));
@@ -144,12 +149,24 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
     return <RfpMatchingLoading phase={phase} business={state.business} industryName={industryName}>{back}</RfpMatchingLoading>;
   }
   const recommendation = state.result;
+  const chosen = recommendation.candidates.find(candidate => candidate.pgWorkspaceId === selected);
+  const needsConsent = chosen && size && recommendation.assignmentPgIds?.includes(selected);
+  function selectPg(id: string) {
+    const pg = recommendation.candidates.find(candidate => candidate.pgWorkspaceId === id);
+    if (!pg) return;
+    const { setField } = draftApi.getState();
+    setField('contactConsent', undefined);
+    setField('allowedPgWorkspaceIds', [{
+      id, displayName: pg.name, logoUpdatedAt: null,
+      ...(recommendation.assignmentPgIds?.includes(id) && { requiresContactConsent: true }),
+    }]);
+  }
   return (
     <MatchingReviewLayout pane={pane} recommendation={
-      <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
-        const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
-        if (pg) draftApi.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
-      }} />
+      <div className="space-y-4">
+        <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={selectPg} />
+        {needsConsent && <ContactConsentField pg={chosen} consent={consent} onChange={value => draftApi.getState().setField('contactConsent', value)} />}
+      </div>
     }>{children}</MatchingReviewLayout>
   );
 }

@@ -18,6 +18,8 @@ import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { DEADLINE_ERROR_MESSAGES } from '@/lib/rfp/deadline-errors';
+import { errorLabel } from '@/lib/utils/error-label';
+import { assignmentSize, hasContactConsent } from '@/lib/rfp/assignment';
 import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 import { WizardActionBar } from './WizardActionBar';
 import { reviewBackPane, isReviewBackShortcut } from './MatchingReviewLayout';
@@ -96,14 +98,18 @@ export function RfpStep4Review(props: Props) {
 }
 
 function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions, pane, onPaneChange, onShortcutBack }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void; pane?: ReviewPane; onPaneChange?: (pane: ReviewPane) => void; onShortcutBack?: (event: KeyboardEvent<HTMLElement>) => void }) {
+  const consentMissing = useRfpDraft(draft => {
+    const pg=draft.allowedPgWorkspaceIds[0];
+    return !!pg?.requiresContactConsent && !!assignmentSize(draft) && !hasContactConsent(draft.contactConsent, pg.id);
+  });
   return <WizardActionBar className={persistentActions ? 'mx-auto flex w-full max-w-3xl items-center justify-between gap-3' : 'flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]'}>
     <Button type="button" variant="outlined" size="md" onClick={onBack} onKeyDown={onShortcutBack} disabled={submitting}>이전</Button>
-    {pane === 'pg' ? <Button data-coachmark="demo-review-next" type="button" size="lg" disabled={pgCount === 0} onClick={() => onPaneChange?.('review')} onKeyDown={onShortcutBack}>다음</Button> : <Button
+    {pane === 'pg' ? <Button data-coachmark="demo-review-next" type="button" size="lg" disabled={pgCount === 0 || consentMissing} onClick={() => onPaneChange?.('review')} onKeyDown={onShortcutBack}>다음</Button> : <Button
       data-demo-cursor
       data-coachmark="tutorial-wizard-submit"
       type="button"
       size="lg"
-      disabled={submitting || (matching && pgCount === 0)}
+      disabled={submitting || (matching && (pgCount === 0 || consentMissing))}
       onKeyDown={onShortcutBack}
       onClick={() => { onAttempt(); if (!sampleMode && !deadlineReady) return; void onSubmit(); }}
     >
@@ -178,7 +184,7 @@ function ReviewContent({
         <RfpStep3PgSelect pgList={pgList} recommendedPgIds={selectedIndustry?.pgWorkspaceIds} industryName={selectedIndustry?.name} showFieldErrors={attempted || showFieldErrors} />
       </div>}
 
-      <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />
+      <FieldError error={serverError ? errorLabel(ERROR_MESSAGES, serverError, '견적 요청을 보내지 못했어요. 입력한 내용을 확인한 뒤 다시 시도해요.') : undefined} />
 
       {!persistentActions && <ReviewActions {...actions} matching={matching} sampleMode={sampleMode} serverError={serverError} showFieldErrors={showFieldErrors} persistentActions={false} pgList={pgList} industryGroups={industryGroups} bizProfile={bizProfile} workspaceName={workspaceName} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={onAttempt} />}
     </div>

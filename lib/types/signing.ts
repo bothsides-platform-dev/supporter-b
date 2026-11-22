@@ -27,7 +27,9 @@ export type SigningContract = {
   /** Missing only on legacy in-memory fixtures. Persisted rows always have a kind. */
   kind?: 'pg_buyer' | 'platform_buyer';
   id: string;
-  rfpId: string;
+  /** Each agreement belongs to either an RFP or an explicitly selected direct signup attempt. */
+  rfpId: string | null;
+  instantAttemptId?: string;
   providerRef?: string; // SnowSign contract_id
   snowsignTemplateId?: string;
   status: SigningContractStatus;

@@ -13,6 +13,26 @@ const tabs = [
 ];
 
 describe('DealRoomCenter', () => {
+  it('하단 행동은 해당 탭에서만 제공하고 본문과 함께 전환한다', async () => {
+    const user = userEvent.setup();
+    const select = vi.fn();
+    const panels = [
+      { ...tabs[0], footer: <button onClick={select}>이 견적 선정하기</button> },
+      tabs[1],
+    ];
+    function Host() {
+      const [active, setActive] = useState('compare');
+      return <DealRoomCenter tabs={panels} activeId={active} onChange={setActive} />;
+    }
+    render(<Host />);
+    await user.click(screen.getByRole('button', { name: '이 견적 선정하기' }));
+    expect(select).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole('tab', { name: '요청 조건' }));
+    expect(screen.queryByRole('button', { name: '이 견적 선정하기' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: '견적 비교' }));
+    expect(screen.getByRole('button', { name: '이 견적 선정하기' })).toBeVisible();
+  });
+
   it('방향키로 계약 탭에 초점만 옮길 때는 로드하지 않고, 선택 후에는 편집 상태를 보존한다', async () => {
     const user = userEvent.setup();
     const mounted = vi.fn();

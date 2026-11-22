@@ -18,6 +18,9 @@ import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import type { Tx } from '@/lib/server/repositories/types';
 import type { MerchantTier } from '@/lib/types/bid';
 
+import { getConsultationRepo } from '../repositories/factory';
+import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
+
 export type PgRecommendationReads = Pick<
   DrizzlePgMatchingRepository,
   'industryGroups' | 'groupPolicy' | 'defaultPolicy' | 'pgDirectory' | 'activePgWorkspaces' | 'buyerTier'
@@ -111,6 +114,9 @@ export class PgRecommendationService {
       previousPgIds: request.kind === 'request' ? request.excludePgIds : [],
       includeTestPg: request.includeTestPg,
     });
+    if (assignmentIntakeEnabled()) {
+      recommendation.assignmentPgIds = await (await getConsultationRepo()).enabled(recommendation.candidates.map(c=>c.pgWorkspaceId),tx);
+    }
     return {
       ok: true,
       industry,

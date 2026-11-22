@@ -1,3 +1,4 @@
+import { VOLUME_LABELS } from './assignment';
 import { productInfoRows } from './product-info';
 import type { RFP } from '@/lib/types/rfp';
 import {
@@ -17,6 +18,7 @@ export function buildRfpOperationRows(
   return [
     ['사업 운영 홈페이지', rfp.websiteUrl],
     ['주요 판매 상품', rfp.mainProducts],
+    ...(rfp.expectedVolume ? [['구매사가 적은 예상 월 PG 거래액', VOLUME_LABELS[rfp.expectedVolume]] as RfpOperationRow] : []),
     ...productInfoRows(rfp.productInfo),
     [
       '전년도 월 평균 PG 거래액',

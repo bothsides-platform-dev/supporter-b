@@ -19,6 +19,7 @@ export const workspaceMembers = pgTable(
     // need no `as MemberApprovalStatus` cast — and, more importantly, dropping
     // this column from a repo projection becomes a compile error instead of a
     // silent `undefined` that flips `isApprovedAdmin` to false.
+    assignmentAlimtalkConsentAt: timestamp('assignment_alimtalk_consent_at', {withTimezone:true}),
     approvalStatus: text('approval_status')
       .$type<MemberApprovalStatus>()
       .notNull()

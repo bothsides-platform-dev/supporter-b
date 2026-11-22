@@ -81,6 +81,27 @@ describe('RfpListPageHost — 실제 목록 화면 정렬', () => {
     expect(screen.queryByText('2026 결제 인프라 견적 요청')).not.toBeInTheDocument();
   });
 
+  // 데모 홈 KPI(견적 검토 대기)가 이 주소로 온다 — 예전엔 모르는 토큰이라 빈 목록이 나왔다.
+  it('검토 대기 필터는 견적이 도착한 요청을 보여준다', () => {
+    render(
+      <DemoNavProvider value={{ pathname: '/rfp', search: 'status=review', navigate: vi.fn() }}>
+        <RfpListPageHost onOpenRfp={vi.fn()} />
+      </DemoNavProvider>,
+    );
+    expect(screen.getByText('2026 결제 인프라 견적 요청')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '검토 대기' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('견적이 없는 요청은 검토 대기에서 빠진다', () => {
+    render(
+      <DemoNavProvider value={{ pathname: '/rfp', search: 'status=review', navigate: vi.fn() }}>
+        <RfpListPageHost onOpenRfp={vi.fn()} progressByRfpId={{ 'demo-rfp-1': { bidCount: 0 } }} />
+      </DemoNavProvider>,
+    );
+    expect(screen.queryByText('2026 결제 인프라 견적 요청')).not.toBeInTheDocument();
+    expect(screen.getByText('아직 보낸 견적 요청이 없어요.')).toBeInTheDocument();
+  });
+
   it('필터 결과가 없으면 실제 빈 상태를 보여준다', () => {
     render(
       <DemoNavProvider value={{ pathname: '/rfp', search: 'grade=general', navigate: vi.fn() }}>

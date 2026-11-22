@@ -6,6 +6,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { publicInputClass } from '@/components/forms/inputs';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import { isWebsiteValid } from '@/lib/rfp/required-fields';
+import { isValidBizNo } from '@/lib/validation/biz-no';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
 import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
 import { SALES_METHOD_LABELS, SALES_METHOD_VALUES } from '@/lib/rfp/product-info';
@@ -37,6 +38,7 @@ export function GuestQuoteIntake({ quote, industryGroups, onConfirmed }: {
   const analyze = (kind: 'business' | 'website', retry = false) => {
     void quote.analyze(kind, retry).catch(() => setError('확인한 정보만 채웠어요. 나머지는 직접 입력해주세요.'));
   };
+  const websiteFirst=quote.websiteFirst;
   const websiteReady = () => {
     const url = normalizeWebsiteUrl(draft.websiteUrl.trim());
     if (!isWebsiteValid(url)) { setError('홈페이지 주소를 확인해요. 예: example.com'); return false; }
@@ -57,6 +59,7 @@ export function GuestQuoteIntake({ quote, industryGroups, onConfirmed }: {
     event.preventDefault();
     if (pending) return;
     if (context.stage === 'business') {
+      if (websiteFirst && (context.bizNo === '0000000000' || !isValidBizNo(context.bizNo))) { setError('사업자등록번호를 확인해주세요.'); return; }
       if (!/^\d{10}$/.test(context.bizNo)) { setError('사업자등록번호 10자리를 입력하거나 건너뛰어요.'); return; }
       analyze('business');
     } else if (context.stage === 'website') {
@@ -65,10 +68,10 @@ export function GuestQuoteIntake({ quote, industryGroups, onConfirmed }: {
     } else run(() => { quote.confirm(); onConfirmed?.(); });
   }}>
     <div className={styles.questionHeader}>
-      <div className={styles.progressLabel}><span>사업 정보</span><Chip label={context.stage === 'business' ? '선택' : '확인'} /></div>
+      <div className={styles.progressLabel}><span>사업 정보</span><Chip label={context.stage === 'business' ? (websiteFirst ? '필수' : '선택') : '확인'} /></div>
       <h2 ref={heading} tabIndex={-1} className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{title}</h2>
       <p className="mt-3 text-[16px] text-[var(--md-sys-color-on-surface-variant)]">{context.stage === 'business'
-        ? '회사 정보를 먼저 확인해요. 지금은 건너뛰어도 괜찮아요.'
+        ? (websiteFirst ? '홈페이지의 사업자등록번호를 확인하거나 직접 입력해주세요.' : '회사 정보를 먼저 확인해요. 지금은 건너뛰어도 괜찮아요.')
         : context.stage === 'website' ? '홈페이지의 공개 정보로 답변을 준비해요. 직접 작성할 수도 있어요.'
           : '맞는 정보만 선택해요. 확인한 항목은 다시 묻지 않아요.'}</p>
     </div>
@@ -123,9 +126,9 @@ export function GuestQuoteIntake({ quote, industryGroups, onConfirmed }: {
     </div>
     <div className={styles.actions}>
       <Button type="button" variant="outlined" className={styles.previous} onClick={() => run(() => {
-        quote.stop(); quote.update({ stage: context.stage === 'review' ? 'website' : 'business', analysisState: 'idle' });
-      })} disabled={context.stage === 'business'}>이전</Button>
-      {context.stage === 'business' && !pending && <Button type="button" variant="text" className={styles.skip} onClick={() => run(() => quote.manual('business'))}>지금은 건너뛸게요</Button>}
+        quote.stop(); quote.update({ stage: websiteFirst ? (context.stage === 'review' ? 'business' : 'website') : (context.stage === 'review' ? 'website' : 'business'), analysisState: 'idle' });
+      })} disabled={context.stage === (websiteFirst ? 'website' : 'business')}>이전</Button>
+      {!websiteFirst && context.stage === 'business' && !pending && <Button type="button" variant="text" className={styles.skip} onClick={() => run(() => quote.manual('business'))}>지금은 건너뛸게요</Button>}
       {(pending || context.stage === 'website') && <Button type="button" variant="text" className={styles.skip} onClick={() => {
         if (context.stage !== 'business' && !websiteReady()) return;
         run(() => quote.manual(context.stage === 'business' ? 'business' : 'website'));

@@ -250,7 +250,7 @@ React 모션은 `motion/react`에서 임포트한다.
 | `elevated` | surface-low + 보더 + elevation-1 | 카드 위 액션 |
 | `tonal` | secondary/primary 컨테이너 | 중간 강조 |
 
-`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 이유를 읽어 줘야 하는 비활성(예: 리마인더 쿨다운)은 네이티브 `disabled` 대신 `aria-disabled` + `aria-describedby` 로 포커스를 남기며, 모양은 같다(`aria-disabled:opacity-38`, 포인터 이벤트 차단). 반대로 **아직 진행할 수 없지만 눌러서 이유를 봐야 하는** 제출 버튼(가입 1단계 [다음], 비밀번호 재설정 [변경하기])은 `dimmed` 로 같은 `opacity-38` 모양만 주고 클릭·포커스·호버는 살린다 — 누르면 호출부가 필드별 사유와 첫 문제 필드 포커스로 답한다. 동작하는 버튼이므로 `aria-disabled` 를 붙이지 않는다. 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용).
+`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 이유를 읽어 줘야 하는 비활성(예: 리마인더 쿨다운)은 네이티브 `disabled` 대신 `aria-disabled` + `aria-describedby` 로 포커스를 남기며, 모양은 같다(`aria-disabled:opacity-38`, 포인터 이벤트 차단). 반대로 **아직 진행할 수 없지만 눌러서 이유를 봐야 하는** 제출 버튼(가입 1단계 [다음], 비밀번호 재설정 [변경하기])은 `dimmed` 로 같은 `opacity-38` 모양만 주고 클릭·포커스·호버는 살린다 — 누르면 호출부가 필드별 사유와 첫 문제 필드 포커스로 답한다. 동작하는 버튼이므로 `aria-disabled` 를 붙이지 않는다. 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용). 다른 화면으로 **이동**하는 행동은 링크여야 하므로 `next/link` 에 같은 파일의 `buttonClassName({ variant, size })` 를 준다 — `<Link><Button/></Link>` 처럼 링크 안에 버튼을 넣지 않는다(Tab 이 두 번 멈추고 낭독기가 두 요소를 읽는다). PG 요청 미리보기의 작업 열기·넓은 화면 보기가 이 방식이다.
 
 ### Chip — 4개 유형 (높이 24px, 4px 반경)
 `assist` / `filter` / `input` / `suggestion`. `color`: `primary`/`tertiary`/`warning`/`error`/`surface`(기본). 뮤트 톤.

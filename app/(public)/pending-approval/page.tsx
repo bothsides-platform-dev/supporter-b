@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import { FunnelView } from '@/lib/analytics/use-funnel';
 import { auth } from '@/auth';
+import { showInstantEntry } from '@/lib/server/services/instant-intake';
 import { redirect } from 'next/navigation';
 import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { ApprovalWaitingScreen } from '@/components/pending-approval/ApprovalWaitingScreen';
@@ -40,5 +42,8 @@ export default async function PendingApprovalPage() {
     redirect('/home');
   }
 
-  return <>{session.user.workspaceType === 'buyer' && !session.user.isMaster && <FunnelView funnel="signup" step="approval_pending" />}<ApprovalWaitingScreen /></>;
+  const showInstant = session.user.workspaceType === 'buyer' && !!workspaceId &&
+    await showInstantEntry({ userId: session.user.id, workspaceId }, 'buyer');
+
+  return <>{session.user.workspaceType === 'buyer' && !session.user.isMaster && <FunnelView funnel="signup" step="approval_pending" />}{showInstant && <Link className="block p-4 text-center underline" href="/instant-quotes">내 PG 가입 신청 확인</Link>}<ApprovalWaitingScreen /></>;
 }

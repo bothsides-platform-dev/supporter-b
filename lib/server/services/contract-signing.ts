@@ -11,6 +11,7 @@ import { SigningDispatch } from './signing-dispatch';
 import { SigningRecovery } from './signing-recovery';
 import { SigningReconciliation } from './signing-reconciliation';
 export { SIGNING_RECOVERY_DEADLINE_MS, RECOVERY_MAX_DETAIL_LOOKUPS } from './signing-recovery';
+import { signingRequest } from './signing-request';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getAgreementService, type AgreementService } from './agreement';
 import { getAgreementRepo } from '@/lib/server/repositories/factory';
@@ -269,6 +270,7 @@ export class ContractSigningService {
   async cancel(contractId: string, actor: Actor, reason?: string): Promise<ServiceResult> {
     const found = await this.signingRepo.findById(contractId);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (!found.contract.rfpId) return { ok:false, error:'FORBIDDEN' };
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     if (!rfp || !(await this.resolvePartyByRfp(rfp, actor)))
       return { ok: false, error: 'FORBIDDEN' };
@@ -344,6 +346,7 @@ export class ContractSigningService {
   async remind(contractId: string, actor: Actor): Promise<ServiceResult> {
     const found = await this.signingRepo.findById(contractId);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (!found.contract.rfpId) return { ok:false, error:'FORBIDDEN' };
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     if (!rfp || !(await this.resolvePartyByRfp(rfp, actor)))
       return { ok: false, error: 'FORBIDDEN' };
@@ -530,7 +533,7 @@ export class ContractSigningService {
   ): Promise<ServiceResult<{ url: string; filename?: string }>> {
     const found = await this.signingRepo.findById(contractId);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
-    const rfp = await this.rfpRepo.findById(found.contract.rfpId);
+    const rfp = await signingRequest(this.rfpRepo,found.contract);
     if (found.contract.kind !== 'platform_buyer' || !rfp || rfp.buyerWsId !== actor.workspaceId)
       return { ok: false, error: 'FORBIDDEN' };
     if (found.contract.status !== 'completed' || !found.contract.providerRef) {
@@ -1134,7 +1137,7 @@ export class ContractSigningService {
       ) {
         continue;
       }
-      const rfp = await this.rfpRepo.findById(c.rfpId);
+      const rfp = await signingRequest(this.rfpRepo,c);
       if (!rfp) continue;
       // 이 루프는 한 틱에 limit(기본 50)건까지 도는데, 던져 놓고 지나가면 50개가 동시에
       // 나가 소켓 50개를 함께 점유한다. await 이 막는 것은 **그 동시성 하나**다.
@@ -1162,6 +1165,7 @@ export class ContractSigningService {
     const stale = await this.signingRepo.findStaleAwaiting(nudgeBefore, limit);
     let nudged = 0;
     for (const c of stale) {
+      if (!c.rfpId) continue;
       const rfp = await this.rfpRepo.findById(c.rfpId);
       if (!rfp?.awardedBidId) continue;
       const bid = await this.bidRepo.findById(rfp.awardedBidId);

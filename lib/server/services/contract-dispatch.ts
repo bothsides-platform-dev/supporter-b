@@ -66,7 +66,7 @@ export class ContractDispatch {
     let rfpId: string;
     if (input.source === 'agreement') {
       agreementContract = (await this.deps.signingRepo.findById(input.contractId))?.contract;
-      if (!agreementContract) return { ok: false, error: 'FORBIDDEN' };
+      if (!agreementContract?.rfpId) return { ok: false, error: 'FORBIDDEN' };
       rfpId = agreementContract.rfpId;
     } else {
       rfpId = input.rfpId;

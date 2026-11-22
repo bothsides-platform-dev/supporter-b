@@ -1,3 +1,4 @@
+import { VOLUME_BANDS } from '@/lib/rfp/assignment';
 import { z } from 'zod';
 import { productInfoSchema } from '@/lib/rfp/product-info';
 import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
@@ -17,6 +18,7 @@ export const currentTermsV1Schema = z
     deliveryServicePeriod: z.string().max(100).optional(),
     solution: z.enum(SOLUTION_VALUES).optional(),
     solutionDetail: z.string().max(100).optional(),
+    expectedVolume: z.enum(VOLUME_BANDS).optional(),
     monthlyAvgPgVolume: z.string().max(100).optional(),
   })
   .strict();

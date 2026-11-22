@@ -1,4 +1,6 @@
 import type { OutboxRepo } from '@/lib/server/repositories/types';
+import { prepareInstantMail } from '../services/instant-quote-mail';
+import { prepareConsultationMail } from '../services/consultation-notices';
 import { computeBackoff } from './backoff';
 import { sendEntriesInBatches } from './batch-send';
 import type { BatchSender, ClaimedOutboxEntry } from './types';
@@ -15,16 +17,20 @@ export async function deliverClaimedEntries(
   await sendEntriesInBatches(async (chunk) => {
     const claims = chunk.map((entry) => claimsById.get(entry.id)!);
     const owned = new Set(await outbox.renewClaims(claims));
-    const deliverable = claims.filter((entry) => owned.has(entry.id));
+    const candidates = claims.filter((entry) => owned.has(entry.id));
+    const prepared = await Promise.all(candidates.map(entry => entry.event === 'pg.instant_quote' ? prepareInstantMail(entry) : prepareConsultationMail(entry)));
+    const suppressed = new Set(candidates.filter((_, i) => !prepared[i]).map((entry) => entry.id));
+    const deliverable = prepared.filter((entry) => entry !== null);
     const sent = deliverable.length > 0 ? await sender(deliverable) : [];
     const byId = new Map(deliverable.map((entry, i) => [entry.id, sent[i]]));
-    const results = claims.map(
-      (entry) =>
-        byId.get(entry.id) ?? {
-          ok: false as const,
-          error: owned.has(entry.id) ? 'no_result' : 'OUTBOX_CLAIM_LOST',
-          retryable: true,
-        },
+    const results = claims.map((entry) =>
+      suppressed.has(entry.id)
+        ? { ok: false as const, error: 'RECIPIENT_CHANGED', retryable: false }
+        : (byId.get(entry.id) ?? {
+            ok: false as const,
+            error: owned.has(entry.id) ? 'no_result' : 'OUTBOX_CLAIM_LOST',
+            retryable: true,
+          }),
     );
 
     // Commit this network batch before a later batch can delay or fail the run.
@@ -36,7 +42,7 @@ export async function deliverClaimedEntries(
         entry.id,
         entry.claimToken,
         result.ok
-          ? { ok: true }
+          ? result
           : {
               ok: false,
               error: result.error,
@@ -68,9 +74,5 @@ export async function flushGenericOutbox(
   sender: BatchSender,
   limit = 50,
 ): Promise<{ ok: number; failed: number }> {
-  return deliverClaimedEntries(
-    outbox,
-    sender,
-    await outbox.claimDue('generic', limit),
-  );
+  return deliverClaimedEntries(outbox, sender, await outbox.claimDue('generic', limit));
 }

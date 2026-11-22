@@ -86,6 +86,7 @@ export const guestRfpRequests = pgTable('guest_rfp_requests', {
   revision: integer('revision').notNull(),
   pgId: uuid('pg_id').notNull().references(() => workspaces.id),
   days: integer('days').notNull(),
+  assignmentConsent: text('assignment_consent'),
   status: text('status').$type<'unbound' | 'waiting' | 'submitted' | 'needs_action' | 'canceled' | 'expired'>().notNull(),
   attemptedAt: timestamp('attempted_at', { withTimezone: true }),
   confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull(),

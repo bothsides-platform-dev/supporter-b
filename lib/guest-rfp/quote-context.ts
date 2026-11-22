@@ -1,3 +1,4 @@
+import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
 import { z } from 'zod';
 import { assistResultSchema } from './suggestions';
 import { quoteSavingsSchema } from './quote-savings';
@@ -6,6 +7,7 @@ export const quoteContextSchema = z.object({
   version: z.literal(1),
   stage: z.enum(['business', 'website', 'review', 'questions', 'complete']),
   bizNo: z.string().max(10).regex(/^\d*$/),
+  confirmedWebsite: z.string().max(500).optional(),
   companyName: z.string().max(100),
   confirmed: z.array(z.string().max(40)).max(30),
   userFields: z.array(z.string().max(40)).max(30),
@@ -18,6 +20,6 @@ export const quoteContextSchema = z.object({
   savings: quoteSavingsSchema.optional(),
 }).strict();
 export type QuoteContext = z.infer<typeof quoteContextSchema>;
-export const newQuoteContext = (): QuoteContext => ({
-  version: 1, stage: 'business', bizNo: '', companyName: '', confirmed: [], userFields: [], analysisState: 'idle',
+export const newQuoteContext = (websiteFirst = assignmentIntakeEnabled()): QuoteContext => ({
+  version: 1, stage: websiteFirst ? 'website' : 'business', bizNo: '', companyName: '', confirmed: [], userFields: [], analysisState: 'idle',
 });

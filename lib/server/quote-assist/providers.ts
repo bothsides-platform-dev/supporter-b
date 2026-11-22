@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { businessOpening } from '@/lib/server/buyer-approval/new-business';
 import { getNtsClient, type NtsLookupResult } from '@/lib/integrations/nts';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 import { industryNameKey } from '@/lib/rfp/industry-selection';
@@ -35,13 +36,14 @@ async function jsonRequest(request: Request, url: string, body: FormData, timeou
 const businessResponse = z.object({
   api: z.object({ success: z.literal(true), cost: z.number().nonnegative().optional().catch(undefined) }),
   data: z.object({
+    설립일: z.unknown().optional(), 상세정보확보:z.unknown().optional(), 정보제한여부:z.unknown().optional(),
     success: z.literal(1), 사업자등록번호: z.string(), 회사명: z.string().max(100).optional(),
     업종: z.string().max(200).optional(), 업태: z.string().max(200).optional(), 종목: z.string().max(200).optional(),
   }),
 });
 export async function lookupQuoteBusiness(bizNo: string, groups: readonly PublicIndustry[], providers: {
   request: Request; nts: (bizNo: string) => Promise<NtsLookupResult>;
-} = { request: fetch, nts: number => getNtsClient().lookup(number) }): Promise<AssistResult & { cost?: number }> {
+} = { request: fetch, nts: number => getNtsClient().lookup(number) }, withAge = false): Promise<AssistResult & { cost?: number }> {
   const suggestions: Suggestion[] = [];
   const business: NonNullable<AssistResult['business']> = { bizNo };
   let apickOk = false, ntsOk = false;
@@ -55,6 +57,10 @@ export async function lookupQuoteBusiness(bizNo: string, groups: readonly Public
         cost = result.api.cost;
         if (result.data.사업자등록번호 !== bizNo) return;
         apickOk = true;
+        if (withAge && result.data.상세정보확보==='Y' && (!result.data.정보제한여부 || result.data.정보제한여부==='N')) {
+          const opened=businessOpening(result.data.설립일,new Date().toISOString());
+          if(opened) business.age=opened.recent?'new':'established';
+        }
         const add = (s: Suggestion) => suggestions.push(s);
         const company = result.data.회사명?.trim();
         if (company) add({ field: 'companyName', value: company, source: 'business', evidence: company });
@@ -76,6 +82,7 @@ export async function lookupQuoteBusiness(bizNo: string, groups: readonly Public
       } catch { /* Lookup is advisory; signup will verify again. */ }
     })(),
   ]);
+  if(business.status!=='active') delete business.age;
   return { status: apickOk && ntsOk ? 'complete' : apickOk || ntsOk ? 'partial' : 'manual',
     suggestions, business, needsConfirmation: suggestions.map(s => s.field), cost };
 }

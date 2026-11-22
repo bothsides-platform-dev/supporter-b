@@ -103,6 +103,69 @@ beforeEach(() => awardRfpAction.mockReset());
 afterEach(cleanup);
 
 describe('FocusComparison', () => {
+  it('신규 견적은 선택한 PG와 구간의 홈페이지 판가를 함께 전환한다', async () => {
+    const user = userEvent.setup();
+    render(<FocusComparison {...baseProps} current={{}} contractType="new" homepageCardRatesByPg={{
+      'pg-toss': { general: 0.034, sole: 0.025 },
+      'pg-kg': { general: 0.035 },
+    }} />);
+    expect(screen.getByText('3.40%')).toBeInTheDocument();
+    expect(screen.getByText(/1\.20%p/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /KG이니시스/ }));
+    expect(screen.getByText('3.50%')).toBeInTheDocument();
+    expect(screen.getByText(/0\.70%p/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '영세' }));
+    expect(screen.queryByText('3.50%')).not.toBeInTheDocument();
+    expect(screen.queryByText(/%p/)).not.toBeInTheDocument();
+    expect(screen.getByText(/이 구간의 홈페이지 판가가 없어/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /토스페이먼츠/ }));
+    expect(screen.getByText('2.50%')).toBeInTheDocument();
+    expect(screen.getByText(/0\.30%p/)).toBeInTheDocument();
+  });
+
+  it('PG 방향키 이동은 초점만 옮기고 Enter로 견적과 채팅 대상을 함께 바꾼다', async () => {
+    const user = userEvent.setup();
+    render(<FocusComparison {...baseProps} />);
+    const first = screen.getByRole('tab', { name: /토스페이먼츠/ });
+    const second = screen.getByRole('tab', { name: /KG이니시스/ });
+    await user.click(first);
+    await user.keyboard('{ArrowRight}');
+    expect(second).toHaveFocus();
+    expect(first).toHaveAttribute('aria-selected', 'true');
+    expect(captured?.workspaceId).toBe('pg-toss');
+    await user.keyboard('{Enter}');
+    expect(second).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', second.id);
+    expect(captured?.workspaceId).toBe('pg-kg');
+    await user.keyboard('{Home}');
+    expect(first).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(second).toHaveFocus();
+  });
+
+  it('한 곳의 견적은 중복 PG 탭 없이 수정 견적 상태를 보여준다', () => {
+    render(<FocusComparison {...baseProps} bids={[toss]} hideActions requoteByPg={{ 'pg-toss': { status: 'pending', round: 2, deadline: '2099-01-01' } }} />);
+    expect(screen.queryByRole('tablist', { name: 'PG사 견적' })).not.toBeInTheDocument();
+    expect(screen.getByText('수정 견적 대기 중')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '이 견적 선정하기' })).not.toBeInTheDocument();
+    expect(captured?.workspaceId).toBe('pg-toss');
+  });
+
+  // 신규 계약은 현재 조건을 묻지도 저장하지도 않는다 — 입력하라는 안내는 할 수 없는 일을 시킨다.
+  it('신규 계약에는 현재 조건 입력 안내를 띄우지 않는다', () => {
+    render(<FocusComparison {...baseProps} current={{}} contractType="new" />);
+    expect(screen.queryByText(/현재 조건을 입력하면/)).not.toBeInTheDocument();
+    expect(screen.getByText('핵심 수치')).toBeInTheDocument();
+  });
+
+  it.each(['renewal', null, undefined] as const)(
+    '견적 유형이 %s 이고 현재 조건이 비면 입력 안내를 유지한다',
+    (contractType) => {
+      render(<FocusComparison {...baseProps} current={{}} contractType={contractType} />);
+      expect(screen.getByText(/현재 조건을 입력하면/)).toBeInTheDocument();
+    },
+  );
+
   it('renders a tab per PG and focuses the lowest card-fee bid by default', () => {
     render(<FocusComparison {...baseProps} />);
     expect(screen.getByRole('tab', { name: /토스페이먼츠/ })).toBeInTheDocument();
@@ -346,11 +409,11 @@ describe('FocusComparison — requote CTA + status chips', () => {
         requoteByPg={{ 'pg-1': { status: 'pending', round: 2, deadline: new Date().toISOString() } }}
       />,
     );
-    expect(screen.getByText('재요청 후 응답 대기')).toBeInTheDocument();
+    expect(screen.getByText('수정 견적 대기 중')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수정 요청' })).toBeInTheDocument();
   });
 
-  it('shows 재제출됨 chip when status is responded', () => {
+  it('shows 수정 견적 도착 chip when status is responded', () => {
     const bid = makeBid({ id: 'b-oo', pgWsId: 'pg-1', round: 2, paymentFees: { card: 0.019 } });
     render(
       <FocusComparison
@@ -366,7 +429,7 @@ describe('FocusComparison — requote CTA + status chips', () => {
         requoteByPg={{ 'pg-1': { status: 'responded', round: 2, deadline: new Date().toISOString() } }}
       />,
     );
-    expect(screen.getByText('재제출됨')).toBeInTheDocument();
+    expect(screen.getByText('수정 견적 도착')).toBeInTheDocument();
   });
 
   it('shows N차 chip when bid.round > 1', () => {

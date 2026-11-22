@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { InboxPageContent } from '@/components/inbox/InboxPageContent';
 import { requirePgPage } from '@/lib/auth/page-guards';
@@ -7,6 +8,7 @@ import { PageHeader } from '@/components/shell/PageHeader';
 import { queryInbox, parseInboxParams, type InboxParams } from '@/lib/rfp/inbox-query';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { RequestPreview } from '@/components/inbox/RequestPreview';
+import { showInstantEntry } from '@/lib/server/services/instant-intake';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +20,11 @@ export default async function InboxPage({ searchParams }: Props) {
   const session = await requirePgPage('/inbox');
 
   const sp = parseInboxParams(await searchParams);
+  const showInstant = await showInstantEntry({ userId: session.user.id, workspaceId: session.user.workspaceId }, 'pg');
 
   return (
     <div className="flex flex-col h-full">
+      {showInstant && <Link className="px-5 pt-3 text-sm underline" href="/instant-quotes">받은 PG 가입 신청</Link>}
       <Suspense
         fallback={
           <>
@@ -65,6 +69,7 @@ async function InboxListPageLoader({
       {...result}
       totalCount={allRows.length}
       selected={params.selected}
+      now={new Date().toISOString()}
       industries={[
         ...new Set(allRows.flatMap((r) => (r.industryName ? [r.industryName] : []))),
       ].sort()}

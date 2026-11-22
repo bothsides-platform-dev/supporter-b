@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateTime,
   formatDeadline,
+  formatTimeLeft,
   formatDeadlineLabel,
   formatSize,
   formatKrwReadable,
@@ -240,5 +241,40 @@ describe('formatSize', () => {
   it('1MB 이상은 MB로 표시 (소수 1자리)', () => {
     expect(formatSize(1_000_000)).toBe('1.0 MB');
     expect(formatSize(2_500_000)).toBe('2.5 MB');
+  });
+});
+
+describe('formatTimeLeft (응답 마감까지 남은 시간)', () => {
+  // 마감은 KST 18:00 — 2026-11-18T09:00:00Z
+  const deadline = '2026-11-18T18:00:00+09:00';
+  const at = (kst: string) => new Date(`${kst}+09:00`);
+
+  it('마감 당일에는 시간 단위로 말한다', () => {
+    expect(formatTimeLeft(deadline, at('2026-11-18T09:00:00'))).toBe('9시간 남음');
+    expect(formatTimeLeft(deadline, at('2026-11-18T16:59:00'))).toBe('1시간 남음');
+  });
+
+  it('한 시간 안쪽은 분 단위, 마지막 1분 미만도 1분으로 말한다', () => {
+    expect(formatTimeLeft(deadline, at('2026-11-18T17:15:00'))).toBe('45분 남음');
+    expect(formatTimeLeft(deadline, at('2026-11-18T17:59:30'))).toBe('1분 남음');
+  });
+
+  it('다음 날부터는 홈 배지와 같은 KST 달력일 D-N 이다', () => {
+    expect(formatTimeLeft(deadline, at('2026-11-17T23:30:00'))).toBe('D-1');
+    expect(formatTimeLeft(deadline, at('2026-11-16T09:00:00'))).toBe('D-2');
+    expect(formatTimeLeft(deadline, at('2026-11-16T09:00:00'))).toBe(formatDeadline(deadline, at('2026-11-16T09:00:00')));
+  });
+
+  it('지난 마감은 null — 마감 표시는 상태 칩이 맡는다', () => {
+    expect(formatTimeLeft(deadline, at('2026-11-18T18:00:00'))).toBeNull();
+    expect(formatTimeLeft(deadline, at('2026-11-19T09:00:00'))).toBeNull();
+  });
+});
+
+describe('formatDeadline — now 주입', () => {
+  it('주입한 시각 기준으로 KST 달력일을 센다', () => {
+    const deadline = '2026-11-18T18:00:00+09:00';
+    expect(formatDeadline(deadline, new Date('2026-11-18T00:30:00+09:00'))).toBe('D-0');
+    expect(formatDeadline(deadline, new Date('2026-11-17T23:59:00+09:00'))).toBe('D-1');
   });
 });

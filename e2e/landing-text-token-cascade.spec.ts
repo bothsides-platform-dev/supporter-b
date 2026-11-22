@@ -132,12 +132,12 @@ async function expectTokenColors(
 
 test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`헤더 CTA가 히어로 전후에 전경·배경을 반전한다 (${colorScheme})`, async ({ page }) => {
+    test(`헤더 로그인 버튼이 히어로 전후에 전경·배경을 반전한다 (${colorScheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await page.goto('/');
 
       const header = page.locator('header.group\\/lheader').first();
-      const cta = header.locator('a[href="/quote-start"]').first();
+      const cta = header.locator('a[href="/login"]').first();
       await expect(cta).toBeVisible();
 
       await expect(header).toHaveAttribute('data-over-dark', 'true');
@@ -182,7 +182,7 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     // 실제 브라우저에서 의도한 값으로 계산되는지 한 지점에서 확인하는 것이다.
     await page.goto('/');
 
-    const cta = page.locator('header a[href="/quote-start"]').first();
+    const cta = page.locator('header a[href="/login"]').first();
     await expect(cta).toBeVisible();
 
     expectLandingControlType(await measureType(cta));

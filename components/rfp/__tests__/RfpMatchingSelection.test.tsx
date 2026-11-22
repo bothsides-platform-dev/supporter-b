@@ -548,3 +548,11 @@ it('워드마크가 없는 PG사가 첫 후보여도 우선 추천 칩을 보여
   expect(within(alphaCard).getByText('우선 추천')).toBeInTheDocument();
   expect(within(tossCard).queryByText('우선 추천')).not.toBeInTheDocument();
 });
+
+// Value: protects=an arrived-but-empty recommendation reads as a result, not as work in progress; fails_when=the empty branch says it is still checking; why_new=the empty-candidate test only asserted the blocked request button; seam=none; no_claim=wording of the operator contact flow
+it.each(['white', 'unconfigured'] as const)('후보 없이 도착한 %s 추천 결과를 확인 중인 것처럼 말하지 않는다', (risk) => {
+  render(<MatchingCandidates recommendation={{ risk, industryName: '업종', candidates: [] }} selected="" onSelect={vi.fn()} />);
+  expect(screen.getByRole('heading', { name: '지금은 상담할 수 있는 PG사를 찾지 못했어요' })).toBeInTheDocument();
+  expect(screen.queryByText(/확인하고 있어요/)).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '운영팀에 문의해요' })).toBeInTheDocument();
+});

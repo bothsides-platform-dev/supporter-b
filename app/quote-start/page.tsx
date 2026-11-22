@@ -1,3 +1,4 @@
+import { instantIntakeOpen } from '@/lib/server/services/instant-intake';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -17,8 +18,6 @@ export const metadata: Metadata = {
 export default async function QuoteStartPage() {
   const session = await auth();
   const autoRequestEnabled = process.env.GUEST_RFP_AUTO_SEND_ENABLED === 'true';
-  if (session?.user?.workspaceType === 'buyer' && !autoRequestEnabled)
-    redirect('/rfp-create');
   if (session?.user && session.user.workspaceType !== 'buyer')
     return (
       <main className="mx-auto max-w-[608px] space-y-4 px-4 py-12">
@@ -35,6 +34,9 @@ export default async function QuoteStartPage() {
         </div>
       </main>
     );
+  const instantOpen = await instantIntakeOpen();
+  if (session?.user?.workspaceType === 'buyer' && !autoRequestEnabled && !instantOpen)
+    redirect('/rfp-create');
   const recovery = autoRequestEnabled && session?.user?.id && !await isSessionRevoked(session) ? (await (await getGuestRequestRepo()).recover(session.user.id))[0] : undefined;
   const industryGroups = await (await getGuestRfpRepo()).industries();
   const pgList = (await (await getWorkspaceRepo()).listCanonicalPgWorkspaces()).map(({ id, name }) => ({ id, name }));
@@ -45,7 +47,7 @@ export default async function QuoteStartPage() {
         <Logo />
         <ConsultButton size="sm" className="min-h-11 bg-transparent font-sans text-[14px] normal-case tracking-normal text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]">문의하기</ConsultButton>
       </header>
-      <GuestQuoteStart recovery={recovery && recovery.workspaceId ? { ...recovery, workspaceId: recovery.workspaceId } : undefined} autoRequestEnabled={autoRequestEnabled} pgList={pgList} industryGroups={industryGroups} />
+      <GuestQuoteStart instantOpen={instantOpen} loggedIn={!!session?.user?.id} recovery={recovery && recovery.workspaceId ? { ...recovery, workspaceId: recovery.workspaceId } : undefined} autoRequestEnabled={autoRequestEnabled} pgList={pgList} industryGroups={industryGroups} />
     </main>
   );
 }

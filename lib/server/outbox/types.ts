@@ -21,6 +21,8 @@ export const OUTBOX_EVENTS = [
   'rfp.requote_requested',
   'rfp.deadline_changed',
   'rfp.matching_buyer_ended',
+  'rfp.consultation',
+  'pg.instant_quote',
   'rfp.deadline_reminder',
   'rfp.bidding_closed',
   'rfp.calendar_changed',
@@ -51,7 +53,7 @@ export type ClaimedOutboxEntry = OutboxEntry & {
   claimExpiresAt: string;
 };
 export type OutboxClaimResult =
-  | { ok: true }
+  | { ok: true; providerMessageId?: string }
   | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date };
 
 // SendResult — outcome of a single email send. On failure the sender classifies
@@ -61,7 +63,7 @@ export type OutboxClaimResult =
 // retryable (the historical default), so legacy `{ ok: false, error }` returns
 // keep their existing maxAttempts-bounded retry behaviour.
 export type SendResult =
-  | { ok: true }
+  | { ok: true; providerMessageId?: string }
   | { ok: false; error: string; retryable?: boolean; retryAfterMs?: number };
 
 /** Single-email sender (per-entry). Used by the digest flushers + dev fallback. */

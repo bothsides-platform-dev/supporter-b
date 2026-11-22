@@ -30,6 +30,9 @@ export const outboxEntries = pgTable(
     claimExpiresAt: timestamp('claim_expires_at', { withTimezone: true }),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     lastError: text('last_error'),
+    providerMessageId: text('provider_message_id'),
+    providerEvent: text('provider_event'),
+    providerCheckedAt: timestamp('provider_checked_at', { withTimezone: true }),
   },
   (t) => [
     check(
@@ -42,6 +45,7 @@ export const outboxEntries = pgTable(
       .where(sql`${t.dedupeKey} IS NOT NULL`),
     // C6: flush hot path — claims pending rows ordered by scheduled_at. Partial
     // index stays small even as sent rows accumulate.
+    index('outbox_reminder_rfp_idx').on(sql`split_part(${t.dedupeKey}, ':', 2)`).where(sql`${t.event} = 'rfp.deadline_reminder'`),
     index('outbox_pending_idx')
       .on(t.scheduledAt)
       .where(sql`${t.status} = 'pending'`),

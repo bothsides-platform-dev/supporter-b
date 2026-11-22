@@ -32,6 +32,10 @@ vi.mock('@/components/pending-approval/ApprovalWaitingScreen', () => ({
   ApprovalWaitingScreen: () => <div>ApprovalWaitingScreen</div>,
 }));
 
+const { showEntryMock } = vi.hoisted(() => ({ showEntryMock: vi.fn(async () => false) }));
+vi.mock('@/lib/server/services/instant-intake', () => ({ showInstantEntry: showEntryMock }));
+vi.mock('@/lib/analytics/use-funnel', () => ({ FunnelView: () => null }));
+
 import PendingApprovalPage from '../page';
 
 const SESSION = {
@@ -81,4 +85,14 @@ describe('PendingApprovalPage 분기', () => {
 it('이미 승인된 회원은 심사 대기를 렌더하지 않고 즉시 앱으로 이동한다', async () => {
   hasActiveBusinessMembershipMock.mockResolvedValue(true);
   await expect(PendingApprovalPage()).rejects.toThrow('REDIRECT:/home');
+});
+
+it('즉시 견적 신청 확인 링크는 접수가 열렸거나 신청이 있는 구매사에게만 보인다', async () => {
+  authMock.mockResolvedValue({ user: { ...SESSION.user, workspaceType: 'buyer' } });
+  render(await PendingApprovalPage());
+  expect(screen.queryByRole('link', { name: '내 PG 가입 신청 확인' })).not.toBeInTheDocument();
+  cleanup();
+  showEntryMock.mockResolvedValueOnce(true);
+  render(await PendingApprovalPage());
+  expect(screen.getByRole('link', { name: '내 PG 가입 신청 확인' })).toBeInTheDocument();
 });

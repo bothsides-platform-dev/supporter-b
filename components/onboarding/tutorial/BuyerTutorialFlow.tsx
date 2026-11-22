@@ -104,6 +104,7 @@ export function BuyerTutorialFlow() {
                 guaranteeInsurance: tutorialBuyerRfp.currentGuaranteeInsurance,
               }}
               rfpStatus={tutorialBuyerRfp.status}
+              contractType={tutorialBuyerRfp.contractType}
               requiredPaymentMethods={tutorialBuyerRfp.requiredPaymentMethods}
               customPaymentMethods={tutorialBuyerRfp.customPaymentMethods}
               rfpId={tutorialBuyerRfp.id}

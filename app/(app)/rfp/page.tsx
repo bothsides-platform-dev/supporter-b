@@ -11,11 +11,13 @@ import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { getBidRepo, getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { filterRfps, type BoardFilterParams } from '@/lib/server/board/filterRfps';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
+import { showInstantEntry } from '@/lib/server/services/instant-intake';
 
 export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
   { value: 'active', label: '진행중' },
+  { value: 'review', label: '검토 대기' },
   { value: 'closed', label: '마감' },
 ];
 const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
@@ -30,6 +32,7 @@ export default async function RfpListPage({ searchParams }: Props) {
   const sp = await searchParams;
   const wsId = session.user.workspaceId;
 
+  const showInstant = await showInstantEntry({ userId: session.user.id, workspaceId: wsId }, 'buyer');
   const newRfpAction = (
     <Link href="/rfp-create">
       <Button size="sm" icon={<PlusIcon />}>
@@ -40,6 +43,7 @@ export default async function RfpListPage({ searchParams }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      {showInstant && <Link className="px-5 pt-3 text-sm underline" href="/instant-quotes">PG 가입 신청</Link>}
       <Suspense
         fallback={
           <>
@@ -65,7 +69,11 @@ async function RfpListPageLoader({
 }) {
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
-  const rfps = filterRfps(allRfps, params, now);
+  // 검토 대기는 견적 도착 여부로 거르므로 필터 전에 sent 요청의 견적 수가 필요하다.
+  const reviewCounts = params.status === 'review'
+    ? await (await getBidRepo()).countSubmittedByRfpIds(allRfps.filter((rfp) => rfp.status === 'sent').map((rfp) => rfp.id))
+    : undefined;
+  const rfps = filterRfps(allRfps, params, now, reviewCounts);
   const rfpIds = rfps.map((rfp) => rfp.id);
   const [bidCounts, reviewStatuses] = await Promise.all([
     (await getBidRepo()).countSubmittedByRfpIds(rfpIds),

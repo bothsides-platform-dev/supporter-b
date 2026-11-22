@@ -119,6 +119,23 @@ describe('RfpListTable', () => {
     expect(push).toHaveBeenCalledWith('/rfp/P-2604-0001');
   });
 
+  it('견적을 받고 있는 요청은 마감일 앞에 남은 날(KST 달력일)을 붙인다', () => {
+    const open = makeRfp({ code: 'P-OPEN', title: '받는 중', deadline: '2026-11-18T18:00:00+09:00' });
+    const awarded = makeRfp({
+      id: '33333333-3333-3333-3333-333333333333',
+      code: 'P-DONE',
+      title: '선정 끝',
+      status: 'awarded',
+      deadline: '2026-11-18T18:00:00+09:00',
+    });
+    render(<RfpListTable rfps={[open, awarded]} now="2026-11-16T10:00:00+09:00" />);
+    const openRow = screen.getByText('P-OPEN').closest('tr')!;
+    const doneRow = screen.getByText('P-DONE').closest('tr')!;
+    expect(openRow).toHaveTextContent('D-2 · 2026. 11. 18.');
+    expect(doneRow).toHaveTextContent('2026. 11. 18.');
+    expect(doneRow).not.toHaveTextContent('D-');
+  });
+
   it('번호 컬럼에 code를 표시', () => {
     render(<RfpListTable rfps={[rfp]} />);
     expect(screen.getByText('P-2604-0001')).toBeInTheDocument();

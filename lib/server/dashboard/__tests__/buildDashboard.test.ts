@@ -9,6 +9,7 @@ import type { PgDashRow } from '../buildDashboard';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { OpportunityListing } from '@/lib/types/pg-request';
+import { filterRfps } from '@/lib/server/board/filterRfps';
 
 const NOW = new Date(2026, 4, 25, 9, 0, 0); // 2026-05-25 09:00 local
 const DAY = 86_400_000;
@@ -62,7 +63,7 @@ describe('buildBuyerDashboard', () => {
     expect(byId.due.value).toBe(1);
     expect(byId.due.href).toBe('/rfp?status=active&deadline=d7');
     expect(byId.review.value).toBe(1);
-    expect(byId.review.href).toBe('/rfp');
+    expect(byId.review.href).toBe('/rfp?status=review');
     expect(byId.awarded.value).toBe(1);
     expect(byId.awarded.href).toBe('/rfp?status=closed');
   });
@@ -141,6 +142,57 @@ describe('buildPgDashboard — open RFP discovery', () => {
     const dash = buildPgDashboard([], NOW);
     expect(dash.openRfps).toEqual([]);
   });
+});
+
+describe('마감 배지 — KST 달력일', () => {
+  // 예전엔 ms 차이를 올림해 마감 당일(18:00) 오전에도 'D-1' 이었다.
+  it('마감 당일 오전에는 D-0 이다 (구매사·PG 홈 모두)', () => {
+    const now = new Date('2026-11-18T09:00:00+09:00');
+    const deadline = '2026-11-18T18:00:00+09:00';
+    const buyer = buildBuyerDashboard(
+      [rfp({ id: 'today', deadline, sentAt: '2026-11-11T09:00:00+09:00' })],
+      new Map([['today', 0]]),
+      now,
+    );
+    expect(buyer.groups.find((g) => g.id === 'due')!.items[0].badge).toBe('D-0');
+    const pg = buildPgDashboard(
+      [{ invitationId: 'i', rfpCode: 'P-1', rfpTitle: '요청', stage: 'received', rfpDeadline: deadline } as PgDashRow],
+      now,
+    );
+    expect(pg.groups[0].items[0].badge).toBe('D-0');
+  });
+});
+
+describe('buildBuyerDashboard — KPI 와 목록 필터', () => {
+  // KPI 를 눌러 열린 목록의 행 수가 KPI 숫자와 같아야 한다 — 예전엔 필터 없는 /rfp 로 가서 전체가 나왔다.
+  it('견적 검토대기 KPI 는 같은 집합을 거르는 목록으로 이동한다', () => {
+    const rfps = [
+      rfp({ id: 'open', deadline: fromNow(3) }),
+      rfp({ id: 'expired', deadline: fromNow(-1) }),
+      rfp({ id: 'no-bid', deadline: fromNow(3) }),
+      rfp({ id: 'awarded', status: 'awarded' }),
+    ];
+    const counts = new Map([['open', 2], ['expired', 1], ['no-bid', 0], ['awarded', 1]]);
+    const kpi = buildBuyerDashboard(rfps, counts, NOW).kpis.find((k) => k.id === 'review')!;
+    const status = new URL(kpi.href, 'http://x').searchParams.get('status') ?? undefined;
+    expect(kpi.href).toBe('/rfp?status=review');
+    expect(filterRfps(rfps, { status }, NOW, counts)).toHaveLength(kpi.value);
+    expect(kpi.value).toBe(2);
+  });
+});
+
+describe('buildBuyerDashboard — 첫 요청 전 구분', () => {
+  it('요청이 없거나 작성 중 초안뿐이면 아직 보낸 요청이 없다고 본다', () => {
+    expect(buildBuyerDashboard([], new Map(), NOW).hasSentRequests).toBe(false);
+    expect(buildBuyerDashboard([rfp({ id: 'd', status: 'draft' })], new Map(), NOW).hasSentRequests).toBe(false);
+  });
+
+  it.each(['sent', 'closed', 'cancelled', 'awarded'] as const)(
+    '%s 요청이 하나라도 있으면 보낸 적이 있다고 본다',
+    (status) => {
+      expect(buildBuyerDashboard([rfp({ id: 's', status })], new Map(), NOW).hasSentRequests).toBe(true);
+    },
+  );
 });
 
 describe('buildBuyerDashboard — no open RFP discovery', () => {

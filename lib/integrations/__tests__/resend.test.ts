@@ -362,6 +362,23 @@ describe('ResendBatchSender', () => {
     if (!results[1].ok) expect(results[1].retryable).toBe(false);
   });
 
+  it('binds reminder receipts to accepted input rows and leaves ambiguous responses unconfirmed', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    const { ResendBatchSender, __resetResendClientForTest } = await import('../resend');
+    __resetResendClientForTest();
+    const entries = ['first', 'invalid', 'last'].map((id) => makeEntry({ id, event: 'rfp.deadline_reminder' }));
+    batchSendMock.mockResolvedValue({ data: { data: [{ id: 'm1' }, { id: 'm3' }], errors: [{ index: 1 }] } });
+    const [first, failed, last] = await ResendBatchSender(entries);
+    expect(first).toEqual({ ok: true, providerMessageId: 'm1' });
+    expect(last).toEqual({ ok: true, providerMessageId: 'm3' });
+    expect(failed.ok).toBe(false);
+    expect(batchSendMock.mock.calls[0][0][2].tags).toEqual([{name:'outbox_id',value:'last'}]);
+    batchSendMock.mockResolvedValue({ data: { data: [{ id: 'm1' }], errors: [{ index: 1 }] } });
+    const incomplete = await ResendBatchSender(entries);
+    expect(incomplete[0]).toEqual({ ok: true });
+    expect(incomplete[2]).toEqual({ ok: true });
+  });
+
   it('maps a whole-batch rate-limit error to retryable failures for every entry', async () => {
     process.env.RESEND_API_KEY = 'test-key';
     batchSendMock.mockResolvedValue({

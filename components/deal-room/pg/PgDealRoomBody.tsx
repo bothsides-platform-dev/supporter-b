@@ -23,6 +23,7 @@ import { LocalTime } from '@/components/primitives/LocalTime';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
+import { rfpActionErrorMessage } from '@/lib/rfp/action-errors';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import type { PgDealRoomLinkTab } from '@/lib/rfp/pg-deal-room-link';
@@ -208,6 +209,7 @@ export function PgDealRoomBody({
 
   const requestContent = (
     <>
+      {rfp.status === 'sent' && data.review?.assignment && buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
       <RfpBriefPanel rfp={displayRfp} buyer={buyer} industryName={data.industryName} />
       {rfp.rfpFiles.length === 0 && (
         <p className="py-4 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -284,9 +286,10 @@ export function PgDealRoomBody({
               const r = await withdrawBidAction({ bidId: myBid.id });
               if (!r.ok) {
                 toast(
-                  r.error === 'REQUOTE_PENDING'
-                    ? '수정 요청에 응답하는 동안은 견적을 철회할 수 없어요.'
-                    : `철회하지 못했어요 — ${r.error}`,
+                  rfpActionErrorMessage(
+                    r.error,
+                    '철회하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.',
+                  ),
                   { type: 'error' },
                 );
                 return;

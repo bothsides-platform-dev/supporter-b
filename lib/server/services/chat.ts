@@ -15,6 +15,7 @@ import { baseUrlFor } from '@/lib/server/env';
 import { kstDateOf } from '@/lib/utils/deadline';
 import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import { recordConsultationMessage } from './consultation-contact';
 import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import {
@@ -180,6 +181,8 @@ export class ChatService {
         ? { id: conversationId }
         : await this.convRepo.findOrCreatePair(buyerWsId, pgWsId, tx);
 
+      // A tagged message takes the same RFP lock before its FK insert as quote submission and switching.
+      if (effectiveRfpId) await this.rfpRepo.findByIdForUpdate(effectiveRfpId, tx);
       await this.msgRepo.save(
         {
           id: messageId,
@@ -201,6 +204,7 @@ export class ChatService {
         assertAttachmentClaimed(claimedIds, input.attachmentIds);
       }
 
+      await recordConsultationMessage({conversationId:conv.id,buyerId:buyerWsId,pgId:pgWsId},effectiveRfpId,actor,messageId,now,tx,pendingEmits);
       await this.convRepo.touchLastMessageAt(conv.id, now, tx);
 
       const senderName = (await this.wsRepo.getName(actor.workspaceId, tx)) ?? '상대';

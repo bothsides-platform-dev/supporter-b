@@ -162,8 +162,9 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // 서버 데이터에서 파생되는 유일한 신호는 초대 보내기 버튼의 draft 카운트다
     // (RfpInviteManager:68,196-209) — router.refresh() 로 새 데이터가 온 뒤에만 1 이 된다.
     const sendBtn = page.getByRole('button', { name: '1개 PG에 초대 보내기' });
-    const addFailToast = page.getByText(/추가하지 못했어요/);
-    // 액션이 조용히 ok:false 로 끝나면 30초 무의미 타임아웃 대신 에러 코드와 함께 죽는다.
+    // 실패 문구는 코드별로 달라지므로(lib/rfp/action-errors.ts) 문구 대신 오류 토스트 자체를 잡는다.
+    const addFailToast = page.locator('[data-type="error"]');
+    // 액션이 조용히 ok:false 로 끝나면 30초 무의미 타임아웃 대신 오류 토스트와 함께 죽는다.
     await expect(sendBtn.or(addFailToast)).toBeVisible({ timeout: 15_000 });
     await expect(addFailToast).toHaveCount(0);
     await expect(sendBtn).toBeVisible();

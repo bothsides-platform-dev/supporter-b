@@ -17,6 +17,7 @@ import {
 import { useLazyPgWorkspaces } from '@/lib/hooks/useLazyPgWorkspaces';
 import type { PgWorkspace } from '@/lib/hooks/useLazyPgWorkspaces';
 import { toast } from '@/lib/toast';
+import { rfpActionErrorMessage } from '@/lib/rfp/action-errors';
 import { Divider } from '@/components/primitives/Divider';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
@@ -85,7 +86,7 @@ export function RfpInviteManager({
       try {
         const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
         if (!r.ok) {
-          toast(`추가하지 못했어요 — ${r.error}`, { type: 'error' });
+          toast(rfpActionErrorMessage(r.error, '추가하지 못했어요. 잠시 후 다시 시도해요.'), { type: 'error' });
           return;
         }
         router.refresh();
@@ -103,7 +104,7 @@ export function RfpInviteManager({
       try {
         const r = await removeDraftPgWorkspaceAction({ rfpId, workspaceId: inv.ws.id });
         if (!r.ok) {
-          toast(`선택을 취소하지 못했어요 — ${r.error}`, { type: 'error' });
+          toast(rfpActionErrorMessage(r.error, '선택을 취소하지 못했어요. 잠시 후 다시 시도해요.'), { type: 'error' });
           return;
         }
         router.refresh();
@@ -122,7 +123,7 @@ export function RfpInviteManager({
       try {
         const r = await sendDraftInvitationsAction({ rfpId });
         if (!r.ok) {
-          toast(`초대 메일을 보내지 못했어요 — ${r.error}`, { type: 'error' });
+          toast(rfpActionErrorMessage(r.error, '초대 메일을 보내지 못했어요. 잠시 후 다시 시도해요.'), { type: 'error' });
           return;
         }
         toast(`${r.sentCount}개 PG에 초대 메일을 보냈어요.`);

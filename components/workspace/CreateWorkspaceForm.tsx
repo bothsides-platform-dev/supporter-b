@@ -8,6 +8,7 @@ import {
   type CreateWorkspaceActionInput,
 } from '@/lib/server/actions/workspace/createWorkspaceAction';
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
+import { errorLabel } from '@/lib/utils/error-label';
 
 const ERROR_LABELS: Record<string, string> = {
   INVALID_INPUT: '1자 이상 200자 이하의 이름을 입력해주세요.',
@@ -30,7 +31,7 @@ export function CreateWorkspaceForm() {
     const r = await createWorkspaceAction(input);
     if (!r.ok) {
       setSubmitting(false);
-      setError(ERROR_LABELS[r.error] ?? r.error);
+      setError(errorLabel(ERROR_LABELS, r.error, '워크스페이스를 만들지 못했어요. 잠시 후 다시 시도해요.'));
       return;
     }
     const sr = await switchWorkspaceAction(r.workspaceId);

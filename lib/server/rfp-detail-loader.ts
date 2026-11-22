@@ -6,6 +6,7 @@
 // pglite + seed 로 auth mock 없이 단위 테스트 가능하다.
 import {
   getPgMatchingRepo,
+  getAgreementRepo,
   getAttachmentRepo,
   getBidRepo,
   getInvitationRepo,
@@ -16,13 +17,16 @@ import {
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
 } from './repositories/factory';
+import type { AssignmentSummary } from '@/lib/rfp/assignment';
+import { getConsultationRepo } from './repositories/factory';
+import { consultationSummary } from './services/consultation-contact';
 import { getPgMatchingService } from './services/pg-matching';
 import type { BuyerMatching, PgReview } from '@/lib/rfp/pg-matching';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { isPgBidWindowOpen, isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
-import type { Bid } from '@/lib/types/bid';
+import { MERCHANT_TIERS, type Bid, type TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
@@ -54,6 +58,8 @@ export type BuyerRfpDetailData = {
   inviteList: { ws: WorkspaceDisplay; status: InvitationStatus }[];
   /** pgWsId → 워크스페이스 신원(상호명·유형·로고 버전). 이름 맵과 로고 맵을 나누지 않는다. */
   pgWsById: Record<string, WorkspaceDisplay>;
+  /** 신규 구매사에게만 제공하는 제출 PG별 홈페이지 카드 판가(소수 요율·부가세 별도). */
+  homepageCardRatesByPg?: Record<string, TierRates>;
   /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
   pendingRequests: { id: string; pgWs: WorkspaceDisplay; message: string; createdAt: string }[];
   /** pgWsId → 최신 재요청 요약(없으면 키 없음). */
@@ -74,7 +80,7 @@ export type PgRfpDetailData = {
   workspaceId?: string;
   industryName?: string;
   contractState?: PgContractState;
-  review?: Pick<PgReview, 'id' | 'status' | 'reason'> | null;
+  review?: (Pick<PgReview, 'id' | 'status' | 'reason'> & {assignment?:AssignmentSummary}) | null;
   rfp: RFP;
   /** 상태와 원 요청 마감일을 모두 통과한 신규 견적 접수 가능 여부. */
   bidWindowOpen: boolean;
@@ -213,7 +219,7 @@ const _PG_STRIPPED_RFP_KEYS = [
 ] as const;
 const _PG_VISIBLE_RFP_KEYS = [
   'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
-  'mainProducts', 'monthlyAvgPgVolume', 'currentFeeRate', 'currentSettlementLimit',
+  'mainProducts', 'expectedVolume', 'monthlyAvgPgVolume', 'currentFeeRate', 'currentSettlementLimit',
   'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
   'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
   'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',
@@ -255,6 +261,25 @@ export async function loadBuyerRfpDetail(args: {
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
   const submitted = allBids.filter((b) => b.status === 'submitted');
   const bids = pickCurrentBids(submitted);
+  // 현재 조건이 없는 신규 계약은 PG 홈페이지 판가의 관리 원본인 표준 수수료를
+  // 사용한다. 제출 PG의 카드·동일 구간만 명시적으로 투영하고 다른 요율/조건은 싣지 않는다.
+  const homepageCardRatesByPg: Record<string, TierRates> = {};
+  if (rfp.contractType === 'new' && bids.length > 0) {
+    const agreementRepo = await getAgreementRepo();
+    const ratesByPg = await Promise.all(bids.map(async (bid) => ({
+      pgWsId: bid.pgWsId,
+      record: await agreementRepo.findRates(bid.pgWsId),
+    })));
+    for (const { pgWsId, record } of ratesByPg) {
+      const cardRates: TierRates = {};
+      for (const tier of MERCHANT_TIERS) {
+        const rows = record?.rates.filter((row) => row.key === `card:${tier}`) ?? [];
+        const rate = rows.length === 1 ? rows[0].rate : undefined;
+        if (typeof rate === 'number' && Number.isFinite(rate) && rate >= 0 && rate <= 1) cardRates[tier] = rate;
+      }
+      if (Object.keys(cardRates).length > 0) homepageCardRatesByPg[pgWsId] = cardRates;
+    }
+  }
   const bidAuthorNames = await loadBidAuthorNames(submitted);
   const bidHistoryByPg: Record<string, Bid[]> = {};
   for (const bid of submitted) (bidHistoryByPg[bid.pgWsId] ??= []).push(bid);
@@ -341,7 +366,7 @@ export async function loadBuyerRfpDetail(args: {
     : null;
 
   return {
-    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg),
+    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg, args.userId),
     rfp,
     bids,
     bidHistoryByPg,
@@ -350,6 +375,7 @@ export async function loadBuyerRfpDetail(args: {
     companyName,
     inviteList,
     pgWsById,
+    homepageCardRatesByPg,
     pendingRequests,
     requoteByPg,
     priorBidByPg,
@@ -428,7 +454,13 @@ export async function loadPgRfpDetail(args: {
   const matchingRepo = await getPgMatchingRepo();
   const matching = await matchingRepo.find(rfp.id);
   const ownReview = matching ? (await matchingRepo.reviews(rfp.id)).find(r => r.pgWorkspaceId === args.workspaceId) : undefined;
-  const review = ownReview ? { id: ownReview.id, status: ownReview.status, reason: ownReview.reason } : null;
+  if (matching?.assignmentEligible && ownReview && ['rejected','withdrawn','buyer_ended'].includes(ownReview.status)) {
+    const prior=await (await getConsultationRepo()).case(ownReview.id);
+    const invited=invitations.find(inv=>inv.pgWsId===args.workspaceId);
+    rfp.deadline=prior?.assignment.quoteDue.toISOString() ?? invited?.expiresAt ?? rfp.deadline;
+  }
+  const assignment=matching?.assignmentEligible && ownReview && args.userId ? await consultationSummary(ownReview.id,{workspaceId:args.workspaceId,userId:args.userId},'pg') : undefined;
+  const review = ownReview ? { ...(assignment ? {assignment} : {}), id: ownReview.id, status: ownReview.status, reason: ownReview.reason } : null;
   const bidWindowOpen = !hasWithdrawnBid && isPgBidWindowOpen(rfp, pendingRequote?.deadline) && (!matching || !!review && ['requested', 'reviewing', 'quoted'].includes(review.status));
 
   // 구매사 신원(상호명 + 로고 버전) — RfpBriefPanel·BidContextStrip 이 아바타까지 그린다.
@@ -448,6 +480,10 @@ export async function loadPgRfpDetail(args: {
     if (contact) buyerContact = { workspaceName: buyer.name, ...contact };
   }
 
+  if (!awardedToMe && assignment && ownReview && args.userId) {
+    const contact=await (await getConsultationRepo()).buyerContact(ownReview.id,{workspaceId:args.workspaceId,userId:args.userId});
+    if (contact) buyerContact={workspaceName:buyer.name,name:contact.name,email:contact.email,phone:contact.phone};
+  }
   // 합의서는 노온과 구매사의 문서다. PG payload에는 계약 자료를 싣지 않는다.
   const signing = null;
   const contractState = undefined;

@@ -6,6 +6,7 @@
 
 ```
 app/
+├─ contact-confirm/[id]/route.ts # 첫 연락 확인. 토큰은 메일 URL fragment에 두고 POST 본문에서 검사
 ├─ quote-start/ # 공개 실작성 — 로컬 작성·가입 시 서버 저장 후 구매사 인증 복귀, noindex
 ├─ demo/        # 공개 구매사 데모 — 요청·메시지·견적 수정·선정·가상 서명·계약 보관. 세션 메모리만 사용, 실제 업무 API 미호출
 ├─ legal/       # 공개 법적 고지: /legal 및 terms·privacy·marketing (판 번호 없는 URL. 가입 증빙 판본은 terms v2·privacy v4·marketing v3 — `lib/auth/signup-documents.ts`; 사용자 요청·운영 동의 0건 확인 후 v1 삭제)
@@ -61,3 +62,7 @@ SEO 보고서 반영(2026-11-09): buyer 사이트맵은 공개 법적 고지 네
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
 **PG 용어 사전(docs)은 별도 레포**: `github.com/bothsides-platform-dev/docs-supporter-b` 가 `docs.support-b.com`(Next.js 정적 export, Cloudflare Pages)을 서빙한다. 이 레포는 docs 링크와 [docs 경유 수신부](../DOCS_ATTRIBUTION.md)를 가진다 — URL 단일 출처 `DOCS_URL`(`lib/site-config.ts`, 사이트 루트)을 양쪽 랜딩 헤더의 `인사이트` 메뉴·공용 푸터(`components/shell/Footer.tsx`)·buyer llms 링크(`product-facts.ts`; 절대 URL 은 `renderLink` 가 origin 없이 그대로 출력)가 소비한다. 공용 푸터와 buyer llms는 같은 파일의 `DOCS_GUIDES`로 docs의 결제 운영 가이드 3편에도 발행된 글 제목으로 직접 링크한다. 제목·주소는 docs 레포와 맞추고, 글을 변경하거나 삭제하면 함께 갱신한다. 랜딩 헤더의 `인사이트`는 섹션 메뉴와 분리해 PC(1200px 이상)에서는 양쪽 모두 로고 바로 옆에 구분선·↗ 아이콘·도메인 툴팁과 함께, 모바일에서는 메뉴 맨 아래에 둔다(2026-10-25, `LandingInsightLink` 공유). PC·모바일과 로그인 여부에 관계없이 같은 탭으로 이동하며, 모바일 클릭은 메뉴를 닫는다. 외부 링크이므로 현재 섹션 강조 대상에는 포함하지 않는다. Organization 의 별칭(`siteConfig.alternateNames`)과 `sameAs`(`siteConfig.sameAs`)는 docs 레포의 같은 @id 노드와 같은 값을 유지한다. docs 쪽 JSON-LD 가 `publisher: { '@id': '<siteConfig.url>/#organization' }` 로 이 레포의 Organization 을 참조하므로, `buildOrganizationJsonLd` 의 `@id` 를 바꾸면 docs 레포도 함께 고친다.
+
+## PG 가입 신청
+
+PG 접수가 열려 있으면 `/quote-start`에서 비회원도 예상 견적을 조회한다. 열림 판정은 `lib/server/services/instant-intake.ts` 하나가 맡고 요청마다 DB에서 읽는다. `/instant-quotes`와 하위 상세는 페이지에서 실제 워크스페이스·사용자·멤버·이메일 인증을 검사한다. 구매사 심사 대기 사용자는 자신의 신청에서 가입·재신청과 상태 확인이 가능하다. `/contact-confirm/instant/[id]/[step]`은 공개 메일 회신 페이지다.

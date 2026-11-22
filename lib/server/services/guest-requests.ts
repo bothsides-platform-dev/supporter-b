@@ -1,3 +1,5 @@
+import { assignmentSize, assignmentIntakeEnabled, hasContactConsent, CONTACT_CONSENT_VERSION, type ContactConsent } from '@/lib/rfp/assignment';
+import { confirmedBusiness } from '@/lib/guest-rfp/business-confirmation';
 import { z } from 'zod';
 import { provisionalTier } from '@/lib/server/quote-assist/savings';
 import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
@@ -139,7 +141,7 @@ export async function getGuestRequestService() {
       });
     },
     async reserve(
-      input: { id: string; revision: number; pgId: string; days: number },
+      input: { id: string; revision: number; pgId: string; days: number; contactConsent?:ContactConsent },
       proof: string | Access,
     ) {
       return db.transaction(async (tx: Tx) => {
@@ -164,7 +166,18 @@ export async function getGuestRequestService() {
             throw new Error("GUEST_REQUEST_FROZEN");
           return;
         }
-        const candidate = (await recommendation(draft, tx)).recommendation.candidates.find(
+        if (draft.completedAt) throw new Error('GUEST_DRAFT_UNAVAILABLE');
+        const { recommendation: options } = await recommendation(draft, tx);
+        const newIntake = assignmentIntakeEnabled();
+        const { data, quoteContext } = draft.answers;
+        if (newIntake && !confirmedBusiness(quoteContext, data.websiteUrl))
+          throw new Error('INVALID_BIZ_PROFILE');
+        if (newIntake && data.contractType === 'new' && !data.expectedVolume)
+          throw new Error('MATCHING_EXPECTED_VOLUME');
+        const assigned = newIntake && !!assignmentSize(data) && options.assignmentPgIds?.includes(input.pgId);
+        if (assigned && !hasContactConsent(input.contactConsent, input.pgId))
+          throw new Error('MATCHING_CONTACT_CONSENT');
+        const candidate = options.candidates.find(
           (c) => c.pgWorkspaceId === input.pgId,
         );
         if (!candidate) throw new Error("MATCHING_UNAVAILABLE");
@@ -189,6 +202,7 @@ export async function getGuestRequestService() {
             revision: input.revision,
             pgId: input.pgId,
             pgName: candidate.name,
+            assignmentConsent:assigned ? CONTACT_CONSENT_VERSION : newIntake ? 'standard-v1' : null,
             days: input.days,
             status: draft.userId ? "waiting" : "unbound",
             confirmedAt: new Date(),
@@ -349,12 +363,13 @@ export async function getGuestRequestService() {
             ).createRfp(
               {
                 ...input,
+                ...(request.assignmentConsent===CONTACT_CONSENT_VERSION ? {contactConsent:{pgId:request.pgId,version:CONTACT_CONSENT_VERSION}} : {}),
                 deadline,
                 guestDraft: { id, revision: draft.revision },
               },
               actor,
               false,
-              { tx: nested, afterCommit, guestRequestId: id },
+              { tx: nested, afterCommit, guestRequestId: id, reservedPgName:request.pgName, reservedIntake: request.assignmentConsent != null, reservedConsentAt:request.assignmentConsent===CONTACT_CONSENT_VERSION ? request.confirmedAt : undefined },
             );
             if (!result.ok) throw new Error(result.error);
             await repo.update(

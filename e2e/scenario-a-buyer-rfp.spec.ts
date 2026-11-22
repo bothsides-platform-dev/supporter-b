@@ -122,6 +122,10 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await quoteContext.close();
 
   await page.reload();
+  // 견적이 도착하면 상담 안내는 접힌 상담 내역 안에 있다(#855).
+  const history = page.getByRole('button', { name: '상담 내역과 다른 PG 문의' });
+  await expect(history).toHaveAttribute('aria-expanded', 'false');
+  await history.click();
   await expect(page.getByRole('heading', { name: '도착한 견적을 확인해주세요' })).toBeVisible();
   expect(await db.select().from(signingContracts).where(eq(signingContracts.rfpId, id))).toHaveLength(0);
   await page.getByRole('button', { name: /이 견적 선정하기/ }).click();

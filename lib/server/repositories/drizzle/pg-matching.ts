@@ -76,11 +76,12 @@ export class DrizzlePgMatchingRepository {
 
   async create(values: typeof rfpMatchingRequests.$inferInsert, candidate: Recommendation['candidates'][number], tx: Tx) {
     await tx.insert(rfpMatchingRequests).values(values);
-    await this.addReview(values.rfpId, candidate, tx);
+    return this.addReview(values.rfpId, candidate, tx);
   }
 
   async addReview(rfpId: string, candidate: Recommendation['candidates'][number], tx: Tx) {
-    await tx.insert(rfpPgReviews).values({ rfpId, pgWorkspaceId: candidate.pgWorkspaceId, candidate });
+    const [row] = await tx.insert(rfpPgReviews).values({ rfpId, pgWorkspaceId: candidate.pgWorkspaceId, candidate }).returning({id:rfpPgReviews.id});
+    return row.id;
   }
 
   async reviews(rfpId: string, tx: Tx = this.db): Promise<PgReview[]> {

@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   workspaces,
   pgProfiles, verificationApplications,
-  adminNotes, riskFlags, adminAuditLogs, adminUsers,
+  adminNotes, riskFlags, adminAuditLogs, adminUsers, adminPasskeys,
 } from '@/lib/db/schema';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -112,5 +113,47 @@ describe('admin_users (operator-console allowlist + TOTP)', () => {
   it('rejects duplicate emails', async () => {
     await db.insert(adminUsers).values({ email: 'dup@example.com' });
     await expect(db.insert(adminUsers).values({ email: 'dup@example.com' })).rejects.toThrow();
+  });
+});
+
+describe('admin_passkeys (operator-console WebAuthn second factor)', () => {
+  const passkey = (adminUserId: string, credentialId: string) => ({
+    adminUserId, credentialId, publicKey: 'pk', backupEligible: true, backedUp: false,
+    aaguid: '00000000-0000-0000-0000-000000000000', label: '회사 맥북',
+  });
+
+  it('stores a credential with a zero counter and no use yet', async () => {
+    const [admin] = await db.insert(adminUsers).values({ email: 'passkey@example.com' }).returning();
+    const [row] = await db
+      .insert(adminPasskeys)
+      .values({ ...passkey(admin.id, 'cred-1'), transports: ['internal', 'hybrid'] })
+      .returning();
+    expect(row.signCount).toBe(0);
+    expect(row.transports).toEqual(['internal', 'hybrid']);
+    expect(row.lastUsedAt).toBeNull();
+    expect(row.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('stores a signature counter beyond 32-bit signed range', async () => {
+    const [admin] = await db.insert(adminUsers).values({ email: 'counter@example.com' }).returning();
+    const [row] = await db
+      .insert(adminPasskeys)
+      .values({ ...passkey(admin.id, 'cred-counter'), signCount: 2 ** 32 - 1 })
+      .returning();
+    expect(row.signCount).toBe(2 ** 32 - 1);
+  });
+
+  it('rejects a credential id that is already registered, even for another admin', async () => {
+    const [first] = await db.insert(adminUsers).values({ email: 'first@example.com' }).returning();
+    const [second] = await db.insert(adminUsers).values({ email: 'second@example.com' }).returning();
+    await db.insert(adminPasskeys).values(passkey(first.id, 'cred-dup'));
+    await expect(db.insert(adminPasskeys).values(passkey(second.id, 'cred-dup'))).rejects.toThrow();
+  });
+
+  it('is removed together with its admin', async () => {
+    const [admin] = await db.insert(adminUsers).values({ email: 'gone@example.com' }).returning();
+    await db.insert(adminPasskeys).values(passkey(admin.id, 'cred-gone'));
+    await db.delete(adminUsers).where(eq(adminUsers.id, admin.id));
+    expect(await db.select().from(adminPasskeys)).toHaveLength(0);
   });
 });

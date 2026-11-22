@@ -58,6 +58,7 @@ describe("실제 화면을 구동하는 구매사 데모 데이터", () => {
     demo.submit({ ...tutorialRfpDraftSeed, contractType: "new" });
     expect(demo.getSnapshot().deal?.rfp.currentFeeRate).toBeUndefined();
     expect(demo.getSnapshot().deal?.rfp.monthlyAvgPgVolume).toBeUndefined();
+    expect(demo.getSnapshot().deal?.homepageCardRatesByPg?.['demo-pg-7']?.sme2).toBe(0.028);
   });
   it("선정 전 서명과 종료 후 수정 요청은 상태를 바꾸지 않는다", async () => {
     const demo = createBuyerDemoSession();

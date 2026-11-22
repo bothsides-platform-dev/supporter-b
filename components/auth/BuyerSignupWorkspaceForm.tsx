@@ -18,14 +18,14 @@ export function BuyerSignupWorkspaceForm({
   onContinue,
 }: { onContinue?: () => void } = {}) {
   const entryPath =
-    readSignupDraft().next === "/rfp-create?resume=guest" ? "guest" : "direct";
+    ["/quote-start", "/rfp-create?resume=guest"].includes(readSignupDraft().next ?? "") ? "guest" : "direct";
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   // 단순 sessionStorage 읽기는 동기 — 렌더 중 guard 가능.
   const draft = readSignupDraft();
-  const prefill = draft.next === '/rfp-create?resume=guest' ? signupQuotePrefill() : undefined;
+  const prefill = entryPath === 'guest' ? signupQuotePrefill(draft.next === '/quote-start') : undefined;
   const ready = !!draft.email && !!draft.password;
   useFunnelView("signup", ready ? "company" : null, { entry_path: entryPath });
 

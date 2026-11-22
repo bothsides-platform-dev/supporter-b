@@ -1,4 +1,9 @@
 'use client';
+import { confirmedBusiness } from './business-confirmation';
+import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
+import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
+import { isValidBizNo } from '@/lib/validation/biz-no';
+import { isWebsiteValid } from '@/lib/rfp/required-fields';
 import type { GuestSession } from '@/components/rfp/useGuestDraft';
 import { type QuoteContext, newQuoteContext } from './quote-context';
 import { assistResultSchema, type AssistResult, type Suggestion } from './suggestions';
@@ -27,12 +32,37 @@ export class GuestQuoteController {
   private abort?: AbortController;
   constructor(readonly session: GuestSession, private readonly ports: Ports = {
     analyze: (input, signal) => sendQuoteRequest('assist', input, signal), save: saveQuoteProgress,
-  }) {
+  }, private readonly instantOpen = false) {
     if (!session.draft.quoteContext) session.draft.quoteContext = {
-      ...newQuoteContext(), stage: session.draft.completed ? 'complete' : session.draft.data.websiteUrl || session.draft.data.contentQuestion !== 'website' ? 'questions' : 'business',
+      ...newQuoteContext(this.websiteFirst), stage: session.draft.completed ? 'complete' : session.draft.data.websiteUrl || session.draft.data.contentQuestion !== 'website' ? 'questions' : newQuoteContext(this.websiteFirst).stage,
     };
+    if (session.draft.quoteContext.stage !== 'complete') this.resumeRequiredInputs();
     if (session.draft.quoteContext.analysisState === 'pending')
       session.draft.quoteContext = { ...session.draft.quoteContext, analysisState: 'manual' };
+  }
+  /** 홈페이지 → 사업자번호(필수) 순서: PG 배정이 켜졌거나 즉시 견적 접수가 열렸을 때. */
+  get websiteFirst() { return assignmentIntakeEnabled() || this.instantOpen; }
+  resumeRequiredInputs() {
+    if (!this.websiteFirst) return;
+    const context = this.snapshot();
+    const draft = this.session.store.getState();
+    let stage = context.stage;
+    if (!isWebsiteValid(draft.websiteUrl)) {
+      stage = 'website';
+    } else if (stage !== 'website' && !confirmedBusiness(context, draft.websiteUrl)) {
+      stage = 'business';
+    } else if (assignmentIntakeEnabled() && stage === 'complete' && draft.contractType === 'new' && !draft.expectedVolume) {
+      // 이 질문은 배정이 켜졌을 때만 화면에 있다. 꺼진 채 되돌리면 첫 질문부터 무한 반복한다.
+      draft.setField('contentQuestion', 'expected-volume');
+      stage = 'questions';
+    }
+    if (stage === context.stage) return;
+    this.session.draft.completed = false;
+    this.session.draft.quoteContext = { ...context, stage };
+    this.listeners.forEach(listener => listener());
+  }
+  private afterAnalysis(kind: 'website'|'business'):QuoteContext['stage'] {
+    return this.websiteFirst ? (kind === 'website' ? 'business' : 'review') : (kind === 'business' ? 'website' : 'review');
   }
   snapshot = (): QuoteContext => this.session.draft.quoteContext!;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener); };
@@ -93,19 +123,25 @@ export class GuestQuoteController {
   business(bizNo: string) {
     if (bizNo === this.snapshot().bizNo) return;
     this.stop(); this.invalidate(this.snapshot().businessResult);
-    this.update({ bizNo, businessResult: undefined, analysisState: 'idle', stage: 'business' });
+    this.update({ bizNo, confirmed:this.snapshot().confirmed.filter(q=>q!=='business-number'), businessResult: undefined, analysisState: 'idle', stage: 'business' });
   }
-  website(url: string) {
-    if (url === this.session.store.getState().websiteUrl) return;
+  website(url: string, previous = this.session.store.getState().websiteUrl) {
+    if (url === previous) return;
     this.stop();
     this.session.store.getState().setField('websiteUrl', url);
     this.invalidate(this.snapshot().websiteResult);
+    if (this.websiteFirst) {
+      this.invalidate(this.snapshot().businessResult);
+      this.update({bizNo:'',confirmedWebsite:undefined,businessResult:undefined,confirmed:this.snapshot().confirmed.filter(q=>q!=='business-number')});
+    }
     this.update({ websiteResult: undefined, analyzedWebsite: undefined, analysisState: 'idle',
       confirmed: this.snapshot().confirmed.filter(q => q !== 'website') });
   }
   manual(kind: 'business' | 'website') {
     this.stop();
-    this.update({ analysisState: 'manual', stage: kind === 'business' ? 'website' : 'review' });
+    if (this.websiteFirst && kind==='business' && !isValidBizNo(this.snapshot().bizNo)) return;
+    this.update({ analysisState: 'manual', stage:this.afterAnalysis(kind),
+      ...(this.websiteFirst && kind==='business' ? {confirmedWebsite:normalizeWebsiteUrl(this.session.store.getState().websiteUrl.trim()),confirmed:[...new Set([...this.snapshot().confirmed,'business-number'])]} : {}) });
   }
   async analyze(kind: 'business' | 'website', retry = false) {
     if (this.busy) return;
@@ -124,7 +160,9 @@ export class GuestQuoteController {
       }, this.abort.signal));
       if (generation !== this.generation) return;
       this.update({ ...(kind === 'business' ? { businessResult: response } : { websiteResult: response, analyzedWebsite: input }),
-        analysisState: response.status, stage: kind === 'business' ? 'website' : 'review' });
+        ...(this.websiteFirst && kind==='website' && response.suggestedBizNo && !this.snapshot().bizNo ? {bizNo:response.suggestedBizNo} : {}),
+        ...(this.websiteFirst && kind==='business' ? {confirmedWebsite:normalizeWebsiteUrl(this.session.store.getState().websiteUrl.trim()),confirmed:[...new Set([...this.snapshot().confirmed,'business-number'])]} : {}),
+        analysisState: response.status, stage:this.afterAnalysis(kind) });
     } catch {
       if (generation === this.generation) this.manual(kind);
     } finally { if (generation === this.generation) this.busy = false; }

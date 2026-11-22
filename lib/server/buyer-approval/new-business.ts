@@ -28,7 +28,7 @@ async function postJson(url: string, init: RequestInit): Promise<unknown> {
   }
 }
 
-function recentOpening(value: unknown, checkedAt: string): string | undefined {
+export function businessOpening(value: unknown, checkedAt: string): {date:string; recent:boolean} | undefined {
   if (typeof value !== 'string' || !/^(?:\d{8}|\d{4}-\d{2}-\d{2})$/.test(value)) return;
   const digits = value.replaceAll('-', '');
   const date = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
@@ -38,7 +38,7 @@ function recentOpening(value: unknown, checkedAt: string): string | undefined {
   const month = parsed.getUTCMonth() + 6;
   const lastDay = new Date(Date.UTC(parsed.getUTCFullYear(), month + 1, 0)).getUTCDate();
   const anniversary = new Date(Date.UTC(parsed.getUTCFullYear(), month, Math.min(parsed.getUTCDate(), lastDay))).toISOString().slice(0, 10);
-  return date <= today && today < anniversary ? date : undefined;
+  return date <= today ? {date, recent:today < anniversary} : undefined;
 }
 
 export async function lookupNewBusiness(bizNo: string): Promise<BuyerBusinessResult> {
@@ -58,7 +58,8 @@ export async function lookupNewBusiness(bizNo: string): Promise<BuyerBusinessRes
     lookup.apickLookup = { provider: 'apick', bizNo, checkedAt, response: result! };
     if (!ntsKey || data.상세정보확보 !== 'Y'
       || (data.정보제한여부 !== undefined && data.정보제한여부 !== 'N')) return lookup;
-    const openingDate = recentOpening(data.설립일, checkedAt);
+    const opening = businessOpening(data.설립일, checkedAt);
+    const openingDate = opening?.recent ? opening.date : undefined;
     const name = data.대표명;
     if (!openingDate || typeof name !== 'string' || !name.trim() || name.length > 100) return lookup;
     const requested = { b_no: bizNo, start_dt: openingDate.replaceAll('-', ''), p_nm: name.trim() };

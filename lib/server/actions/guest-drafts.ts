@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { requireBuyerActor } from "./_session";
+import { businessConfirmationSchema,type BusinessConfirmation } from '@/lib/guest-rfp/business-confirmation';
 import { getGuestDraftService } from "@/lib/server/services/guest-drafts";
 import {
   guestAnswersSchema,
@@ -13,6 +14,7 @@ const Identity = z
   .object({ id: z.string().uuid(), revision: z.number().int().min(1) })
   .strict();
 const Save = Identity.extend({
+  guestBusiness:businessConfirmationSchema.optional(),
   answers: guestAnswersSchema,
   files: z.array(z.string().uuid()).max(5),
 }).strict();
@@ -58,6 +60,7 @@ export async function saveServerGuestDraftAction(
   input: {
     id: string;
     revision: number;
+    guestBusiness?:BusinessConfirmation;
     answers: GuestAnswers;
     files: string[];
   },

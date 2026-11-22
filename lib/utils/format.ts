@@ -81,9 +81,9 @@ export function formatDateTime(iso: string, timeZone: string = KST, fmt = 'yyyy-
  * 기존 ms 차이 ÷ 86400 방식은 KST 달력일과 어긋나는 케이스가 있었다
  * (예: 당일 KST 오후 → D-1, KST 자정 직후 → D-0).
  */
-export function formatDeadline(iso: string): string {
+export function formatDeadline(iso: string, now: Date = new Date()): string {
   const deadlineDate = new Date(iso);
-  const nowDate = new Date();
+  const nowDate = now;
   // KST 달력 날짜 'YYYY-MM-DD' 로 변환
   const kstDeadline = formatInTimeZone(deadlineDate, KST, 'yyyy-MM-dd');
   const kstNow = formatInTimeZone(nowDate, KST, 'yyyy-MM-dd');
@@ -94,6 +94,23 @@ export function formatDeadline(iso: string): string {
   if (diff < 0) return '마감';
   if (diff === 0) return 'D-0';
   return `D-${diff}`;
+}
+
+/**
+ * 응답 마감까지 남은 시간. 마감일이 오늘(KST)이면 시간·분으로, 그 뒤면 `formatDeadline` 과
+ * 같은 D-N 으로 말한다 — 홈 배지와 목록이 같은 날수를 보이도록 날수 계산은 한 곳에 둔다.
+ * 이미 지났으면 null 이다(마감 표시는 상태 칩이 맡는다).
+ *
+ * `now` 를 받는 이유는 `elapsedCalendarDays` 와 같다: 테스트 결정성, 그리고 서버가 정한
+ * 시각을 넘겨 하이드레이션 때 서버·클라이언트 문구가 갈리지 않게 하려는 것이다.
+ */
+export function formatTimeLeft(iso: string, now: Date): string | null {
+  const left = new Date(iso).getTime() - now.getTime();
+  if (!(left > 0)) return null;
+  const day = formatDeadline(iso, now);
+  if (day !== 'D-0') return day;
+  const hours = Math.floor(left / 3_600_000);
+  return hours >= 1 ? `${hours}시간 남음` : `${Math.max(1, Math.floor(left / 60_000))}분 남음`;
 }
 
 /** `formatDeadline` 결과에 마감 접두어를 한 번만 붙인 사용자 표시 문구. */

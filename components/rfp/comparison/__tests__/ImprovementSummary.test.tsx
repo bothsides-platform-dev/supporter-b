@@ -33,6 +33,73 @@ const fullCurrent = {
 afterEach(cleanup);
 
 describe('ImprovementSummary', () => {
+  it('신규 견적은 현재 조건 대신 홈페이지 판가와 카드 수수료를 비교한다', () => {
+    render(<ImprovementSummary bid={makeBid()} current={fullCurrent} contractType="new" homepageCardRate={0.034} />);
+    const card = within(screen.getByTestId('metric-row-card'));
+    expect(screen.getByRole('heading', { name: '홈페이지 판가보다 이만큼 좋아져요' })).toBeInTheDocument();
+    expect(card.getByText('홈페이지 판가')).toBeInTheDocument();
+    expect(card.getByText('3.40%')).toBeInTheDocument();
+    expect(card.getByText('2.20%')).toBeInTheDocument();
+    expect(card.getByText(/1\.20%p/)).toHaveTextContent('↓1.20%p');
+    expect(screen.queryByText('현재 조건')).not.toBeInTheDocument();
+    expect(screen.queryByText('더 빠름')).not.toBeInTheDocument();
+    expect(screen.queryByText('지금 조건보다 이만큼 좋아져요')).not.toBeInTheDocument();
+    expect(screen.queryByText(/현재 조건을 입력하면/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('metric-row-signup')).getByText('처음 한 번만 내는 비용이에요')).toBeInTheDocument();
+  });
+
+  it.each([undefined, null, -0.01, NaN, Infinity, 1.1])('신규 홈페이지 판가가 없거나 유효하지 않으면 개선을 단정하지 않는다 (%s)', (rate) => {
+    render(<ImprovementSummary bid={makeBid()} current={fullCurrent} contractType="new" homepageCardRate={rate} />);
+    expect(screen.getByText('핵심 수치')).toBeInTheDocument();
+    expect(screen.getByText('이 구간의 홈페이지 판가가 없어 받은 견적만 보여드려요.')).toBeInTheDocument();
+    expect(screen.queryByText(/좋아져요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%p/)).not.toBeInTheDocument();
+    expect(screen.queryByText('현재 조건')).not.toBeInTheDocument();
+  });
+
+  it.each([0.022, 0.02, 0])('홈페이지 판가보다 낮지 않은 견적에는 중립 제목을 쓴다 (%s)', (rate) => {
+    render(<ImprovementSummary bid={makeBid()} current={{}} contractType="new" homepageCardRate={rate} />);
+    expect(screen.getByText('홈페이지 판가와 비교한 조건이에요')).toBeInTheDocument();
+    expect(screen.queryByText(/좋아져요/)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('metric-row-card')).getByText('홈페이지 판가')).toBeInTheDocument();
+    if (rate === 0) expect(screen.getByText('0.00%')).toBeInTheDocument();
+    if (rate === 0.022) expect(screen.queryByText(/%p/)).not.toBeInTheDocument();
+  });
+
+  it('신규 견적에 해당 구간의 카드 수수료가 없으면 판가만으로 개선을 만들지 않는다', () => {
+    render(<ImprovementSummary bid={makeBid({ paymentFees: {} })} current={{}} contractType="new" homepageCardRate={0.034} />);
+    expect(screen.queryByText(/좋아져요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/%p/)).not.toBeInTheDocument();
+  });
+
+  it('갱신 견적은 홈페이지 판가가 있어도 기존 조건과 비교한다', () => {
+    render(<ImprovementSummary bid={makeBid()} current={fullCurrent} contractType="renewal" homepageCardRate={0.034} />);
+    expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
+    expect(screen.getByText('2.8%')).toBeInTheDocument();
+    expect(screen.getByText(/0\.60%p/)).toBeInTheDocument();
+    expect(screen.queryByText('홈페이지 판가')).not.toBeInTheDocument();
+  });
+
+  it('작성 화면과 같은 용어 설명을 수수료·정산주기·정산한도 행에 붙인다', () => {
+    render(<ImprovementSummary bid={makeBid()} current={fullCurrent} />);
+    expect(
+      within(screen.getByTestId('metric-row-card')).getByRole('button', { name: '수수료율 설명' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('metric-row-cycle')).getByRole('button', { name: '정산 주기 설명' }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('metric-row-limit')).getByRole('button', { name: '정산한도 설명' }),
+    ).toBeInTheDocument();
+  });
+
+  // 용어집의 보증보험 설명은 보험료율·금액의 유불리를 말한다. 비교 화면은 중립 표기 규칙을 따른다.
+  it('보증보험·가입비 행에는 용어 설명을 붙이지 않는다', () => {
+    render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    expect(within(screen.getByTestId('metric-row-guarantee')).queryByRole('button')).toBeNull();
+    expect(within(screen.getByTestId('metric-row-signup')).queryByRole('button')).toBeNull();
+  });
+
   it('보증보험 금액은 감소해도 감면으로 평가하지 않는다', () => {
     render(
       <ImprovementSummary

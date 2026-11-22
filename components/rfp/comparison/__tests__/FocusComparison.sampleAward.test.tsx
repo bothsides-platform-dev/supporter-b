@@ -59,14 +59,14 @@ const baseProps = {
 describe('FocusComparison onSampleAward (가상 샘플 온보딩 — 가짜 선정)', () => {
   it('onSampleAward가 주어지면 선정 CTA가 활성화된다', () => {
     render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={vi.fn()} />);
-    expect(screen.getByText('이 견적 선정하기 →')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이 견적 선정하기' })).toBeEnabled();
   });
 
   it('선정 CTA 클릭 시 실제 awardRfpAction 대신 onSampleAward(bidId)를 호출한다', async () => {
     const user = userEvent.setup();
     const onSampleAward = vi.fn();
     render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={onSampleAward} />);
-    await user.click(screen.getByText('이 견적 선정하기 →'));
+    await user.click(screen.getByRole('button', { name: '이 견적 선정하기' }));
     expect(onSampleAward).toHaveBeenCalledWith('b1');
     expect(awardRfpAction).not.toHaveBeenCalled();
     // 실제 확인 다이얼로그(AwardConfirmDialog)는 열리지 않는다.

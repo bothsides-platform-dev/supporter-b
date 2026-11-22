@@ -29,6 +29,7 @@ import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoo
 import { AwardResult } from '@/components/rfp/comparison/AwardResult';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
+import { AwardCtaBar } from '@/components/rfp/comparison/AwardCtaBar';
 import { BidRoundHistory } from '@/components/inbox/bid-wizard/BidRoundHistory';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
@@ -39,6 +40,7 @@ import { AttachmentPreviewList } from '@/components/attachments/AttachmentPrevie
 import { AwardConfirmDialog } from '@/components/rfp/comparison/AwardConfirmDialog';
 import { RequoteDialog } from '@/components/rfp/comparison/RequoteDialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
@@ -47,6 +49,7 @@ import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSumma
 import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
+import { rfpActionErrorMessage } from '@/lib/rfp/action-errors';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -162,7 +165,7 @@ export function BuyerDealRoomBody({
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
+          {data.matching && bids.length === 0 && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
           {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
@@ -180,6 +183,8 @@ export function BuyerDealRoomBody({
             rfpCode={rfp.code}
             requoteByPg={requoteByPg}
             buyerGrade={rfp.bizProfile?.grade}
+            contractType={rfp.contractType}
+            homepageCardRatesByPg={data.homepageCardRatesByPg}
             invitedPgCount={invitedPgCount}
             draftPgCount={draftPgCount}
             deadline={rfp.deadline}
@@ -190,7 +195,15 @@ export function BuyerDealRoomBody({
             tier={comparisonTier}
             onTierChange={setComparisonTier}
             hideHeader
+            hideActions
           />}
+          {data.matching && bids.length > 0 && (
+            <Accordion className="mt-5">
+              <AccordionItem value="matching" title={canAward ? '상담 내역과 다른 PG 문의' : '상담 내역'}>
+                <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />
+              </AccordionItem>
+            </Accordion>
+          )}
           {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 0).map(([pgWsId, history]) => (
             <div key={pgWsId} className="mt-6">
               <BidRoundHistory rfp={rfp} bids={history} authorNames={data.bidAuthorNames ?? {}} pgName={pgName(pgWsId)} />
@@ -198,6 +211,16 @@ export function BuyerDealRoomBody({
           ))}
         </>
       ),
+      footer: canAward && focusedBid ? (
+        <AwardCtaBar
+          canAward
+          docked
+          pgName={pgName(focusedBid.pgWsId)}
+          showRequote={!onGuestAction}
+          onRequote={() => setRequoteOpen(true)}
+          onAward={() => onGuestAction ? onGuestAction() : setAwardOpen(true)}
+        />
+      ) : undefined,
     },
     { id: 'request', label: '요청 조건', content: <RequestConditionsView data={data} /> },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfpFiles} /> },
@@ -271,6 +294,8 @@ export function BuyerDealRoomBody({
       pgName={pgName(awardResult.bid.pgWsId)}
       bid={awardResult.bid}
       tier={awardResult.tier}
+      contractType={rfp.contractType}
+      homepageCardRate={data.homepageCardRatesByPg?.[awardResult.bid.pgWsId]?.[awardResult.tier]}
       current={{
         feeRate: rfp.currentFeeRate,
         settlementCycle: rfp.currentSettlementCycle,
@@ -340,7 +365,7 @@ export function BuyerDealRoomBody({
           try {
             const r = await (demo ? demo.close('closed') : closeRfpAction({ rfpId: rfp.code }));
             if (!r.ok) {
-              toast(`마감하지 못했어요 — ${r.error}`, { type: 'error' });
+              toast(rfpActionErrorMessage(r.error, '종료하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.'), { type: 'error' });
               return;
             }
             setCloseOpen(false);
@@ -365,7 +390,7 @@ export function BuyerDealRoomBody({
           try {
             const r = await (demo ? demo.close('cancelled') : cancelRfpAction({ rfpId: rfp.code }));
             if (!r.ok) {
-              toast(`취소하지 못했어요 — ${r.error}`, { type: 'error' });
+              toast(rfpActionErrorMessage(r.error, '취소하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.'), { type: 'error' });
               return;
             }
             setCancelOpen(false);

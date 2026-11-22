@@ -11,6 +11,7 @@ import { PROVIDER_ENFORCED_SECURITY_METHOD } from '@/lib/signing/security-method
 import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import { type SnowSignContractDetail } from '@/lib/server/signing/snowsign-client';
 import type { RFP } from '@/lib/types/rfp';
+import { instantAward, type SigningRequest } from './signing-request';
 import type {
   SigningContract,
   SigningContractStatus,
@@ -171,7 +172,16 @@ export async function resolveAuthoritativeSigningContext(
     participants: readonly SigningParticipant[];
   },
   tx?: Tx,
-): Promise<{ rfp: RFP; pgWsId: string } | undefined> {
+): Promise<{ rfp: SigningRequest; pgWsId: string } | undefined> {
+  if (found.contract.instantAttemptId) {
+    if (found.contract.kind !== 'platform_buyer') return;
+    const source = await instantAward(found.contract.instantAttemptId, tx);
+    if (!source) return;
+    const buyer = await deps.userRepo.findContactById(source.request.createdBy, tx);
+    if (!buyer || !storedParticipantsMeetAuthoritativePolicy(found.participants,{userId:source.request.createdBy,email:buyer.email},[],'platform_buyer')) return;
+    return {rfp:source.request,pgWsId:source.terms.pgId};
+  }
+  if(!found.contract.rfpId) return;
   const rfp = await deps.rfpRepo.findById(found.contract.rfpId, tx);
   if (!rfp?.awardedBidId) return undefined;
   const bid = await deps.bidRepo.findById(rfp.awardedBidId, tx);

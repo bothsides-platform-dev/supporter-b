@@ -1,6 +1,8 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Maximize2 } from 'lucide-react';
+import { buttonClassName } from '@/components/primitives/Button';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { MarkInboxViewed } from './MarkInboxViewed';
 import { BidRoundHistory } from './bid-wizard/BidRoundHistory';
@@ -68,22 +70,23 @@ export function RequestPreview({
             견적 작업 화면 열기
           </button>
         ) : (
-          <>
+          <div className="flex flex-wrap gap-2">
             <Link
               href={`/inbox/${rfp.code}?tab=${state.tab}`}
               prefetch={false}
-              className="inline-flex min-h-9 items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-3 text-[14px] text-[var(--md-sys-color-on-primary)]"
+              className={buttonClassName({ size: 'lg' })}
             >
               {state.actionLabel}
             </Link>
             <Link
               href={`/inbox/${rfp.code}`}
               prefetch={false}
-              className="ml-4 inline-block py-2 text-[14px] underline"
+              className={buttonClassName({ variant: 'outlined', size: 'lg' })}
             >
+              <Maximize2 className="size-4 shrink-0" aria-hidden />
               넓은 화면에서 보기
             </Link>
-          </>
+          </div>
         )}
       </div>
       {data.review && !onOpenWork && (
@@ -94,7 +97,7 @@ export function RequestPreview({
           bidWindowOpen={data.bidWindowOpen}
         />
       )}
-      {data.awardedToMe && data.buyerContact && (
+      {data.buyerContact && (
         <ContactBlock contact={data.buyerContact} counterpartyKind="buyer" />
       )}
       <RfpBriefPanel
