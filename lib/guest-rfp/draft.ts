@@ -1,6 +1,7 @@
 "use client";
 import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { z } from "zod";
+import { VOLUME_BANDS } from '@/lib/rfp/assignment';
 import { quoteContextSchema, type QuoteContext } from './quote-context';
 import { guestFiles } from "./files";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
@@ -105,6 +106,7 @@ export function loadGuestDraft(): GuestDraft | null {
     ]),
   );
   Object.assign(fields, {
+    expectedVolume:z.enum(VOLUME_BANDS).optional(),
     currentPgs: currentPgsSchema,
     productInfo: z.object({
       hasMarketplaceSellers: z.boolean().optional(),

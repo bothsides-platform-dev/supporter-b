@@ -25,7 +25,11 @@ export class GuestSession {
     this.store = createStore<RfpDraftStore>((set) => ({
       ...draft.data,
       setField: (key, value) => set({ [key]: value }),
-      reset: () => set(draftData(useRfpDraftStore.getInitialState())),
+      reset: () => set(state => ({
+        ...draftData(useRfpDraftStore.getInitialState()),
+        setField: state.setField,
+        reset: state.reset,
+      }), true),
     }));
   }
   save = () => {
@@ -40,8 +44,12 @@ export class GuestSession {
     }
     this.onError('');
   };
-  commitEdit(data: DraftData) {
-    const candidate = { ...this.draft, data: { ...data, contentQuestion: this.draft.data.contentQuestion } };
+  commitEdit(data: DraftData, reopen = false) {
+    const candidate = {
+      ...this.draft,
+      ...(reopen ? { completed: false } : {}),
+      data: { ...data, contentQuestion: this.draft.data.contentQuestion },
+    };
     saveGuestDraft(candidate);
     Object.assign(this.draft, candidate);
     this.applyingEdit = true;

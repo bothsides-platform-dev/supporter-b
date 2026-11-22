@@ -1,11 +1,23 @@
+import { isValidBizNo } from '@/lib/validation/biz-no';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 import { industryNameKey } from '@/lib/rfp/industry-selection';
 import type { Suggestion } from '@/lib/guest-rfp/suggestions';
 export type PublicPage = { url: string; html: string };
-export function pageText(html: string) {
+export function pageText(html: string, limit = 12000) {
   return html.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim().slice(0, 12000);
+    .replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+export function websiteBusinessNumber(pages: PublicPage[]) {
+  const numbers=new Set<string>();
+  for (const page of pages) {
+    const visible=pageText(page.html,page.html.length);
+    for (const m of visible.matchAll(/사업자\s*(?:등록\s*)?번호\s*[:：#]?\s*(\d{3}[ -]?\d{2}[ -]?\d{5})(?!\d)/g)) {
+      const value=m[1].replace(/\D/g,'');
+      if (isValidBizNo(value) && !/^0+$/.test(value)) numbers.add(value);
+    }
+  }
+  return numbers.size===1 ? [...numbers][0] : undefined;
 }
 export function extractWebsiteSuggestions(pages: PublicPage[], groups: readonly PublicIndustry[]): Suggestion[] {
   const found = new Map<Suggestion['field'], Suggestion>();

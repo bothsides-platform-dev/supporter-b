@@ -5,6 +5,7 @@ import { logger } from '@/lib/observability/logger';
 import type { BusinessTemplate } from './types';
 
 const TEMPLATE_ENV: Record<BusinessTemplate, string> = {
+  pgAssignment: 'SOLAPI_TEMPLATE_PG_ASSIGNMENT',
   rfpInvited: 'SOLAPI_TEMPLATE_RFP_INVITED',
   bidSubmitted: 'SOLAPI_TEMPLATE_BID_SUBMITTED',
   requoteRequested: 'SOLAPI_TEMPLATE_REQUOTE_REQUESTED',
@@ -34,7 +35,9 @@ export async function flushAlimtalk() {
       const result = await sendAlimtalk(
         row.phone,
         process.env[TEMPLATE_ENV[row.template]] ?? '',
-        row.template === 'chatMessage'
+        row.template === 'pgAssignment'
+          ? { '#{견적번호}': row.rfpCode ?? '', '#{연락기한}': row.assignment?.due ?? '', '#{신청요약}':row.assignment?.title ?? '', '#{링크}':row.linkUrl }
+          : row.template === 'chatMessage'
           ? { '#{PG사}': row.senderName ?? '', '#{링크}': row.linkUrl }
           : { '#{견적번호}': row.rfpCode ?? '', '#{링크}': row.linkUrl },
       );

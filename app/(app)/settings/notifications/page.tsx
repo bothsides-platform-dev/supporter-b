@@ -1,5 +1,5 @@
 import { requireSession } from '@/lib/auth/session';
-import { getAlimtalkRepo } from '@/lib/server/repositories/factory';
+import { getConsultationRepo, getAlimtalkRepo } from '@/lib/server/repositories/factory';
 import { BusinessAlimtalkSettings } from '@/components/settings/BusinessAlimtalkSettings';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { PageEnter } from '@/components/primitives/PageEnter';
@@ -8,19 +8,21 @@ export const dynamic = 'force-dynamic';
 
 export default async function NotificationsSettingsPage() {
   const session = await requireSession();
-  const preference = await (
-    await getAlimtalkRepo()
-  ).preference(session.user.id);
+  const repo=await getAlimtalkRepo();
+  const preference=await repo.preference(session.user.id);
+  const pgId=session.user.workspaceType==='pg' ? session.user.workspaceId : null;
+  const consent=pgId ? await repo.assignmentPreference(pgId,session.user.id) : false;
+  const participant=pgId && (consent || (await (await getConsultationRepo()).policy(pgId))?.enabled);
   const phone = preference?.phone?.replace(/[\s-]/g, '');
   const maskedPhone =
     phone && /^010\d{8}$/.test(phone) ? `010-****-${phone.slice(-4)}` : null;
   return (
     <PageEnter className="flex h-full min-h-0 flex-col">
       <SettingsPage title="알림 설정">
-        {/* PG 멤버 대상 업무 알림톡은 일시 중단 — 효과 없는 스위치를 보이지 않는다. */}
-        {session.user.workspaceType === 'buyer' && (
+        {(session.user.workspaceType === 'buyer' || participant) && (
           <BusinessAlimtalkSettings
-            enabled={preference?.enabled ?? true}
+            assignment={!!pgId}
+            enabled={pgId ? consent : preference?.enabled ?? true}
             maskedPhone={maskedPhone}
           />
         )}

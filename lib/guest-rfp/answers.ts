@@ -1,3 +1,4 @@
+import { VOLUME_BANDS } from '@/lib/rfp/assignment';
 import { z } from "zod";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
 import { SOLUTION_VALUES } from "@/lib/types/rfp-terms";
@@ -23,6 +24,7 @@ export const guestAnswersSchema = z
     customPaymentMethods: z
       .array(z.object({ label: z.string().min(1).max(50) }).strict())
       .max(20),
+    expectedVolume: z.enum(VOLUME_BANDS).optional(),
     monthlyAvgPgVolume: z.string().max(100),
     currentFeeRate: z.string().max(50),
     currentSettlementLimit: z.string().max(100),

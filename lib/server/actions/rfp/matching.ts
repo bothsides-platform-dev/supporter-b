@@ -1,4 +1,5 @@
 'use server';
+import { CONTACT_CONSENT_VERSION } from '@/lib/rfp/assignment';
 import { currentPgsSchema, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, type IndustrySelection } from '@/lib/rfp/industry-selection';
 
@@ -54,7 +55,7 @@ export async function reviewPgRequestAction(input: z.input<typeof Review>) {
   return result;
 }
 
-const Next = z.object({ rfpId: z.string().uuid(), previousReviewId: z.string().uuid(), pgWorkspaceId: z.string().uuid(), deadline: z.string().datetime({ offset: true }) }).strict();
+const Next = z.object({ contactConsent:z.object({pgId:z.string().uuid(),version:z.literal(CONTACT_CONSENT_VERSION)}).strict().optional(), rfpId: z.string().uuid(), previousReviewId: z.string().uuid(), pgWorkspaceId: z.string().uuid(), deadline: z.string().datetime({ offset: true }) }).strict();
 export async function requestNextPgAction(input: z.input<typeof Next>) {
   const actor = await requireBuyerActor();
   if (!actor.ok) return actor;
@@ -62,7 +63,7 @@ export async function requestNextPgAction(input: z.input<typeof Next>) {
   if (!parsed.success) return { ok: false as const, error: 'INVALID_INPUT' };
   const { rfpId, previousReviewId, pgWorkspaceId, deadline } = parsed.data;
   const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
-  const result = await (await getPgMatchingService()).next(rfpId, previousReviewId, pgWorkspaceId, new Date(deadline), actor, includeTest);
+  const result = await (await getPgMatchingService()).next(rfpId, previousReviewId, pgWorkspaceId, new Date(deadline), actor, includeTest, parsed.data.contactConsent);
   if (result.ok) await refreshRequest(rfpId);
   return result;
 }
@@ -74,7 +75,7 @@ export async function endAndRequestNextPgAction(input: z.input<typeof Next>) {
   if (!parsed.success) return { ok: false as const, error: 'INVALID_INPUT' };
   const { rfpId, previousReviewId, pgWorkspaceId, deadline } = parsed.data;
   const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
-  const result = await (await getPgMatchingService()).endAndNext(rfpId, previousReviewId, pgWorkspaceId, new Date(deadline), actor, includeTest);
+  const result = await (await getPgMatchingService()).endAndNext(rfpId, previousReviewId, pgWorkspaceId, new Date(deadline), actor, includeTest, parsed.data.contactConsent);
   if (result.ok) await refreshRequest(rfpId);
   return result;
 }

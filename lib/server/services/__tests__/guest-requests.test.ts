@@ -14,7 +14,9 @@ import { seedMatchingPolicy } from "@/lib/server/repositories/drizzle/__tests__/
 import { getGuestDraftService } from "../guest-drafts";
 import * as requests from "../guest-requests";
 import { seedBusinessCalendar } from "@/lib/server/__tests__/_business-calendar";
-import { users, rfps, notifications } from "@/lib/db/schema";
+import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
+import { CONTACT_CONSENT_VERSION } from '@/lib/rfp/assignment';
+import { users, rfps, notifications, guestRfpDrafts, guestRfpRequests, pgAssignmentPolicies, consultationCases, rfpMatchingRequests } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 vi.mock("@/lib/auth/signup-documents", async () => {
   const { TEST_SIGNUP_DOCUMENTS } =
@@ -536,4 +538,36 @@ it('returns only selected attachment metadata and refuses reservation while orig
   const service = await requests.getGuestRequestService();
   expect((await service.recommend(id, 'secret')).files).toEqual([{ id: selected, name: '소개.pdf', size: 8 }]);
   await expect(service.reserve({ id, revision: 1, pgId, days: 5 }, 'secret')).rejects.toThrow('GUEST_FILES_NOT_READY');
+});
+
+it('기존 예약은 시범 운영을 켠 뒤에도 원래대로 발송한다',async()=>{
+ const service=await requests.getGuestRequestService();
+ await service.reserve({id,revision:1,pgId,days:3},'secret');
+ vi.stubEnv('NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED','true');
+ await db.insert(pgAssignmentPolicies).values({pgId,enabled:true,managerId:actor.userId,contactDays:1,windowDays:30,threshold:2,roster:[]});
+ await db.update(users).set({emailVerified:true});
+ await service.bind(id,'secret',actor);await service.dispatch(id);
+ expect((await service.status(id,{actor}))?.status).toBe('submitted');
+ expect(await db.select().from(consultationCases)).toHaveLength(0);
+ expect((await db.select().from(rfpMatchingRequests))[0].assignmentEligible).toBe(false);
+});
+it('신규 예약의 사업자번호와 PG별 동의 시각을 검증하고 동의한 당시의 이름으로 배정한다',async()=>{
+ vi.stubEnv('NEXT_PUBLIC_PG_ASSIGNMENT_ENABLED','true');
+ const service=await requests.getGuestRequestService();
+ const [draft]=await db.select().from(guestRfpDrafts);
+ const user=await seedUser(db,{email:'rep@guest.example'});
+ await seedMembership(db,pgId,user.id,'member');
+ await db.update(users).set({emailVerified:true});
+ await db.insert(pgAssignmentPolicies).values({pgId,enabled:true,managerId:user.id,contactDays:1,windowDays:30,threshold:2,roster:[{userId:user.id,groupId:null,size:null}]});
+ const contactConsent={pgId,version:CONTACT_CONSENT_VERSION} as const;
+ const reserve=(revision:number,consent?:typeof contactConsent)=>service.reserve({id,revision,pgId,days:3,contactConsent:consent},'secret');
+ await expect(reserve(1)).rejects.toThrow('INVALID_BIZ_PROFILE');
+ const saved=await (await getGuestDraftService()).savePublic({id,revision:1,files:[],answers:{...draft.answers.data,expectedVolume:'100m'},quoteContext:{...newQuoteContext(),bizNo:'2208162517',confirmedWebsite:'https://example.com',confirmed:['business-number']}},'secret');
+ await expect(reserve(saved.revision)).rejects.toThrow('MATCHING_CONTACT_CONSENT');
+ await reserve(saved.revision,contactConsent);
+ const [snapshot]=await db.select().from(guestRfpRequests);
+ await service.bind(id,'secret',actor);
+ await service.dispatch(id);await service.dispatch(id);
+ expect((await service.status(id,{actor}))?.status).toBe('submitted');
+ expect(await db.select().from(consultationCases)).toEqual([expect.objectContaining({consentBy:actor.userId,consentAt:snapshot.confirmedAt,assignee:user.id})]);
 });

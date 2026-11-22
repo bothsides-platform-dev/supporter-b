@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   integer,
+  jsonb,
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
@@ -24,6 +25,7 @@ export const alimtalkOutbox = pgTable(
     // Null for events without a quote, e.g. chat messages.
     rfpCode: text('rfp_code'),
     senderName: text('sender_name'),
+    assignment: jsonb('assignment').$type<{title:string;due:string}>(),
     linkUrl: text('link_url').notNull(),
     dedupeKey: text('dedupe_key').notNull().unique(),
     status: text('status')

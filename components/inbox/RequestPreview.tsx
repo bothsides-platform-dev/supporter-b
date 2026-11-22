@@ -97,7 +97,7 @@ export function RequestPreview({
           bidWindowOpen={data.bidWindowOpen}
         />
       )}
-      {data.awardedToMe && data.buyerContact && (
+      {data.buyerContact && (
         <ContactBlock contact={data.buyerContact} counterpartyKind="buyer" />
       )}
       <RfpBriefPanel

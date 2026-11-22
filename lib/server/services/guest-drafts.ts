@@ -1,5 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
-import { quoteContextSchema, type QuoteContext } from '@/lib/guest-rfp/quote-context';
+import { businessConfirmationSchema,type BusinessConfirmation } from '@/lib/guest-rfp/business-confirmation';
+import {normalizeWebsiteUrl} from '@/lib/validation/website-url';
+import { newQuoteContext, quoteContextSchema, type QuoteContext } from '@/lib/guest-rfp/quote-context';
 import { completionMetrics } from '@/lib/server/quote-assist/metrics';
 import { logger } from '@/lib/observability/logger';
 import { withGuestJourney } from './guest-journey';
@@ -24,6 +26,7 @@ import type {
 } from "@/lib/server/repositories/drizzle/guest-draft";
 import type { Tx } from "@/lib/server/repositories/types";
 export type SaveGuestDraft = {
+  guestBusiness?:BusinessConfirmation;
   quoteContext?: QuoteContext;
   id: string;
   revision: number;
@@ -215,7 +218,16 @@ export class GuestDraftService {
       )
         return { id: completed.id, revision: completed.revision };
       const row = await this.owned(input.id, actor, tx);
-      const answers = { version: 1 as const, data, ...(row.answers.quoteContext ? { quoteContext: row.answers.quoteContext } : {}) };
+      const site=normalizeWebsiteUrl(data.websiteUrl?.trim()??'');
+      let context=row.answers.quoteContext;
+      if(input.guestBusiness && input.guestBusiness.website===site) {
+        const identity=businessConfirmationSchema.parse(input.guestBusiness);
+        const base=context ?? newQuoteContext();
+        context={...base,confirmedWebsite:site,bizNo:identity.bizNo,confirmed:[...new Set([...base.confirmed,'business-number'])]};
+      } else if(context?.confirmedWebsite && context.confirmedWebsite!==site) {
+        context={...context,confirmedWebsite:undefined,bizNo:'',businessResult:undefined,confirmed:context.confirmed.filter(field=>field!=='business-number')};
+      }
+      const answers = { version: 1 as const, data, ...(context ? {quoteContext:context} : {}) };
       await this.repo.assertEditable(row.id, tx);
       if (row.revision !== input.revision) {
         if (

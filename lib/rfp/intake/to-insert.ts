@@ -33,6 +33,7 @@ export function toNewRfpInsert(
     memo: input.memo?.trim() ?? "",
     websiteUrl: text(input.websiteUrl),
     mainProducts: text(input.mainProducts),
+    ...(input.contractType === 'new' && input.expectedVolume ? { expectedVolume: input.expectedVolume } : {}),
     monthlyAvgPgVolume: text(input.monthlyAvgPgVolume),
     currentFeeRate: text(input.currentFeeRate),
     currentSettlementLimit: text(input.currentSettlementLimit),

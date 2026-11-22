@@ -1,3 +1,6 @@
+import { assignmentSize, type ContactConsent } from '@/lib/rfp/assignment';
+import { createAssignment, prepareAssignment } from './consultation-assignment';
+import { consultationSummary } from './consultation-contact';
 import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
 export type MatchingBidRepo = Pick<PgMatchingRepo, 'find' | 'reviews' | 'updateReview'>;
 import { getPgRecommendationService, type PgRecommendationService } from './pg-recommendation';
@@ -5,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import {
   getDb,
+  getConsultationRepo,
   getPgMatchingRepo,
   getRfpRepo,
   getWorkspaceRepo,
@@ -59,6 +63,7 @@ class PgMatchingService {
     rfpId: string,
     workspaceId: string,
     includeTestPg = false,
+    userId?:string,
   ): Promise<BuyerMatching | null> {
     const rfp = await this.deps.rfp.findById(rfpId);
     if (!rfp || rfp.buyerWsId !== workspaceId) return null;
@@ -73,9 +78,14 @@ class PgMatchingService {
       buyerWorkspaceId: workspaceId,
       includeTestPg,
     });
+    if (request.assignmentEligible && recommended.ok && !recommended.recommendation.assignmentPgIds) {
+      recommended.recommendation.assignmentPgIds = await (await getConsultationRepo()).enabled(recommended.recommendation.candidates.map(c=>c.pgWorkspaceId));
+    }
     return {
       industryName: request.industryName,
       currentPgs: request.currentPgs,
+      assignmentEligible:request.assignmentEligible,
+      assignment:request.assignmentEligible && userId && reviews.length ? await consultationSummary(reviews[reviews.length-1].id,{workspaceId,userId},'buyer') : undefined,
       reviews,
       recommendation: recommended.recommendation,
     };
@@ -159,8 +169,9 @@ class PgMatchingService {
     deadline: Date,
     actor: Actor,
     includeTestPg = false,
+    consent?:ContactConsent,
   ): Promise<ServiceResult> {
-    return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, false);
+    return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, false, consent);
   }
 
   async endAndNext(
@@ -170,8 +181,9 @@ class PgMatchingService {
     deadline: Date,
     actor: Actor,
     includeTestPg = false,
+    consent?:ContactConsent,
   ): Promise<ServiceResult> {
-    return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, true);
+    return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, true, consent);
   }
 
   private async nextInternal(
@@ -182,6 +194,7 @@ class PgMatchingService {
     actor: Actor,
     includeTestPg: boolean,
     buyerEnd: boolean,
+    consent?:ContactConsent,
   ): Promise<ServiceResult> {
     if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now())
       return { ok: false, error: 'INVALID_INPUT' };
@@ -207,7 +220,12 @@ class PgMatchingService {
       )
         return { ok: false, error: 'MATCHING_BUSY' };
       if (buyerEnd) {
-        if (new Date(rfp.deadline).getTime() > Date.now()) return { ok: false, error: 'RFP_NOT_EXPIRED' };
+        if (new Date(rfp.deadline).getTime() > Date.now()) {
+          const progress = request.assignmentEligible
+            ? await (await getConsultationRepo()).progress(previous.id, tx)
+            : null;
+          if (!progress?.canSwitch) return { ok: false, error: 'RFP_NOT_EXPIRED' };
+        }
         const bids = await this.deps.bid.findByRfp(rfpId, tx);
         if (bids.some((bid) => bid.pgWsId === previous.pgWorkspaceId && bid.status === 'submitted'))
           return { ok: false, error: 'MATCHING_BID_ARRIVED' };
@@ -221,8 +239,14 @@ class PgMatchingService {
       }, tx);
       const candidate = recommendation.candidates.find((c) => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
-      if (buyerEnd) await repo.updateReview(previous.id, 'buyer_ended', '구매사가 마감 후 상담을 종료했어요.', tx);
-      await repo.addReview(rfpId, candidate, tx);
+      const size = request.assignmentEligible ? assignmentSize(rfp) : null;
+      const prepared = size
+        ? await prepareAssignment(pgWorkspaceId, request.groupId, size, consent, actor, tx)
+        : { ok: true as const, plan: null };
+      if (!prepared.ok) return prepared;
+      if (consent && !prepared.plan) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
+      if (buyerEnd) await repo.updateReview(previous.id, 'buyer_ended', '구매사가 상담을 종료했어요.', tx);
+      const reviewId = await repo.addReview(rfpId, candidate, tx);
       await rfpRepo.updateDeadline(rfpId, deadline, tx);
       await this.deps.allowedPg.add(rfpId, [pgWorkspaceId], tx);
       const token = generateToken();
@@ -241,40 +265,44 @@ class PgMatchingService {
         tx,
       );
       const ws = this.deps.workspace;
-      const members = await ws.approvedMemberRecipients(pgWorkspaceId, tx);
-      const buyerName = (await ws.getName(actor.workspaceId, tx)) ?? '구매사';
-      const html = await renderRfpInvited({
-        rfpId: rfp.code,
-        rfpTitle: rfp.title,
-        buyerName,
-        deadline: deadline.toISOString(),
-        inviteUrl: `${baseUrlFor('pg')}/invite/rfp/${token}`,
-      });
-      pending.push(
-        ...(await notify(tx, {
-          recipients: members.map((m) => ({
-            ...m,
-            workspaceId: pgWorkspaceId,
+      if (prepared.plan) {
+        pending.push(...await createAssignment(reviewId, prepared.plan, deadline, candidate.name, actor.userId, new Date(), tx));
+      } else {
+        const members = await ws.approvedMemberRecipients(pgWorkspaceId, tx);
+        const buyerName = (await ws.getName(actor.workspaceId, tx)) ?? '구매사';
+        const html = await renderRfpInvited({
+          rfpId: rfp.code,
+          rfpTitle: rfp.title,
+          buyerName,
+          deadline: deadline.toISOString(),
+          inviteUrl: `${baseUrlFor('pg')}/invite/rfp/${token}`,
+        });
+        pending.push(
+          ...(await notify(tx, {
+            recipients: members.map((m) => ({
+              ...m,
+              workspaceId: pgWorkspaceId,
+            })),
+            channels: ['inapp', 'email', 'alimtalk'],
+            alimtalk: {
+              template: 'rfpInvited',
+              eventKey: `invite:${rfpId}`,
+              rfpCode: rfp.code,
+              linkUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+            },
+            type: 'rfp.invited',
+            title: '새 상담 요청이 도착했어요',
+            body: `${buyerName}가 상담을 요청했어요.`,
+            linkUrl: `/inbox/${rfp.code}`,
+            email: {
+              event: 'rfp.invited',
+              subject: '[서포트비] 새 상담 요청이 도착했어요',
+              html,
+              dedupeKey: (r) => `matching:${rfpId}:${pgWorkspaceId}:${r.userId}`,
+            },
           })),
-          channels: ['inapp', 'email', 'alimtalk'],
-          alimtalk: {
-            template: 'rfpInvited',
-            eventKey: `invite:${rfpId}`,
-            rfpCode: rfp.code,
-            linkUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
-          },
-          type: 'rfp.invited',
-          title: '새 상담 요청이 도착했어요',
-          body: `${buyerName}가 상담을 요청했어요.`,
-          linkUrl: `/inbox/${rfp.code}`,
-          email: {
-            event: 'rfp.invited',
-            subject: '[서포트비] 새 상담 요청이 도착했어요',
-            html,
-            dedupeKey: (r) => `matching:${rfpId}:${pgWorkspaceId}:${r.userId}`,
-          },
-        })),
-      );
+        );
+      }
       if (buyerEnd) {
         const previousMembers = await ws.approvedMemberRecipients(previous.pgWorkspaceId, tx);
         pending.push(...await notify(tx, {
@@ -282,12 +310,12 @@ class PgMatchingService {
           channels: ['inapp', 'email'],
           type: 'rfp.matching_buyer_ended',
           title: '상담이 종료됐어요',
-          body: `${rfp.code} 상담이 마감 후 종료됐어요.`,
+          body: `${rfp.code} 상담이 종료됐어요.`,
           linkUrl: `/inbox/${rfp.code}`,
           email: {
             event: 'rfp.matching_buyer_ended',
             subject: `[서포트비 견적 ${rfp.code}] 상담 종료 안내`,
-            html: `<p>${rfp.code} 상담이 마감 후 종료됐어요.</p><p><a href="${baseUrlFor('pg')}/inbox/${rfp.code}">상담 이력 보기</a></p>`,
+            html: `<p>${rfp.code} 상담이 종료됐어요.</p><p><a href="${baseUrlFor('pg')}/inbox/${rfp.code}">상담 이력 보기</a></p>`,
             dedupeKey: (member) => `matching:${rfpId}:buyer-ended:${previous.id}:user:${member.userId}`,
           },
         }));
