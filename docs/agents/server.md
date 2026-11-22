@@ -70,3 +70,7 @@ lib/server/
 **Realtime**: Centrifugo (자체호스팅 WS, Caddy `wss://`) + `centrifuge-js` — 채팅 라이브(즉시 수신·타이핑·프레즌스·읽음). 메시지는 자사 Postgres에만 영속, 비공개 ACL은 subscribe-proxy로 앱에 보존
 
 **Client data fetching**: SWR — `force-static` 랜딩 헤더(`LandingHeaderNav`/`PgLandingHeaderNav`)가 마운트 후 `/api/auth/session`을 클라이언트에서 재조회해 로그인 상태를 반영(`components/landing/use-session-authed.ts`); 같은 키를 쓰는 두 헤더 인스턴스 요청을 SWR 캐시가 자동 중복제거
+
+## 담당자 배정과 지연 처리
+
+서비스와 관리자 앱은 `pg_consultation_progress`에서 같은 판정을 읽는다. 개별 배정·재배정·첫 연락·미수신 판정·PG 전환·견적 제출은 해당 RFP 행을 잠근 뒤 상태를 확인한다. 메시지 커서는 읽은 경계를, `pg_consultation_evidence.observed_at`은 서버가 관측한 시각을 기록한다. 담당자 배정 알림과 시정 요청 이메일은 `rfp.consultation`으로 적재하고 서비스 앱의 outbox 소비자가 발송 전 자격을 다시 확인한다. 재배정 통지·다음 영업일 확인·지연 안내는 기존 `/api/cron/rfp-deadlines`에서 처리한다.

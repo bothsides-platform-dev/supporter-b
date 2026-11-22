@@ -16,9 +16,10 @@ export async function updateBusinessAlimtalkAction(input: {
     return { ok: false, error: 'UNAUTHENTICATED' };
   }
   try {
-    const saved = await (
-      await getAlimtalkRepo()
-    ).setPreference(session.user.id, parsed.data.enabled);
+    const repo=await getAlimtalkRepo();
+    const saved = session.user.workspaceType==='pg'
+      ? !!session.user.workspaceId && await repo.setAssignmentPreference(session.user.workspaceId,session.user.id,parsed.data.enabled)
+      : await repo.setPreference(session.user.id,parsed.data.enabled);
     return saved ? { ok: true } : { ok: false, error: 'SAVE_FAILED' };
   } catch {
     return { ok: false, error: 'SAVE_FAILED' };

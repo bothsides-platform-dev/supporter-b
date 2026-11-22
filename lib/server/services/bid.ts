@@ -8,6 +8,7 @@ import type { BidDraftScope } from '@/lib/quote/draft-schema';
 import type { DrizzleBidDraftRepository } from '@/lib/server/repositories/drizzle/bid-draft';
 import { baseUrlFor } from '@/lib/server/env';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
+import { getConsultationRepo } from '../repositories/factory';
 import { matchingBidReview, notifyMatchingEnded, type MatchingBidRepo } from './pg-matching';
 import { randomUUID } from 'node:crypto';
 
@@ -380,8 +381,10 @@ export class BidService {
           this.matchingRepo,
         );
         if (!matching.ok) return matching;
-        if (matching.review)
+        if (matching.review) {
           await this.matchingRepo.updateReview(matching.review.id, 'quoted', '', tx);
+          await (await getConsultationRepo()).recordQuote(matching.review.id,tx);
+        }
 
         await this.bidRepo.save(
           {

@@ -11,6 +11,7 @@ import { Button } from '@/components/primitives/Button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDateTime, formatKRW, formatTimeLeft } from '@/lib/utils/format';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
+import { VOLUME_LABELS, type VolumeBand } from '@/lib/rfp/assignment';
 import type { PgReview } from '@/lib/rfp/pg-matching';
 import type { RfpStatus } from '@/lib/types/rfp';
 import {
@@ -24,6 +25,7 @@ import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 export type InboxRow = {
   invitationId: string;
   buyerName?: string;
+  expectedVolume?: VolumeBand;
   monthlyAvgPgVolume?: string;
   receivedAt?: string;
   hasDraft?: boolean;
@@ -171,10 +173,10 @@ export function InboxList({
                     <td className="px-3 py-4">
                       <p className="break-words">{row.industryName || '업종 미제공'}</p>
                       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        전년도 월 평균 PG 거래액
+                        {row.expectedVolume ? '구매사가 적은 예상 월 PG 거래액' : '전년도 월 평균 PG 거래액'}
                       </p>
                       <p className="md-numeric">
-                        {row.contractType === 'new'
+                        {row.expectedVolume ? VOLUME_LABELS[row.expectedVolume] : row.contractType === 'new'
                           ? '해당 없음'
                           : row.monthlyAvgPgVolume
                             ? /^\d+$/.test(row.monthlyAvgPgVolume)

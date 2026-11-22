@@ -23,6 +23,7 @@ export type RFP = {
   memo: string;
   websiteUrl?: string;
   mainProducts?: string;
+  expectedVolume?: import('@/lib/rfp/assignment').VolumeBand;
   monthlyAvgPgVolume?: string;
   currentFeeRate?: string;
   currentSettlementLimit?: string;

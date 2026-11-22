@@ -1,5 +1,8 @@
 import { getMasterEmails, isMasterEmail } from '@/lib/auth/master-allowlist';
-import { getUserRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
+import { assignmentIntakeEnabled, assignmentSize } from '@/lib/rfp/assignment';
+import { confirmedBusiness } from '@/lib/guest-rfp/business-confirmation';
+import { createAssignment, prepareAssignment } from './consultation-assignment';
+import { getConsultationRepo, getUserRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
 import { getGuestDraftService } from './guest-drafts';
 import { currentPgsSchema, currentPgNameKey, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
@@ -120,6 +123,7 @@ export class RfpService {
       if (newDeadline.getTime() <= latest) return { ok: false as const, error: 'DEADLINE_MUST_EXTEND' };
       const deadlineError = await validateNewDeadline(newDeadline, now, tx);
       if (deadlineError) return { ok: false as const, error: deadlineError };
+      if (expectedReviewId) await (await getConsultationRepo()).extend(expectedReviewId,newDeadline,tx);
       await this.rfpRepo.updateDeadline(rfpId, newDeadline, tx);
       await this.requoteRepo.extendPendingForRfp(rfpId, newDeadline, tx);
       await this.auditRepo.insert({
@@ -1092,7 +1096,7 @@ export class RfpService {
     input: ParsedCreateRfpInput,
     actor: Actor,
     includeTestPg = false,
-    transaction?: { tx: Tx; afterCommit: (() => void)[]; guestRequestId?: string },
+    transaction?: { tx: Tx; afterCommit: (() => void)[]; guestRequestId?: string; reservedIntake?: boolean; reservedPgName?: string; reservedConsentAt?: Date },
   ): Promise<ServiceResult<{ rfpId: string }>> {
     // 신규 계약에는 과거 PG 계약 정보가 없다. 모든 호출 경로에서 저장·멱등 키
     // 계산 전에 정규화하며, 호출자가 보유한 입력은 변경하지 않는다.
@@ -1136,6 +1140,10 @@ export class RfpService {
       let currentPgs: CurrentPg[] = [];
       let requestPayloadHash = '';
       let industry: ResolvedIndustry | undefined;
+      // A frozen guest reservation keeps the route to which the buyer originally agreed.
+      const useAssignment = transaction?.guestRequestId ? transaction.reservedIntake === true : assignmentIntakeEnabled();
+      const size = useAssignment ? assignmentSize(input) : null;
+      let assignment: Extract<Awaited<ReturnType<typeof prepareAssignment>>, {ok:true}>['plan'] = null;
       if (send) {
         await matching.lockBuyer(actor.workspaceId, tx);
         const existing = await matching.findByKey(actor.workspaceId, input.requestKey!, tx);
@@ -1163,6 +1171,19 @@ export class RfpService {
         recommendation = recommended.recommendation;
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
+        }
+        if (useAssignment && guestRow && !confirmedBusiness(guestRow.answers.quoteContext, input.websiteUrl))
+          return { ok: false as const, error: 'INVALID_BIZ_PROFILE' };
+        if (useAssignment && input.contractType === 'new' && !input.expectedVolume)
+          return { ok: false as const, error: 'MATCHING_EXPECTED_VOLUME' };
+        if (size && (!transaction?.guestRequestId || transaction.reservedConsentAt)) {
+          const prepared = await prepareAssignment(
+            input.allowedPgWorkspaceIds[0], industry.groupId, size, input.contactConsent, actor, tx,
+          );
+          if (!prepared.ok) return prepared;
+          if (!prepared.plan && (input.contactConsent || transaction?.reservedConsentAt))
+            return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
+          assignment = prepared.plan;
         }
       }
       const code = await nextRfpId(tx, this.rfpRepo);
@@ -1229,7 +1250,8 @@ export class RfpService {
 
       if (send && recommendation) {
         const candidate = recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!;
-        await matching.create({ rfpId, groupId: industry!.groupId, isCustomIndustry: industry!.isCustomIndustry, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash, currentPgs }, candidate, tx);
+        const reviewId=await matching.create({ rfpId, assignmentEligible:!!size, groupId: industry!.groupId, isCustomIndustry: industry!.isCustomIndustry, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash, currentPgs }, candidate, tx);
+        if (assignment) pendingEmits.push(...await createAssignment(reviewId,assignment,input.deadline,transaction?.reservedPgName ?? candidate.name,actor.userId,transaction?.reservedConsentAt ?? now,tx));
         operatorNotice = { event: 'consultation_requested', rfpCode: code, rfpTitle: input.title.trim(), pgNames: [candidate.name] };
       }
 
@@ -1282,6 +1304,7 @@ export class RfpService {
             tx,
           );
 
+          if (assignment) continue;
           // 이메일 팬아웃과 인앱 팬아웃이 같은 수신자 집합을 쓴다 — 한 번만 읽는다.
           const emailRows = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
           const pgRecipients = emailRows.map((m) => ({

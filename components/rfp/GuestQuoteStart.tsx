@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createStore, type StoreApi } from 'zustand';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
+import { assignmentIntakeEnabled } from '@/lib/rfp/assignment';
 import { draftData } from '@/lib/guest-rfp/draft';
 import { Button } from "@/components/primitives/Button";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
@@ -127,7 +128,13 @@ export function GuestQuoteStart({
             ? after.productInfo[s.field] : after[s.field];
         return JSON.stringify(value) !== JSON.stringify(quote.value(s.field));
       }).map(s => s.field) ?? [];
-      session.commitEdit(after);
+      const previousWebsite = session.store.getState().websiteUrl;
+      const websiteChanged = assignmentIntakeEnabled() && !!quote && after.websiteUrl !== previousWebsite;
+      session.commitEdit(after, websiteChanged);
+      if (websiteChanged) {
+        quote.website(after.websiteUrl, previousWebsite);
+        quote.update({stage:'website'});
+      }
       quote?.update({ userFields: [...new Set([...(context?.userFields ?? []), ...changed])] });
       setEditStore(null);
       setEditError('');

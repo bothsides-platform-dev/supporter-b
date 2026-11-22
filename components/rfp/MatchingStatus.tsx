@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { AssignmentSummary, ContactConsent } from '@/lib/rfp/assignment';
+import { ContactConsentField } from './ContactConsentField';
+import { ConsultationContact } from './ConsultationContact';
 import { Button } from '@/components/primitives/Button';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -35,6 +38,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState('');
+  const [consent,setConsent]=useState<ContactConsent>();
   const [deadline, setDeadline] = useState('');
   const [choice, setChoice] = useState<DeadlineChoice>({ mode: 'period', days: 5 });
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
@@ -55,14 +59,31 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
     timer = setTimeout(tick, 0);
     return () => clearTimeout(timer);
   }, [responseDeadline, status]);
+  const contactDue = data.assignment?.due;
+  useEffect(() => {
+    if (!contactDue || status !== 'sent') return;
+    const due = Date.parse(contactDue);
+    if (due <= Date.now()) return;
+    let timer: ReturnType<typeof setTimeout>;
+    function refreshWhenDue() {
+      const remaining = due - Date.now();
+      if (remaining <= 0) router.refresh();
+      else timer = setTimeout(refreshWhenDue, Math.min(remaining + 50, 2_147_483_647));
+    }
+    refreshWhenDue();
+    return () => clearTimeout(timer);
+  }, [contactDue, router, status]);
   const current = data.reviews.at(-1);
   if (!current) return null;
   const terminal = current.status === 'rejected' || current.status === 'withdrawn' || current.status === 'buyer_ended';
   const ended = status !== 'sent';
   const unanswered = !terminal && current.status !== 'quoted';
   const overdue = !ended && unanswered && !isRfpBidWindowOpen({ status, deadline: responseDeadline }, now);
-  const next = (terminal || overdue) && status === 'sent';
-  const requiresEnd = overdue && !terminal;
+  const early=!!data.assignment?.canSwitch && unanswered && !ended;
+  const next = (terminal || overdue || early) && status === 'sent';
+  const requiresEnd = (overdue || early) && !terminal;
+  const chosen=data.recommendation.candidates.find(c=>c.pgWorkspaceId===selected);
+  const needsConsent=chosen && data.assignmentEligible && data.recommendation.assignmentPgIds?.includes(selected);
   const supportSubject = `[서포트비] 다른 PG 상담 문의: ${rfpCode}`;
   const supportBody = `견적 요청 번호: ${rfpCode}\n현재 상담 PG사: ${current.candidate.name}\n상담 상태: ${LABELS[current.status].label}\n\n다른 PG사와 상담할 수 있는지 문의해요.\n문의 사유: ${overdue ? '견적 마감일까지 답변을 받지 못했어요.' : current.status === 'quoted' ? '받은 견적 조건이 맞지 않아요.' : '상담 답변이 늦어지고 있어요.'}`;
   const supportHref = `mailto:${siteConfig.operator.email}?subject=${encodeURIComponent(supportSubject)}&body=${encodeURIComponent(supportBody)}`;
@@ -83,11 +104,13 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
     <div className="space-y-2">
       <Chip {...LABELS[current.status]} />
       <h2 className="text-[20px] font-semibold" aria-live="polite">{heading}</h2>
-      {!ended && unanswered && !overdue && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">PG사 담당자가 영업일 기준 <span className="md-numeric">1~5일</span> 이내에 연락드릴 예정이에요. 검토가 끝나면 견적 또는 검토 결과를 알려드려요.</p>}
+      {!ended && !terminal && data.assignment && <ConsultationContact reviewId={current.id} summary={data.assignment} />}
+      {early && !overdue && <p>첫 연락 기한이 지났어요. 다음 PG사에 상담을 요청할 수 있어요.</p>}
+      {!data.assignment && !ended && unanswered && !overdue && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">PG사 담당자가 영업일 기준 <span className="md-numeric">1~5일</span> 이내에 연락드릴 예정이에요. 검토가 끝나면 견적 또는 검토 결과를 알려드려요.</p>}
       {overdue && <p className="text-[14px]">견적 접수 기간이 끝났어요. 다음 PG사를 선택해 상담을 이어갈 수 있어요.</p>}
       {!ended && current.status === 'quoted' && <p className="text-[14px]">수수료와 계약 조건을 확인한 뒤 최종 선정해주세요. 선정하면 노온과의 합의서를 확인하고 전자서명을 요청해요.</p>}
     </div>
-    {!ended && !terminal && !overdue && support}
+    {!data.assignment && !ended && !terminal && !overdue && support}
     <ol className="divide-y divide-[var(--md-sys-color-outline-variant)]">
       {data.reviews.map(review => <li key={review.id} className="space-y-2 py-3 text-[14px]">
         <div className="flex flex-wrap items-center justify-between gap-2"><span>{review.candidate.name}</span><Chip {...LABELS[review.status]} /></div>
@@ -95,15 +118,16 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
       </li>)}
     </ol>
     {next && <>
-      <MatchingCandidates recommendation={data.recommendation} selected={selected} onSelect={setSelected} />
+      <MatchingCandidates recommendation={data.recommendation} selected={selected} onSelect={id=>{setSelected(id);setConsent(undefined);}} />
+      {needsConsent && <ContactConsentField pg={chosen} consent={consent} onChange={setConsent} />}
       {data.recommendation.candidates.length > 0 && <div className="space-y-3">
         <BusinessDeadlineField label="새 견적 마감일" value={deadline} choice={choice} onChange={(value, nextChoice) => { setDeadline(value); setChoice(nextChoice); }} onValidityChange={setDeadlineValid} refreshKey={calendarRefreshKey} />
         {error && <p role="alert" className="text-[14px] text-[var(--md-sys-color-error)]">{error}</p>}
-        <Button disabled={busy || !selected || !deadline || !deadlineValid} onClick={async () => {
+        <Button disabled={busy || !selected || !deadline || !deadlineValid || (!!needsConsent && consent?.pgId!==selected)} onClick={async () => {
           if (requiresEnd) { setEndOpen(true); return; }
           setBusy(true); setError('');
           try {
-            const result = await requestNextPgAction({ rfpId, previousReviewId: current.id, pgWorkspaceId: selected, deadline });
+            const result = await requestNextPgAction({ rfpId, previousReviewId: current.id, pgWorkspaceId: selected, deadline, ...(consent ? {contactConsent:consent} : {}) });
             if (!result.ok) { setError(MATCHING_ERRORS[result.error] ?? deadlineErrorMessage(result.error)); setDeadlineValid(false); setCalendarRefreshKey(key => key + 1); router.refresh(); }
             else { setSelected(''); router.refresh(); }
           } catch { setError(MATCHING_ERRORS.NETWORK_ERROR); }
@@ -115,7 +139,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
     <ConfirmDialog open={endOpen} onOpenChange={setEndOpen} title="현재 상담을 종료하고 다음 PG사에 요청할까요?" description="현재 PG사의 상담을 종료하고 선택한 PG사에 새 마감일로 요청해요." confirmLabel="현재 상담을 종료하고 요청하기" loading={busy} onConfirm={async () => {
       setBusy(true); setError('');
       try {
-        const result = await endAndRequestNextPgAction({ rfpId, previousReviewId: current.id, pgWorkspaceId: selected, deadline });
+        const result = await endAndRequestNextPgAction({ rfpId, previousReviewId: current.id, pgWorkspaceId: selected, deadline, ...(consent ? {contactConsent:consent} : {}) });
         if (!result.ok) { setError(MATCHING_ERRORS[result.error] ?? deadlineErrorMessage(result.error)); setDeadlineValid(false); setCalendarRefreshKey(key => key + 1); router.refresh(); }
         else { setEndOpen(false); setSelected(''); router.refresh(); }
       } catch { setError(MATCHING_ERRORS.NETWORK_ERROR); }
@@ -124,7 +148,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
   </section>;
 }
 
-export function PgReviewPanel({ rfpId, status, review, bidWindowOpen, onReviewStarted }: { rfpId: string; status: RFP['status']; review: Pick<PgReview, 'id' | 'status' | 'reason'>; bidWindowOpen: boolean; onReviewStarted?: () => void }) {
+export function PgReviewPanel({ rfpId, status, review, bidWindowOpen, onReviewStarted }: { rfpId: string; status: RFP['status']; review: Pick<PgReview, 'id' | 'status' | 'reason'> & {assignment?:AssignmentSummary}; bidWindowOpen: boolean; onReviewStarted?: () => void }) {
   const router = useRouter();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -152,6 +176,7 @@ export function PgReviewPanel({ rfpId, status, review, bidWindowOpen, onReviewSt
   return <section className="mb-5 space-y-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4" aria-label="입점 검토">
     <div className="flex items-center justify-between gap-3"><h2 className="text-[16px] font-semibold">입점 검토</h2><Chip {...LABELS[review.status]} /></div>
     {review.reason && <p className="whitespace-pre-wrap text-[14px]">{review.reason}</p>}
+    {review.assignment && status==='sent' && <ConsultationContact reviewId={review.id} summary={review.assignment} />}
     {editable && <>
       <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{bidWindowOpen ? '사업자 정보와 업종의 위험 요소를 확인해주세요. 상담이 가능하면 견적 작성에서 조건을 제안해주세요.' : '견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.'}</p>
       {review.status === 'requested' && bidWindowOpen && <Button variant="outlined" disabled={busy} onClick={() => submit('reviewing')}>검토 시작하기</Button>}

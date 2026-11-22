@@ -1,3 +1,4 @@
+import { CONTACT_CONSENT_VERSION } from '@/lib/rfp/assignment';
 import { auth } from "@/auth";
 import { isSessionRevoked } from "@/lib/auth/session";
 import { cookies } from "next/headers";
@@ -26,6 +27,7 @@ const Input = z
     id: z.string().uuid().optional(),
     annualRevenue: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional(),
     revision: z.number().int().positive().optional(),
+    contactConsent: z.object({pgId:z.string().uuid(),version:z.literal(CONTACT_CONSENT_VERSION)}).strict().optional(),
     pgId: z.string().uuid().optional(),
     days: z.union([z.literal(3), z.literal(5), z.literal(10)]).optional(),
     workspaceId: z.string().uuid().optional(),
@@ -111,6 +113,7 @@ export async function POST(request: Request) {
             revision: input.revision,
             pgId: input.pgId,
             days: input.days,
+            contactConsent:input.contactConsent,
           },
           proof,
         );

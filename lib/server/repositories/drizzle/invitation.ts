@@ -6,6 +6,7 @@ import {
   workspaces,
   rfpMatchingRequests,
   rfpPgReviews,
+  consultationCases,
 } from '@/lib/db/schema';
 import type { RfpInvitation, InvitationStatus } from '@/lib/types/invitation';
 import type { RFP } from '@/lib/types/rfp';
@@ -51,6 +52,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
     contractType: row.contractType ?? null,
+    expectedVolume: (row.currentTerms as { expectedVolume?: import('@/lib/rfp/assignment').VolumeBand } | null)?.expectedVolume,
     monthlyAvgPgVolume:
       row.contractType === 'new'
         ? undefined
@@ -193,6 +195,8 @@ export class DrizzleInvitationRepository implements InvitationRepo {
         buyerName: workspaces.name,
         industryName: rfpMatchingRequests.industryName,
         reviewStatus: rfpPgReviews.status,
+        reviewDeadline: consultationCases.quoteDue,
+        assignmentEligible: rfpMatchingRequests.assignmentEligible,
       })
       .from(rfpInvitations)
       .innerJoin(rfps, eq(rfpInvitations.rfpId, rfps.id))
@@ -203,6 +207,7 @@ export class DrizzleInvitationRepository implements InvitationRepo {
         rfpPgReviews,
         and(eq(rfpPgReviews.rfpId, rfps.id), eq(rfpPgReviews.pgWorkspaceId, pgWsId)),
       )
+      .leftJoin(consultationCases, eq(consultationCases.reviewId,rfpPgReviews.id))
       .where(
         and(
           eq(rfpInvitations.pgWsId, pgWsId),
@@ -211,7 +216,8 @@ export class DrizzleInvitationRepository implements InvitationRepo {
       );
     return rows.map((r) => ({
       invitation: rowToInvitation(r.inv),
-      rfp: rowToRfp(r.rfp, r.biz),
+      rfp: rowToRfp(r.assignmentEligible && r.reviewStatus && ['rejected','withdrawn','buyer_ended'].includes(r.reviewStatus)
+        ? {...r.rfp,deadline:r.reviewDeadline ?? r.inv.expiresAt ?? r.rfp.deadline} : r.rfp, r.biz),
       buyerName: r.buyerName,
       industryName: r.industryName ?? undefined,
       reviewStatus: r.reviewStatus ?? undefined,

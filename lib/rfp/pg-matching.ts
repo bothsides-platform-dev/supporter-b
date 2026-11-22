@@ -40,9 +40,9 @@ export type SelectedMatchingCandidate = Pick<MatchingCandidate, 'pgWorkspaceId' 
 };
 // Historical reviews retain their original range snapshot; never reinterpret it as a tier fee.
 export type HistoricalMatchingCandidate = z.infer<typeof legacyCandidateSchema> & { name: string; merchantTier?: never; feeRate?: never };
-export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: SelectedMatchingCandidate[] };
+export type Recommendation = { assignmentPgIds?: string[]; risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: SelectedMatchingCandidate[] };
 export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn' | 'buyer_ended'; reason: string; createdAt: string; updatedAt: string; candidate: SelectedMatchingCandidate | HistoricalMatchingCandidate };
-export type BuyerMatching = { currentPgs?: CurrentPg[]; industryName: string; reviews: PgReview[]; recommendation: Recommendation };
+export type BuyerMatching = { assignmentEligible?:boolean; assignment?:import('./assignment').AssignmentSummary; currentPgs?: CurrentPg[]; industryName: string; reviews: PgReview[]; recommendation: Recommendation };
 
 export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: string[], previousPgIds: string[]): MatchingCandidate[] {
   if (policy.risk !== 'white' && policy.risk !== 'gray') return [];
@@ -52,6 +52,8 @@ export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: 
 }
 
 export const MATCHING_ERRORS: Record<string, string> = {
+  MATCHING_CONTACT_CONSENT: '선택한 PG사에 연락처를 제공하는 데 동의해주세요.',
+  MATCHING_EXPECTED_VOLUME: '예상 월 PG 거래액을 선택해주세요.',
   CURRENT_PGS_REQUIRED: '현재 이용 중인 PG사를 한 곳 이상 입력해주세요.',
   INVALID_CURRENT_PGS: '현재 이용 중인 PG사를 다시 확인해주세요.',
   MATCHING_REQUIRED: '업종을 선택하고 추천 PG사를 확인해주세요.',

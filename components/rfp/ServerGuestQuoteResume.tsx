@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { RfpCreateWizard } from "./RfpCreateWizard";
+import { GuestBusinessConfirmation } from './GuestBusinessConfirmation';
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
 import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
 import { clearServerDraftBackup, createServerDraftSession, type ServerDraftSession } from '@/lib/guest-rfp/server-draft-session';
@@ -186,6 +187,7 @@ export function ServerGuestQuoteResume({
       )}
       {session ? (
         <RfpDraftProvider value={session.store}>
+          <GuestBusinessConfirmation store={session.store} context={session.draft.quoteContext}>
           <RfpCreateWizard
             {...props}
             resumedAnswers
@@ -199,6 +201,7 @@ export function ServerGuestQuoteResume({
               await clearMatchingLocal(session.draft.id);
             }}
           />
+          </GuestBusinessConfirmation>
         </RfpDraftProvider>
       ) : (
         <div className="space-y-4">

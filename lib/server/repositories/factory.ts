@@ -49,7 +49,10 @@ import type { DrizzleGuestRfpRepository } from './drizzle/guest-rfp';
 
 import type { DrizzleAlimtalkRepository } from './drizzle/alimtalk';
 
+import type { ConsultationRepository } from './drizzle/consultation';
+
 type RepoBundle = {
+  consultation: ConsultationRepository;
   alimtalk: DrizzleAlimtalkRepository;
   guestRfp: DrizzleGuestRfpRepository;
   agreement: DrizzleAgreementRepository;
@@ -108,11 +111,12 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 30;
+const BUNDLE_VERSION = 31;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createRepoBundle(db: any): Promise<RepoBundle> {
+  const { ConsultationRepository } = await import('./drizzle/consultation');
   const { DrizzleAlimtalkRepository } = await import('./drizzle/alimtalk');
   const { DrizzleGuestRfpRepository } = await import('./drizzle/guest-rfp');
   const { DrizzleAgreementRepository } = await import('./drizzle/agreement');
@@ -157,6 +161,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
   return {
+    consultation: new ConsultationRepository(db),
     alimtalk: new DrizzleAlimtalkRepository(db),
     guestRfp: new DrizzleGuestRfpRepository(db),
     agreement: new DrizzleAgreementRepository(db),
@@ -228,6 +233,7 @@ async function getBundle(): Promise<RepoBundle> {
 export async function getRfpRepo(): Promise<RfpRepo> {
   return (await getBundle()).rfp;
 }
+export async function getConsultationRepo() { return (await getBundle()).consultation; }
 export async function getPgMatchingRepo(): Promise<DrizzlePgMatchingRepository> {
   return (await getBundle()).pgMatching;
 }

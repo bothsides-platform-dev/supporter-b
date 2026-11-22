@@ -3,7 +3,7 @@ import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getDb, getGuestDraftRepo, getQuoteAssistRepo, getGuestRfpRepo } from '@/lib/server/repositories/factory';
 import { lookupQuoteBusiness, supplementQuoteWithAi } from '@/lib/server/quote-assist/providers';
 import { collectPublicWebsite } from '@/lib/server/quote-assist/website';
-import { extractWebsiteSuggestions } from '@/lib/server/quote-assist/extraction';
+import { extractWebsiteSuggestions, websiteBusinessNumber } from '@/lib/server/quote-assist/extraction';
 import { manualResult } from '@/lib/guest-rfp/suggestions';
 import { logger } from '@/lib/observability/logger';
 import type { Tx } from '@/lib/server/repositories/types';
@@ -39,7 +39,7 @@ export class QuoteAssistService {
         aiStatus = ai.status; cost = ai.cost;
         const suggestions = [...rules, ...ai.suggestions.filter(s => !rules.some(r => r.field === s.field))];
         result = { status: !suggestions.length ? 'manual' : ai.status === 'complete' ? 'complete' : 'partial',
-          suggestions, needsConfirmation: suggestions.map(s => s.field) };
+          suggestedBizNo:websiteBusinessNumber(pages), suggestions, needsConfirmation: suggestions.map(s => s.field) };
       }
     } catch { /* Optional enrichment never invalidates the draft or earlier results. */ }
     await this.finish(input, secret, result, cost);

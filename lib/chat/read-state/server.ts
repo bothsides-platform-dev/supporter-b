@@ -7,6 +7,7 @@ import type {
 import { publishChatEvent } from '@/lib/server/realtime/centrifugo';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import type { ServiceResult } from '@/lib/server/services/types';
+import { observeConsultationRead } from '@/lib/server/services/consultation-contact';
 
 export type ConversationReadViewer = {
   userId: string;
@@ -131,6 +132,14 @@ class DefaultConversationReadState implements ConversationReadState {
       input.viewer.userId,
       attemptedReadAt,
     );
+    if (matchesBuyer) {
+      await observeConsultationRead(
+        conversation.id,
+        { workspaceId: input.viewer.activeWorkspaceId, userId: input.viewer.userId },
+        attemptedReadAt,
+        now,
+      );
+    }
     const readAt = persistedReadAt.toISOString();
 
     try {

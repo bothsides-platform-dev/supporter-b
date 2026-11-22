@@ -12,6 +12,8 @@ import { guestRequest, type GuestRecommendation } from '@/lib/guest-rfp/requests
 import { saveGuestForSignup, saveGuestProgress } from '@/lib/guest-rfp/server-client';
 import type { GuestQuoteController } from '@/lib/guest-rfp/quote-controller';
 import { MatchingCandidates, MIN_MATCHING_LOADING_MS } from './RfpMatchingSelection';
+import { assignmentSize, type ContactConsent } from '@/lib/rfp/assignment';
+import { ContactConsentField } from './ContactConsentField';
 import { MatchingReviewLayout, reviewBackPane, isReviewBackShortcut } from './MatchingReviewLayout';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { RequestSummary } from './RequestSummary';
@@ -22,7 +24,7 @@ import styles from './guest-quote.module.css';
 export function GuestMatchingReview({ id, revision, workspaceId, quote, autoRequestEnabled, onBack, onEdit, onConfirm }: {
   id: string; revision: number; workspaceId: string; quote?: GuestQuoteController; autoRequestEnabled: boolean;
   onBack: () => void; onEdit?: (question: string) => void;
-  onConfirm: (selection: { pgId: string; days: number; revision: number }) => Promise<void>;
+  onConfirm: (selection: { pgId: string; days: number; revision: number; contactConsent?:ContactConsent }) => Promise<void>;
 }) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -31,6 +33,7 @@ export function GuestMatchingReview({ id, revision, workspaceId, quote, autoRequ
   const [pane, setPane] = useState<ReviewPane>('pg');
   const [result, setResult] = useState<GuestRecommendation | null>(null);
   const [selected, setSelected] = useState('');
+  const [consent,setConsent]=useState<ContactConsent>();
   const [days, setDays] = useState(5);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -81,7 +84,9 @@ export function GuestMatchingReview({ id, revision, workspaceId, quote, autoRequ
     rootRef.current?.scrollIntoView?.({ block: 'start' });
     rootRef.current?.focus({ preventScroll: true });
   }, [loading]);
-  const canContinue = !busy && !error && !loading && !!selected
+  const chosen=result?.recommendation.candidates.find(c=>c.pgWorkspaceId===selected);
+  const needsConsent=autoRequestEnabled && chosen && draft && assignmentSize(draft) && result?.recommendation.assignmentPgIds?.includes(selected);
+  const canContinue = (!needsConsent || consent?.pgId===selected) && !busy && !error && !loading && !!selected
     && (result?.recommendation.risk === 'white' || result?.recommendation.risk === 'gray')
     && result.recommendation.candidates.some(pg => pg.pgWorkspaceId === selected);
   const back = () => {
@@ -104,7 +109,7 @@ export function GuestMatchingReview({ id, revision, workspaceId, quote, autoRequ
       if (!latest.recommendation.candidates.some(pg => pg.pgWorkspaceId === selected)) {
         setSelected(''); setPane('pg'); throw new Error('추천 기준이 바뀌었어요. PG사를 다시 선택해요.');
       }
-      if (autoRequestEnabled) await onConfirm({ pgId: selected, days, revision: latest.revision });
+      if (autoRequestEnabled) await onConfirm({ pgId: selected, days, revision: latest.revision, ...(needsConsent && consent ? {contactConsent:consent} : {}) });
       else router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '저장을 완료하지 못했어요. 다시 시도해요.');
@@ -125,7 +130,8 @@ export function GuestMatchingReview({ id, revision, workspaceId, quote, autoRequ
               <option value="1000000000">5억 원 초과 ~ 10억 원 이하</option><option value="3000000000">10억 원 초과 ~ 30억 원 이하</option><option value="3000000001">30억 원 초과</option>
             </select>
           </label>
-          <MatchingCandidates recommendation={result.recommendation} selected={selected} onSelect={setSelected} estimated />
+          <MatchingCandidates recommendation={result.recommendation} selected={selected} onSelect={id=>{ setConsent(undefined);setSelected(id); }} estimated />
+          {needsConsent && <ContactConsentField pg={chosen} consent={consent} onChange={setConsent} />}
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{result.tierBasis === 'confirmed' ? '확인된 회원 등급을 기준으로 안내해요.' : result.tierBasis === 'provisional' ? '입력한 연매출 구간으로 산정한 잠정 등급이에요.' : '매출 구간을 선택하면 예상 수수료를 확인할 수 있어요.'} 실제 요율은 PG 심사 후 확정해요.</p>
         </div>}>
           <div className="space-y-5">

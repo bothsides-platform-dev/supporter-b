@@ -1,4 +1,5 @@
 'use server';
+import { getConsultationRepo } from '@/lib/server/repositories/factory';
 
 import { z } from 'zod';
 
@@ -66,16 +67,17 @@ export async function sendChatMessageAction(
     const savedAtts = data.attachmentIds.length > 0
       ? await (await getAttachmentRepo()).findByChatMessageIds([result.messageId])
       : [];
+    const identity=result.rfpId && ws.workspaceType==='pg' ? (await (await getConsultationRepo()).messageIdentities([result.messageId])).get(result.messageId) : undefined;
     const author = await (await getUserRepo()).findById(ws.userId);
     await publishChatEvent(result.conversationId, {
       type: 'message',
       id: result.messageId,
       body: data.body.trim(),
       authorWsId: ws.workspaceId,
-      authorUserId: ws.userId,
-      authorName: result.authorName,
-      authorEmail: result.authorEmail,
-      authorAvatarUpdatedAt: author?.avatarUpdatedAt ?? null,
+      authorUserId: identity && !identity.selected ? '' : ws.userId,
+      authorName: identity && !identity.showName ? identity.name : result.authorName,
+      authorEmail: identity && !identity.selected ? '' : result.authorEmail,
+      authorAvatarUpdatedAt: identity && !identity.selected ? null : author?.avatarUpdatedAt ?? null,
       rfpId: result.rfpId,
       // 낙관적 말풍선 상관관계 id — self-echo 시 pending 말풍선 정확 매칭에 사용.
       tempId: data.tempId ?? null,

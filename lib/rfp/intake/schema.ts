@@ -9,6 +9,7 @@
 //
 // 서버 전용: `isValidWebsiteUrl` 이 tldts 를 끌어오므로 클라이언트 컴포넌트는 이 파일을
 // 값으로 import 하지 않는다(타입 import 만 허용).
+import { CONTACT_CONSENT_VERSION, VOLUME_BANDS } from '@/lib/rfp/assignment';
 import { z } from "zod";
 import { currentPgsSchema } from "@/lib/rfp/current-pgs";
 import { customIndustryNameSchema } from "@/lib/rfp/industry-selection";
@@ -70,6 +71,8 @@ export const createRfpInputSchema = z
       }),
     mainProducts: z.string().max(200).optional(),
     productInfo: productInfoSchema.optional(),
+    expectedVolume: z.enum(VOLUME_BANDS).optional(),
+    contactConsent: z.object({ pgId: z.string().uuid(), version: z.literal(CONTACT_CONSENT_VERSION) }).strict().optional(),
     monthlyAvgPgVolume: z.string().max(100).optional(),
     currentFeeRate: z.string().max(50).optional(),
     currentSettlementLimit: z.string().max(100).optional(),
@@ -90,7 +93,8 @@ export const createRfpInputSchema = z
     // 다시 판정하므로 견적 내용(단계 2)만 받는다. parse.ts 가 params.rule 로 오류 코드를 고른다.
     if (!d.send) return;
     for (const issue of sendReadinessIssues(d)) {
-      if (issue.step !== 2) continue;
+      // Locked reservations from before rollout are validated by createRfp with their stored protocol.
+      if (issue.step !== 2 || issue.rule === 'expected-volume') continue;
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: [issue.path],

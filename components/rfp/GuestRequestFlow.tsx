@@ -85,6 +85,7 @@ export function GuestRequestFlow({
       });
     }
     if (generation !== refreshGeneration.current) return;
+    if (quote && !state && quote.snapshot().stage==='complete') quote.resumeRequiredInputs();
     setRequest(state);
     setReserved(
       !!state && ["unbound", "waiting", "submitted"].includes(state.status),

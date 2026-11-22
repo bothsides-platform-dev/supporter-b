@@ -1,11 +1,12 @@
 'use client';
 
 import { z } from 'zod';
+import { businessConfirmationSchema, confirmedBusiness, type BusinessConfirmation } from './business-confirmation';
 import { createRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { guestAnswersSchema, selectGuestAnswers, type GuestAnswers, type ServerGuestDraft } from './answers';
 import { GUEST_DRAFT_TTL_MS, sameOwner, type DraftOwner } from './draft';
 
-type SaveInput = { id: string; revision: number; answers: GuestAnswers; files: string[] };
+type SaveInput = { guestBusiness?:BusinessConfirmation; id: string; revision: number; answers: GuestAnswers; files: string[] };
 type Save = (input: SaveInput, actor: DraftOwner) => Promise<{ ok: true; revision: number } | { ok: false; error: string }>;
 const BACKUP_PREFIX = 'support-b-server-guest-draft-v1:';
 const backupSchema = z.object({
@@ -16,6 +17,7 @@ const backupSchema = z.object({
   updatedAt: z.number().finite(),
   writer: z.string(),
   answers: guestAnswersSchema,
+  guestBusiness:businessConfirmationSchema.optional(),
   files: z.array(z.object({ id: z.string(), name: z.string(), size: z.number().nonnegative() }).strict()).max(5),
 }).strict();
 type Backup = z.infer<typeof backupSchema>;
@@ -59,6 +61,7 @@ export function createServerDraftSession({ draft, actor, save, refresh, onError 
     }
   } catch { backupUnavailable = true; }
   const store = createRfpDraftStore({
+    guestBusiness:recovered?.guestBusiness ?? confirmedBusiness(draft.quoteContext,draft.answers.websiteUrl),
     ...draft.answers,
     ...recovered?.answers,
     matchingRequestKey: draft.requestKey,
@@ -76,7 +79,7 @@ export function createServerDraftSession({ draft, actor, save, refresh, onError 
   let completed = false;
   let applyingServer = false;
   const notify = (code: string) => { if (!stopped) onError(code); };
-  const snapshot = () => ({ answers: selectGuestAnswers(store.getState()), files: structuredClone(store.getState().rfpFiles) });
+  const snapshot = () => ({ ...(store.getState().guestBusiness ? {guestBusiness:store.getState().guestBusiness} : {}), answers: selectGuestAnswers(store.getState()), files: structuredClone(store.getState().rfpFiles) });
   const preserve = () => {
     try {
       if (localStorage.getItem(key) !== backupRaw) {
@@ -115,7 +118,7 @@ export function createServerDraftSession({ draft, actor, save, refresh, onError 
     queue = queue.catch(() => {}).then(async () => {
       if (stopped) throw new Error('GUEST_SESSION_CLOSED');
       if (conflicted) throw new Error('GUEST_DRAFT_CHANGED');
-      const result = await save({ id: draft.id, revision, answers: data.answers, files: data.files.map(file => file.id) }, actor);
+      const result = await save({ id: draft.id, revision, ...(data.guestBusiness ? {guestBusiness:data.guestBusiness} : {}), answers: data.answers, files: data.files.map(file => file.id) }, actor);
       if (!result.ok) throw new Error(result.error);
       revision = result.revision;
       baseRevision = revision;
@@ -173,7 +176,7 @@ export function createServerDraftSession({ draft, actor, save, refresh, onError 
       applyingServer = true;
       try {
         store.getState().reset();
-        store.setState({ ...latest.answers, matchingRequestKey: latest.requestKey, rfpFiles: latest.files });
+        store.setState({ ...latest.answers, guestBusiness:confirmedBusiness(latest.quoteContext,latest.answers.websiteUrl), matchingRequestKey: latest.requestKey, rfpFiles: latest.files });
       } finally { applyingServer = false; }
       savedGeneration = ++generation;
     }

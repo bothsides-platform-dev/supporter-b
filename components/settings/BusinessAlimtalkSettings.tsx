@@ -6,7 +6,9 @@ import { updateBusinessAlimtalkAction } from '@/lib/server/actions/user/updateBu
 export function BusinessAlimtalkSettings({
   enabled,
   maskedPhone,
+  assignment=false,
 }: {
+  assignment?: boolean;
   enabled: boolean;
   maskedPhone: string | null;
 }) {
@@ -45,13 +47,13 @@ export function BusinessAlimtalkSettings({
           aria-describedby="alimtalk-description"
           className="relative h-5 w-9 shrink-0 appearance-none rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)] before:absolute before:left-0.5 before:top-0.5 before:size-3.5 before:rounded-[4px] before:bg-[var(--md-sys-color-on-surface-variant)] before:transition-transform checked:bg-[var(--md-sys-color-primary)] checked:before:translate-x-4 checked:before:bg-[var(--md-sys-color-on-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] disabled:opacity-50 motion-reduce:before:transition-none"
         />
-        업무 알림톡 받기
+        {assignment?'상담 배정 알림톡 받기':'업무 알림톡 받기'}
       </label>
       <p
         id="alimtalk-description"
         className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]"
       >
-        견적·계약 소식과 PG사 메시지(PG사별 하루 한 번)를 카카오톡으로 받아요. 알림톡을 받지 못하면
+        {assignment ? '이 PG사에서 나에게 배정된 상담과 첫 연락 기한을 카카오톡으로 받아요.' : '견적·계약 소식과 PG사 메시지(PG사별 하루 한 번)를 카카오톡으로 받아요.'} 알림톡을 받지 못하면
         문자로 보내요. 이 설정을 끄면 대체 문자도 보내지 않아요.
       </p>
       <p className="text-[14px]">

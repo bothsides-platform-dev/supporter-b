@@ -17,6 +17,9 @@ import {
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
 } from './repositories/factory';
+import type { AssignmentSummary } from '@/lib/rfp/assignment';
+import { getConsultationRepo } from './repositories/factory';
+import { consultationSummary } from './services/consultation-contact';
 import { getPgMatchingService } from './services/pg-matching';
 import type { BuyerMatching, PgReview } from '@/lib/rfp/pg-matching';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
@@ -77,7 +80,7 @@ export type PgRfpDetailData = {
   workspaceId?: string;
   industryName?: string;
   contractState?: PgContractState;
-  review?: Pick<PgReview, 'id' | 'status' | 'reason'> | null;
+  review?: (Pick<PgReview, 'id' | 'status' | 'reason'> & {assignment?:AssignmentSummary}) | null;
   rfp: RFP;
   /** 상태와 원 요청 마감일을 모두 통과한 신규 견적 접수 가능 여부. */
   bidWindowOpen: boolean;
@@ -216,7 +219,7 @@ const _PG_STRIPPED_RFP_KEYS = [
 ] as const;
 const _PG_VISIBLE_RFP_KEYS = [
   'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
-  'mainProducts', 'monthlyAvgPgVolume', 'currentFeeRate', 'currentSettlementLimit',
+  'mainProducts', 'expectedVolume', 'monthlyAvgPgVolume', 'currentFeeRate', 'currentSettlementLimit',
   'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
   'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
   'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',
@@ -363,7 +366,7 @@ export async function loadBuyerRfpDetail(args: {
     : null;
 
   return {
-    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg),
+    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg, args.userId),
     rfp,
     bids,
     bidHistoryByPg,
@@ -451,7 +454,13 @@ export async function loadPgRfpDetail(args: {
   const matchingRepo = await getPgMatchingRepo();
   const matching = await matchingRepo.find(rfp.id);
   const ownReview = matching ? (await matchingRepo.reviews(rfp.id)).find(r => r.pgWorkspaceId === args.workspaceId) : undefined;
-  const review = ownReview ? { id: ownReview.id, status: ownReview.status, reason: ownReview.reason } : null;
+  if (matching?.assignmentEligible && ownReview && ['rejected','withdrawn','buyer_ended'].includes(ownReview.status)) {
+    const prior=await (await getConsultationRepo()).case(ownReview.id);
+    const invited=invitations.find(inv=>inv.pgWsId===args.workspaceId);
+    rfp.deadline=prior?.assignment.quoteDue.toISOString() ?? invited?.expiresAt ?? rfp.deadline;
+  }
+  const assignment=matching?.assignmentEligible && ownReview && args.userId ? await consultationSummary(ownReview.id,{workspaceId:args.workspaceId,userId:args.userId},'pg') : undefined;
+  const review = ownReview ? { ...(assignment ? {assignment} : {}), id: ownReview.id, status: ownReview.status, reason: ownReview.reason } : null;
   const bidWindowOpen = !hasWithdrawnBid && isPgBidWindowOpen(rfp, pendingRequote?.deadline) && (!matching || !!review && ['requested', 'reviewing', 'quoted'].includes(review.status));
 
   // 구매사 신원(상호명 + 로고 버전) — RfpBriefPanel·BidContextStrip 이 아바타까지 그린다.
@@ -471,6 +480,10 @@ export async function loadPgRfpDetail(args: {
     if (contact) buyerContact = { workspaceName: buyer.name, ...contact };
   }
 
+  if (!awardedToMe && assignment && ownReview && args.userId) {
+    const contact=await (await getConsultationRepo()).buyerContact(ownReview.id,{workspaceId:args.workspaceId,userId:args.userId});
+    if (contact) buyerContact={workspaceName:buyer.name,name:contact.name,email:contact.email,phone:contact.phone};
+  }
   // 합의서는 노온과 구매사의 문서다. PG payload에는 계약 자료를 싣지 않는다.
   const signing = null;
   const contractState = undefined;
