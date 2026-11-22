@@ -18,11 +18,33 @@ type TransactionalDb = {
   transaction<T>(callback: (tx: Tx) => Promise<T>): Promise<T>;
 };
 
+/**
+ * The row lock order for every multi-key write. One `IN (...)` statement will
+ * not do: it locks in scan order and deadlocks against reserve(). Sorting in SQL
+ * will not either, because the database collation can disagree with this sort.
+ */
+function inLockOrder(keys: string[]): string[] {
+  return [...new Set(keys)].sort();
+}
+
 export class DrizzleLoginAttemptRepository implements LoginAttemptRepo {
   constructor(private readonly _db: Tx) {}
 
   private h(tx?: Tx): Tx {
     return tx ?? this._db;
+  }
+
+  /** One statement per key, in lock order, still all-or-nothing. */
+  private async writeEachKey(
+    keys: string[],
+    tx: Tx | undefined,
+    write: (db: Tx, key: string) => Promise<unknown>,
+  ): Promise<void> {
+    const ordered = inLockOrder(keys);
+    if (ordered.length === 0) return;
+    await (this.h(tx) as TransactionalDb).transaction(async (inner) => {
+      for (const key of ordered) await write(inner, key);
+    });
   }
 
   async findByKey(
@@ -49,7 +71,7 @@ export class DrizzleLoginAttemptRepository implements LoginAttemptRepo {
     keys: string[],
     input: { threshold: number; now: Date; lockUntil: Date },
   ): Promise<LoginAttemptReservationResult> {
-    const uniqueKeys = [...new Set(keys)].sort();
+    const uniqueKeys = inLockOrder(keys);
     if (uniqueKeys.length === 0) return { allowed: true, records: [] };
 
     try {
@@ -120,20 +142,20 @@ export class DrizzleLoginAttemptRepository implements LoginAttemptRepo {
   }
 
   async release(keys: string[], threshold: number, tx?: Tx): Promise<void> {
-    if (keys.length === 0) return;
-    const db = this.h(tx);
-    await db
-      .update(loginAttempts)
-      .set({
-        count: sql<number>`greatest(${loginAttempts.count} - 1, 0)`,
-        lockedUntil: sql<Date | null>`case
-          when ${loginAttempts.lockedUntil} is not null
-            and ${loginAttempts.count} <= ${threshold}
-            then null
-          else ${loginAttempts.lockedUntil}
-        end`,
-      })
-      .where(inArray(loginAttempts.key, keys));
+    await this.writeEachKey(keys, tx, (db, key) =>
+      db
+        .update(loginAttempts)
+        .set({
+          count: sql<number>`greatest(${loginAttempts.count} - 1, 0)`,
+          lockedUntil: sql<Date | null>`case
+            when ${loginAttempts.lockedUntil} is not null
+              and ${loginAttempts.count} <= ${threshold}
+              then null
+            else ${loginAttempts.lockedUntil}
+          end`,
+        })
+        .where(eq(loginAttempts.key, key)),
+    );
   }
 
   async upsert(
@@ -161,8 +183,8 @@ export class DrizzleLoginAttemptRepository implements LoginAttemptRepo {
   }
 
   async clear(keys: string[], tx?: Tx): Promise<void> {
-    if (keys.length === 0) return; // empty array → no-op (avoid `IN ()`).
-    const db = this.h(tx);
-    await db.delete(loginAttempts).where(inArray(loginAttempts.key, keys));
+    await this.writeEachKey(keys, tx, (db, key) =>
+      db.delete(loginAttempts).where(eq(loginAttempts.key, key)),
+    );
   }
 }
