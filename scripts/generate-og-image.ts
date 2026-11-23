@@ -6,7 +6,9 @@
  * it via Playwright Chromium. Korean glyphs are rendered by the same font
  * binary used in production, so what you see in the OG card == what the app
  * uses. Dark Linear theme — solid near-black background, brand mark +
- * wordmark, no gradients/glow/blur.
+ * wordmark on the left, and the docs character 모아 on the right. No
+ * gradients/glow/blur beyond the shading inside 모아's own art
+ * (`scripts/assets/og-moa.svg`, exported from the docs repo's rig).
  *
  * apple-icon.png has its own separate manual pipeline — this script must
  * never write it.
@@ -20,6 +22,8 @@ import { BRAND_MARK_PATH } from '../lib/brand/brand-mark-path';
 
 const ROOT = path.resolve(__dirname, '..');
 const PRETENDARD = path.join(ROOT, 'public/fonts/PretendardVariable.woff2');
+
+const MOA_SVG = path.join(ROOT, 'scripts/assets/og-moa.svg');
 
 const OUT_OG = path.join(ROOT, 'app/opengraph-image.png');
 
@@ -44,7 +48,7 @@ function brandMarkSvg(size: number, color: string) {
   </svg>`;
 }
 
-function ogHtml(pretendard: string) {
+function ogHtml(pretendard: string, moa: string) {
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -75,9 +79,9 @@ function ogHtml(pretendard: string) {
   }
   .hero {
     position: absolute;
-    left: 50%;
+    left: 112px;
     top: 46%;
-    transform: translate(-50%, -50%);
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -86,7 +90,7 @@ function ogHtml(pretendard: string) {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 40px;
+    gap: 30px;
   }
   .mark svg {
     display: block;
@@ -94,7 +98,7 @@ function ogHtml(pretendard: string) {
   .wordmark {
     font-family: 'Pretendard', sans-serif;
     font-weight: 800;
-    font-size: 145px;
+    font-size: 112px;
     line-height: 1;
     letter-spacing: -0.04em;
     color: ${COLOR_ON_SURFACE};
@@ -104,15 +108,27 @@ function ogHtml(pretendard: string) {
   .tagline {
     font-family: 'Pretendard', sans-serif;
     font-weight: 600;
-    font-size: 38px;
+    font-size: 36px;
     letter-spacing: -0.02em;
     color: ${COLOR_ON_SURFACE_VARIANT};
-    margin: 28px 0 0 4px;
+    margin: 26px 0 0 4px;
+  }
+  .moa {
+    position: absolute;
+    right: 70px;
+    top: 88px;
+    width: 360px;
+    height: 450px;
+  }
+  .moa svg {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
   .domain-row {
     position: absolute;
-    left: 96px;
-    bottom: 76px;
+    left: 116px;
+    bottom: 92px;
     display: flex;
     align-items: center;
     gap: 14px;
@@ -137,11 +153,13 @@ function ogHtml(pretendard: string) {
 
   <div class="hero">
     <div class="brand-row">
-      <div class="mark">${brandMarkSvg(132, COLOR_ON_SURFACE)}</div>
+      <div class="mark">${brandMarkSvg(96, COLOR_ON_SURFACE)}</div>
       <div class="wordmark">서포트비</div>
     </div>
-    <div class="tagline">PG사 비교 견적 플랫폼</div>
+    <div class="tagline">맞춤 PG 견적 플랫폼</div>
   </div>
+
+  <div class="moa">${moa}</div>
 
   <div class="domain-row">
     <div class="domain-dot"></div>
@@ -181,9 +199,10 @@ async function shoot({
 
 async function main() {
   const pretendard = await loadFontDataUri(PRETENDARD, 'font/woff2');
+  const moa = await fs.readFile(MOA_SVG, 'utf8');
 
   await shoot({
-    html: ogHtml(pretendard),
+    html: ogHtml(pretendard, moa),
     width: 1200,
     height: 630,
     out: OUT_OG,
