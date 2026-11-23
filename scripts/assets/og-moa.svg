@@ -1,0 +1,37 @@
+<!-- 모아(서포트비 문서의 캐릭터). 원본 리그: bothsides-platform-dev/docs-supporter-b lib/chat/moa-art.ts (5695dac).
+     생성식: moaPoseSvg({ ...moaPoses.idle, lookX: -0.55, lookY: 0.05 }, false, "og-moa"). 손으로 고치지 말고 docs 저장소에서 다시 뽑는다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 40 970 1214" fill="none" aria-hidden="true" focusable="false">
+<defs>
+  <linearGradient id="og-moa-paper" x2=".85" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#fff9ef"/><stop offset=".57" stop-color="#f5eee6"/><stop offset="1" stop-color="#ebe1d6"/></linearGradient>
+  <linearGradient id="og-moa-edge" x2="1" y2=".4"><stop stop-color="#0085bc"/><stop offset="1" stop-color="#07466e"/></linearGradient>
+  <linearGradient id="og-moa-blue" x2=".8" y2="1"><stop stop-color="#0097d1"/><stop offset=".54" stop-color="#007cb7"/><stop offset="1" stop-color="#00659b"/></linearGradient>
+  <linearGradient id="og-moa-foot" x2=".24" y2="1"><stop offset=".15" stop-color="#064566"/><stop offset=".6" stop-color="#007db5"/><stop offset=".88" stop-color="#0089c1"/><stop offset="1" stop-color="#006ba1"/></linearGradient>
+  <radialGradient id="og-moa-white"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#f1f1f7"/></radialGradient>
+  <clipPath id="og-moa-clipL"><path data-part="clipL" d="M-167 0 C-167 -117.6399 -92.2341 -213 0 -213 S167 -117.6399 167 0 C167 117.6399 92.2341 213 0 213 S-167 117.6399 -167 0 Z"/></clipPath>
+  <clipPath id="og-moa-clipR"><path data-part="clipR" d="M-167 0 C-167 -117.6399 -92.2341 -213 0 -213 S167 -117.6399 167 0 C167 117.6399 92.2341 213 0 213 S-167 117.6399 -167 0 Z"/></clipPath>
+</defs>
+<g data-part="move" transform="translate(0 0)"><g transform="translate(610 657) scale(.82) translate(-610 -657)"><g data-part="lean" transform="translate(610 1235) rotate(0) scale(1 1) translate(-610 -1235)">
+  <g fill="url(#og-moa-foot)" stroke="#07547b" stroke-width="4">
+    <path data-part="footL" transform="translate(340 1140) rotate(0) scale(1 1) translate(-340 -1140)" d="M272 1103 C245 1134 217 1191 238 1220 C257 1246 340 1244 373 1222 Q402 1200 414 1125 Z"/>
+    <path data-part="footR" transform="translate(917 1140) rotate(0) scale(1 1) translate(-917 -1140)" d="M824 1124 Q830 1198 863 1228 C888 1247 965 1241 994 1225 C1019 1211 1001 1157 971 1106 Z"/>
+  </g>
+  <path d="M701 77 C565 83 398 82 310 111 C222 141 158 219 162 308 C167 398 208 548 199 742 L190 1035 Q187 1112 245 1156 Q260 1116 333 1143 Q380 1163 424 1163 L818 1163 C883 1163 944 1109 982 1141 Q998 1155 997 1161 Q1044 1114 1043 1053 L1036 395 Q1037 359 1015 338 L754 94 Q732 73 701 77 Z" fill="url(#og-moa-paper)" stroke="#b7afa2" stroke-width="4"/>
+  <path d="M246 1154 Q185 1112 190 1035 L199 742 C209 543 166 397 162 308 C155 203 241 124 316 103 Q417 77 701 76 Q732 74 746 94 Q729 80 697 84 C559 92 397 87 317 116 C226 147 169 221 180 322 C186 407 228 569 220 745 L208 1034 Q203 1103 246 1154 Z" fill="url(#og-moa-edge)"/>
+  <path d="M246 1150 Q263 1111 336 1138 Q384 1157 424 1157 L818 1157 C886 1157 943 1103 983 1135" stroke="#fffaf1" stroke-width="8" stroke-linecap="round"/>
+  <path data-part="foldShadow" d="M710 77 C742 77 752 107 753 139 Q747 258 751 286 Q752 294 763 297 C831 314 1001 329 1026 352 Q1011 327 978 298 L765 102 Q736 76 710 77 Z" transform="translate(0 13)" fill="#826f60" opacity=".31"/>
+  <path data-part="fold" d="M710 77 C742 77 752 107 753 139 Q747 258 751 286 Q752 294 763 297 C831 314 1001 329 1026 352 Q1011 327 978 298 L765 102 Q736 76 710 77 Z" fill="url(#og-moa-blue)" stroke="#07547b" stroke-width="4" stroke-linejoin="round"/>
+  <g data-part="eyeL" transform="translate(445 574) scale(1 1) rotate(0)"><g transform="scale(1)">
+    <path data-part="rimL" d="M-167 0 C-167 -117.6399 -92.2341 -213 0 -213 S167 -117.6399 167 0 C167 117.6399 92.2341 213 0 213 S-167 117.6399 -167 0 Z" stroke-width="10" fill="url(#og-moa-white)" stroke="#0d3149" stroke-linejoin="round"/>
+    <path data-part="creaseL" d="M167 0 Q40.08 20 -113.56 0" opacity="0" stroke="#0d3149" stroke-width="25" stroke-linecap="round"/>
+    <g clip-path="url(#og-moa-clipL)"><g data-part="pupilL" transform="translate(-25.1 8.55) scale(1)">
+      <ellipse rx="98" ry="114" fill="#083852"/><circle cx="40" cy="-64" r="21" fill="white"/>
+    </g></g></g></g><g data-part="eyeR" transform="translate(798 574) scale(1 1) rotate(0)"><g transform="scale(1)">
+    <path data-part="rimR" d="M-167 0 C-167 -117.6399 -92.2341 -213 0 -213 S167 -117.6399 167 0 C167 117.6399 92.2341 213 0 213 S-167 117.6399 -167 0 Z" stroke-width="10" fill="url(#og-moa-white)" stroke="#0d3149" stroke-linejoin="round"/>
+    <path data-part="creaseR" d="M-167 0 Q-40.08 20 113.56 0" opacity="0" stroke="#0d3149" stroke-width="25" stroke-linecap="round"/>
+    <g clip-path="url(#og-moa-clipR)"><g data-part="pupilR" transform="translate(-65.1 8.55) scale(1)">
+      <ellipse rx="98" ry="114" fill="#083852"/><circle cx="40" cy="-64" r="21" fill="white"/>
+    </g></g></g></g>
+  <g stroke="#416c83" stroke-width="34" stroke-linecap="round">
+    <line data-part="line1" x2="404" opacity="0" x1="404" y1="930" y2="930"/><line data-part="line2" x2="404" opacity="0" x1="404" y1="1009" y2="1009"/>
+  </g>
+</g></g></g></svg>
