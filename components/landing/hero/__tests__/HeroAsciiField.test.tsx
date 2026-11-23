@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { MotionValue } from 'motion/react';
-
-vi.mock('motion/react', () => ({
-  useMotionValueEvent: () => {},
-}));
 
 import { HeroAsciiField } from '../HeroAsciiField';
 import { LandingPartnerMarquee } from '../../LandingPartnerMarquee';
@@ -38,8 +33,6 @@ function stubMatchMedia(matches: boolean) {
   }) as unknown as typeof window.matchMedia;
 }
 
-const stillScrollValue = { get: () => 0 } as unknown as MotionValue<number>;
-
 describe('HeroAsciiField', () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -65,7 +58,7 @@ describe('HeroAsciiField', () => {
   it('starts the animation loop (rAF) on mount', () => {
     stubMatchMedia(false);
     const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
-    render(<HeroAsciiField scrollYProgress={stillScrollValue} />);
+    render(<HeroAsciiField />);
     expect(rafSpy).toHaveBeenCalled();
   });
 
@@ -73,7 +66,7 @@ describe('HeroAsciiField', () => {
     stubMatchMedia(true);
     const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
     const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
-    render(<HeroAsciiField scrollYProgress={stillScrollValue} />);
+    render(<HeroAsciiField />);
     expect(rafSpy).toHaveBeenCalled();
     expect(addEventListenerSpy).toHaveBeenCalledWith('pointermove', expect.any(Function), {
       passive: true,
@@ -100,7 +93,7 @@ describe('HeroAsciiField', () => {
     // Replay identical pointer energy so differences measure the palette, not trail decay.
     const drawTrail = () => {
       paints = new Map();
-      const field = render(<HeroAsciiField scrollYProgress={stillScrollValue} />);
+      const field = render(<HeroAsciiField />);
       fireEvent.pointerMove(window, { clientX: 260, clientY: 130 });
       act(() => frame(40));
       field.unmount();

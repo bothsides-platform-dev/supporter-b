@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useMotionValueEvent } from 'motion/react';
-import type { MotionValue } from 'motion/react';
 import { useHeroToneStore } from './hero-tone-store';
 import {
   FONT_PX,
@@ -24,20 +22,16 @@ import {
   type AsciiField,
 } from '@/lib/landing/ascii-field';
 
-// 다크 오프닝 씬 배경 — 캔버스 기반 ASCII 문자 필드 (커서 중심 미니멀).
+// 히어로 씬 배경 — 캔버스 기반 ASCII 문자 필드 (커서 중심 미니멀).
 // 필드는 거의 정적(셀 2%의 미세 twinkle만)이고, 커서 궤적을 따라 문자가 · : + * # 로
-// 깨어났다가 약 1초 동안 문자 잔상을 남기며 식는다. 잉크→inverse-primary 색 리프트 + 소프트 블룸.
+// 깨어났다가 약 1초 동안 문자 잔상을 남기며 식는다. 잉크(on-surface)→primary 색 리프트 + 소프트 블룸.
+// 씬은 페이지와 같은 surface 위에 놓이므로 테마를 따라간다: 다크 테마에서는 밝은 글자와
+// 가산(lighter) 블룸, 라이트 테마에서는 어두운 글자와 옅은 브랜드색 번짐(source-over)으로 그린다.
 // 블룸·앰비언트 글로우는 §9(블러 금지)의 사용자 승인 예외 — 랜딩 히어로 한정(§9 랜딩·마케팅
 // 예외 범주). 터치 기기는 손가락 드래그(pointermove, pointerType=touch) 로 같은 궤적을
 // 스탬프한다 — 동작 줄이기 선호일 때만 정적 베이스 필드로 폴백한다(루프·리스너 없음).
 // 순수 계산(에너지·램프·해시)은 lib/landing/ascii-field.ts 가 소유한다.
 
-interface HeroAsciiFieldProps {
-  /** 씬 스크롤 진행 — 라이트 리빌 완료(≥ 0.9) 후 rAF 를 완전히 멈추고 복귀 시 재개한다. */
-  scrollYProgress: MotionValue<number>;
-}
-
-const SCROLL_HIDE_AT = 0.9;
 const DPR_CAP = 2;
 // 배경 연출은 30fps로도 잔상 감쇠를 매끄럽게 표현할 수 있다.
 const FRAME_MS = 33;
@@ -49,7 +43,12 @@ const GLOW_SCALE = 0.25;
 const GLOW_SPRITE_PX = 64;
 const GLOW_MIN_ENERGY = 0.25;
 const GLOW_SIZE_PX = PITCH * 2.6;
-const GLOW_LAYER_ALPHA = 0.85;
+// 가산 합성은 어두운 바탕에서만 빛으로 보인다. 밝은 바탕에서는 같은 스프라이트를 일반 합성으로
+// 옅게 얹어 브랜드색 번짐으로 바꾼다(흰 바탕에 lighter 를 쓰면 아무것도 보이지 않는다).
+const GLOW_LAYER_ALPHA_ON_DARK = 0.85;
+const GLOW_LAYER_ALPHA_ON_LIGHT = 0.4;
+// 바탕(surface) 상대 휘도가 이보다 낮으면 어두운 바탕으로 본다.
+const DARK_SURFACE_LUMINANCE = 0.4;
 // 에너지 → 색 리프트를 24티어 rgba 문자열로 사전계산해 프레임당 문자열 생성을 없앤다.
 const COLOR_TIERS = 24;
 // Pointillist accent: keep most cells in the original palette; never re-roll per frame.
@@ -70,15 +69,16 @@ if (HUE_OFFSETS.length !== HUE_BUCKETS) {
 type Rgb = [number, number, number];
 
 // 토큰 해석 실패 시 폴백(라이트 테마 리터럴). 실제 값은 mount 시 계산 스타일에서 읽는다 —
-// 다크 테마에서 inverse-* 토큰이 뒤집히므로 하드코딩하면 안 된다.
-const INK_FALLBACK: Rgb = [247, 248, 248]; // --md-sys-color-inverse-on-surface
-const BLUE_FALLBACK: Rgb = [158, 202, 255]; // --md-sys-color-inverse-primary
+// 테마에 따라 토큰 값이 바뀌므로 하드코딩하면 안 된다.
+const INK_FALLBACK: Rgb = [31, 32, 35]; // --md-sys-color-on-surface
+const BLUE_FALLBACK: Rgb = [0, 97, 164]; // --md-sys-color-primary
+const SURFACE_FALLBACK: Rgb = [251, 251, 252]; // --md-sys-color-surface
 
-// 앰비언트 워시 — "플랫 검정 금지" 요구: inverse-primary 를 아주 옅게 섞은 라디얼 2장이
-// 다크 레이어에 은은한 광원 깊이를 준다. CSS 정적 배경이라 JS 비용 0.
+// 앰비언트 워시 — primary 를 아주 옅게 섞은 라디얼 2장이 평평한 바탕에 은은한 광원 깊이를 준다.
+// 농도는 테마별 CSS 변수(--hero-ambient-top/-bottom)로 받는다. CSS 정적 배경이라 JS 비용 0.
 const AMBIENT_BG = [
-  'radial-gradient(1200px 800px at 50% -10%, color-mix(in srgb, var(--md-sys-color-inverse-primary) 10%, transparent), transparent 70%)',
-  'radial-gradient(900px 600px at 85% 110%, color-mix(in srgb, var(--md-sys-color-inverse-primary) 6%, transparent), transparent 70%)',
+  'radial-gradient(1200px 800px at 50% -10%, color-mix(in srgb, var(--md-sys-color-primary) var(--hero-ambient-top), transparent), transparent 70%)',
+  'radial-gradient(900px 600px at 85% 110%, color-mix(in srgb, var(--md-sys-color-primary) var(--hero-ambient-bottom), transparent), transparent 70%)',
 ].join(', ');
 
 // getComputedStyle 은 브라우저에 따라 '#rrggbb' 또는 'rgb(r, g, b)' 를 돌려준다 — 둘 다 파싱.
@@ -111,23 +111,22 @@ function hueTarget(blueRgb: Rgb, offset: Rgb): Rgb {
   ];
 }
 
+// WCAG 상대 휘도(0~1) — 바탕이 어두운지 판정한다.
+function luminance([r, g, b]: Rgb): number {
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
 function smoothstep(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
 
-export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
+export function HeroAsciiField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const hiddenByScrollRef = useRef(false);
-  const resumeRef = useRef<(() => void) | null>(null);
-
-  // 진행값 구독은 motion 훅으로 — 테스트의 motion/react 목(no-op 스텁)과 호환된다.
-  useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    const hidden = v >= SCROLL_HIDE_AT;
-    if (hiddenByScrollRef.current === hidden) return;
-    hiddenByScrollRef.current = hidden;
-    if (!hidden) resumeRef.current?.();
-  });
 
   useEffect(() => {
     // 가드 ①: matchMedia 미정의(jsdom 등) — getContext 에 닿기 전에 탈출한다.
@@ -142,9 +141,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     // 예외 ③). 터치 기기는 제외하지 않는다 — pointermove 는 드래그 중 pointerType=touch 로도
     // 발생하므로 기존 onPointerMove/stampTrail 경로가 손가락 궤적에도 그대로 먹힌다.
 
-    // 앵커 딥링크(#pricing 등)로 트랙 아래에서 진입하면 첫 change 이벤트 전에도 루프가 돌지
-    // 않아야 한다 — HeroPinnedScene의 톤 스위치 mount-sync와 같은 패턴으로 초기값을 동기화.
-    hiddenByScrollRef.current = scrollYProgress.get() >= SCROLL_HIDE_AT;
+    // 필드가 화면 밖이면 rAF 를 멈춘다. 씬은 리빌 뒤에도 같은 바탕으로 남아 있으므로 스크롤
+    // 진행이 아니라 실제 노출 여부로 판단한다. IntersectionObserver 가 없으면(jsdom 등) 보이는
+    // 것으로 본다. 앵커 딥링크(#pricing 등)로 진입하면 첫 관찰 콜백이 곧바로 멈춘다.
+    let offscreen = false;
 
     const base = document.createElement('canvas');
     const baseCtx = base.getContext('2d');
@@ -174,6 +174,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     // 팔레트·폰트 (mount + 재개 시 해석)
     let ink = INK_FALLBACK;
     let blue = BLUE_FALLBACK;
+    let onDark = false;
     let partnerColor: Rgb | null = null;
     let fontString = `500 ${FONT_PX}px ui-monospace, monospace`;
     // Original hue buckets plus one optional partner bucket, each with an ink→accent ramp.
@@ -199,8 +200,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
 
     const resolvePalette = () => {
       const cs = getComputedStyle(canvas);
-      ink = parseColor(cs.getPropertyValue('--md-sys-color-inverse-on-surface'), INK_FALLBACK);
-      blue = parseColor(cs.getPropertyValue('--md-sys-color-inverse-primary'), BLUE_FALLBACK);
+      ink = parseColor(cs.getPropertyValue('--md-sys-color-on-surface'), INK_FALLBACK);
+      blue = parseColor(cs.getPropertyValue('--md-sys-color-primary'), BLUE_FALLBACK);
+      onDark = luminance(parseColor(cs.getPropertyValue('--md-sys-color-surface'), SURFACE_FALLBACK))
+        < DARK_SURFACE_LUMINANCE;
       const partnerAccent = useHeroToneStore.getState().partnerAccent;
       partnerColor = partnerAccent ? parseColor(partnerAccent, blue) : null;
       // next/font 가 --font-mono 에 해시 패밀리를 넣으므로 var 값을 그대로 폰트 스택으로 쓴다.
@@ -299,8 +302,8 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
 
     const frame = (now: number) => {
       if (disposed) return;
-      if (document.hidden || hiddenByScrollRef.current) {
-        // 재개는 visibilitychange / 스크롤 복귀 핸들러가 담당
+      if (document.hidden || offscreen) {
+        // 재개는 visibilitychange / 노출 복귀 핸들러가 담당
         running = false;
         return;
       }
@@ -370,8 +373,8 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       }
       if (anyGlow) {
         glowCtx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = GLOW_LAYER_ALPHA;
+        ctx.globalCompositeOperation = onDark ? 'lighter' : 'source-over';
+        ctx.globalAlpha = onDark ? GLOW_LAYER_ALPHA_ON_DARK : GLOW_LAYER_ALPHA_ON_LIGHT;
         // 위치를 GLOW_SCALE 로 찍었으므로 정확히 그 역배율로 되돌린다(ceil 오차 방지)
         ctx.drawImage(glow, 0, 0, glow.width / GLOW_SCALE, glow.height / GLOW_SCALE);
         ctx.globalAlpha = 1;
@@ -399,7 +402,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
 
     const kick = () => {
       if (disposed || running) return;
-      if (document.hidden || hiddenByScrollRef.current) return;
+      if (document.hidden || offscreen) return;
       running = true;
       lastFrame = 0;
       lastTick = performance.now();
@@ -409,7 +412,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
 
     const resume = () => {
       if (disposed || running) return;
-      if (document.hidden || hiddenByScrollRef.current) return;
+      if (document.hidden || offscreen) return;
       // 일시정지 사이 테마 토글(푸터)로 토큰이 바뀌었을 수 있어 재개 시 팔레트를 재해석한다.
       resolvePalette();
       renderBase();
@@ -502,14 +505,28 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       attributeFilter: ['class'],
     });
 
+    const io = typeof IntersectionObserver === 'function'
+      ? new IntersectionObserver(([entry]) => {
+        offscreen = !entry.isIntersecting;
+        if (offscreen) {
+          if (running) {
+            running = false;
+            cancelAnimationFrame(rafId);
+          }
+        } else {
+          resume();
+        }
+      })
+      : null;
+    io?.observe(canvas);
+
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     document.addEventListener('visibilitychange', onVisibility);
-    resumeRef.current = resume;
     kick();
 
     return () => {
       disposed = true;
-      resumeRef.current = null;
+      io?.disconnect();
       if (rafId) cancelAnimationFrame(rafId);
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
       ro?.disconnect();
@@ -520,10 +537,13 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       window.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [scrollYProgress]);
+  }, []);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0">
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 [--hero-ambient-bottom:4%] [--hero-ambient-top:6%] dark:[--hero-ambient-bottom:6%] dark:[--hero-ambient-top:10%]"
+    >
       <div className="absolute inset-0" style={{ background: AMBIENT_BG }} />
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
     </div>

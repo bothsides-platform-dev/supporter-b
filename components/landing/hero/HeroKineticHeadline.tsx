@@ -14,7 +14,7 @@ const TYPING_VALUES = [
 // 헤드라인용 서포트B 워드마크. 파티클까지 같은 단어로 묶어
 // "서포트B를/로"가 줄바꿈 없이 한 덩어리로 읽히게 한다.
 export function BrandWordB({ particle }: { particle: string }) {
-  return <SupportBWordmark particle={particle} colorVar="--md-sys-color-inverse-on-surface" />;
+  return <SupportBWordmark particle={particle} colorVar="--md-sys-color-on-surface" />;
 }
 
 const LINE1_WORDS: ReactNode[] = [<BrandWordB key="support-b" particle="를" />];
@@ -48,8 +48,8 @@ function HeadlineWord({ word }: { word: ReactNode }) {
 const ROLLING_LINE_WIDTH_CLS =
   'min-[1920px]:w-[calc(100vw_-_max(2rem,_(100vw_-_1080px)/2_+_2rem)_-_2rem)]';
 
-// 다크 오프닝 씬 위의 헤드라인 — 색은 inverse-* 토큰(라이트 테마에서 near-black 위 라이트 텍스트,
-// 다크 테마에서는 반전)으로 해석돼 파이널 CTA 인버티드 섹션과 같은 규칙을 따른다.
+// 히어로 헤드라인 — 씬이 페이지와 같은 surface 위에 있으므로 on-surface·primary 토큰을 쓴다
+// (테마를 그대로 따른다).
 // 구매사 카피를 기본값으로 두고 PG는 자기 문구를 주입한다. 롤링 위치는 DOM 읽기 순서와 일치한다.
 export function HeroKineticHeadline({
   line1Words = LINE1_WORDS,
@@ -64,11 +64,11 @@ export function HeroKineticHeadline({
 } = {}) {
   const rollingLine = (
     <span className={`block overflow-hidden pb-[0.08em] -mb-[0.08em] ${ROLLING_LINE_WIDTH_CLS}`}>
-      <WordMaskRoll phrases={phrases} className="text-[var(--md-sys-color-inverse-primary)]" />
+      <WordMaskRoll phrases={phrases} className="text-[var(--md-sys-color-primary)]" />
     </span>
   );
   return (
-    <div className={`${headlineCls} grid grid-cols-1 gap-y-[0.12em] text-[var(--md-sys-color-inverse-on-surface)]`}>
+    <div className={`${headlineCls} grid grid-cols-1 gap-y-[0.12em] text-[var(--md-sys-color-on-surface)]`}>
       {/* Sizing shares the rolling row through subgrid, outside the semantic heading.
           The same CSS geometry reserves all phrases before JS/fonts finish loading. */}
       <WordMaskRollSizer

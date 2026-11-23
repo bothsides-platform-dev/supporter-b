@@ -48,7 +48,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
     <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col [--landing-header-height:68px] [--landing-header-top:0px]">
 
-      {/* ── Nav — 히어로 다크 씬 위에서는 솔리드 다크+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      {/* ── Nav — 히어로와 본문이 같은 surface 라 헤더도 한 톤(surface+border) ── */}
       <LandingHeader>{nav}</LandingHeader>
 
       <main className="flex-1 pt-[var(--landing-header-height)]">

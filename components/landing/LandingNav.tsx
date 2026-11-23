@@ -55,7 +55,7 @@ const NAV_LINKS: { label: string; href: string }[] = [
 
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
 const linkCls = styles.link;
-const overDarkLinkCls = styles.barLink;
+const barLinkCls = styles.barLink;
 
 export function LandingNav({ authed }: { authed: boolean }) {
   const { navRef, activeSection } = useLandingActiveSection();
@@ -87,11 +87,11 @@ export function LandingNav({ authed }: { authed: boolean }) {
   // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
   // 섹션의 scroll-mt)가 처리한다.
   const authLink = authed ? (
-    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} ${styles.auth} ${styles.buyerAuth}`}>
+    <Link href="/home" className={`${linkCls} ${barLinkCls} ${styles.auth} ${styles.buyerAuth}`}>
       서포트비로 이동해요 →
     </Link>
   ) : (
-    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} ${styles.auth} ${styles.buyerAuth}`}>
+    <Link href="/login" className={`${linkCls} ${barLinkCls} ${styles.auth} ${styles.buyerAuth}`}>
       로그인
     </Link>
   );
@@ -105,7 +105,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
           <button
             ref={serviceTriggerRef}
             type="button"
-            className={`${styles.trigger} ${linkCls} ${overDarkLinkCls}`}
+            className={`${styles.trigger} ${linkCls} ${barLinkCls}`}
             aria-current={activeSection === 'service' ? 'location' : undefined}
             aria-expanded={serviceOpen}
             aria-haspopup="true"
@@ -178,7 +178,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         </div>
 
         {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`} aria-current={l.href === `#${activeSection}` ? 'location' : undefined}>
+          <a key={l.href} href={l.href} className={`${linkCls} ${barLinkCls}`} aria-current={l.href === `#${activeSection}` ? 'location' : undefined}>
             {l.label}
           </a>
         ))}
