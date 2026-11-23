@@ -14,6 +14,8 @@ import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { LandingPartnerMarquee } from '@/components/landing/LandingPartnerMarquee';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
+import { SectionLineField } from '@/components/landing/section-fx/SectionLineField';
+import { LandingScrollRail } from '@/components/landing/section-fx/LandingScrollRail';
 import { SOLUTION_SCENES } from './solution-scenes';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
 
@@ -45,7 +47,9 @@ const PROBLEM_ITEMS = [
 // 다크의 surface-container(-low)는 surface 와 거의 구분되지 않아 한 단계 밝은 토큰을 쓴다.
 const sectionCls =
   'py-[var(--s-11)] px-8 scroll-mt-[var(--landing-header-height)]';
-const bandCls = 'bg-[var(--landing-band)]';
+// 띠 섹션은 배경에 세로 라인 필드(커서·스크롤 반응)를 깔고, 내용은 그 위 relative 층에 둔다.
+const bandCls = 'relative bg-[var(--landing-band)]';
+const bandContentCls = 'relative';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
@@ -55,32 +59,37 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
       {/* ── Nav — 히어로와 본문이 같은 surface 라 헤더도 한 톤(surface+border) ── */}
       <LandingHeader>{nav}</LandingHeader>
 
-      <main className="flex-1 pt-[var(--landing-header-height)]">
+      {/* main 은 스크롤 레일(절대 레이어)의 기준이다. 레일은 data-rail-node 섹션을 재서 노드를 놓는다. */}
+      <main className="relative flex-1 pt-[var(--landing-header-height)]">
 
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
         {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
-        <section className={`${sectionCls} ${bandCls}`}>
-          <ScrollDrivenProblem
-            heading={
-              <SectionHeading>
-                PG 계약,<br />이런 고민 있었나요?
-              </SectionHeading>
-            }
-            items={PROBLEM_ITEMS}
-            presentation="focus"
-          />
+        <section data-rail-node className={`${sectionCls} ${bandCls}`}>
+          <SectionLineField salt={1} />
+          <div className={bandContentCls}>
+            <ScrollDrivenProblem
+              heading={
+                <SectionHeading>
+                  PG 계약,<br />이런 고민 있었나요?
+                </SectionHeading>
+              }
+              items={PROBLEM_ITEMS}
+              presentation="focus"
+            />
+          </div>
         </section>
 
         {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
-        <section id="service" aria-label="서비스 주요 기능" className="px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
+        <section id="service" data-rail-node aria-label="서비스 주요 기능" className="px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
           <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
         </section>
 
         {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}
-        <section id="process" className={`${sectionCls} ${bandCls}`}>
-          <div className={containerCls}>
+        <section id="process" data-rail-node className={`${sectionCls} ${bandCls}`}>
+          <SectionLineField salt={2} />
+          <div className={`${containerCls} ${bandContentCls}`}>
             <div className="flex flex-col gap-[var(--s-4)]">
               <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
               <p className="text-base leading-[1.6] text-[var(--md-sys-color-on-surface-variant)]">
@@ -92,7 +101,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Metrics: surface 위 카드 3장 ── */}
-        <section className={sectionCls}>
+        <section data-rail-node className={sectionCls}>
           <div className={containerCls}>
             <SectionHeading>
               서포트비를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
@@ -121,8 +130,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* 제휴 PG사는 히어로 하단에 표시한다. 고객 레퍼런스는 자료 확보 전까지 미노출. */}
 
         {/* ── Pricing ── */}
-        <section id="pricing" className={`${sectionCls} ${bandCls}`}>
-          <div className={`${containerCls} gap-[var(--s-6)]`}>
+        <section id="pricing" data-rail-node className={`${sectionCls} ${bandCls}`}>
+          <SectionLineField salt={3} />
+          <div className={`${containerCls} ${bandContentCls} gap-[var(--s-6)]`}>
             <SectionHeading>이용 요금</SectionHeading>
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-4)]">
@@ -138,7 +148,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Calculator ── */}
-        <section id="calculator" className={sectionCls}>
+        <section id="calculator" data-rail-node className={sectionCls}>
           <div className={containerCls}>
             <SectionHeading>PG 수수료, 얼마나 아낄 수 있을까요?</SectionHeading>
             <SavingsCalculator />
@@ -148,8 +158,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── FAQ ── */}
         {/* 다른 섹션과 동일한 1080 컬럼에 좌측 정렬해 세로 레이아웃을 맞춘다.
             (heading 은 좌측 끝, FAQ 목록은 가독성 위해 760으로 제한하되 좌측 정렬) */}
-        <section id="faq" className={`${sectionCls} ${bandCls}`}>
-          <div className={containerCls}>
+        <section id="faq" data-rail-node className={`${sectionCls} ${bandCls}`}>
+          <SectionLineField salt={4} />
+          <div className={`${containerCls} ${bandContentCls}`}>
             <SectionHeading>자주 묻는 질문</SectionHeading>
             <div className="w-full max-w-[760px]">
               <FaqList />
@@ -158,7 +169,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Chat consultation ── */}
-        <section id="consultation" aria-labelledby="consultation-heading" className={sectionCls}>
+        <section id="consultation" data-rail-node aria-labelledby="consultation-heading" className={sectionCls}>
           <div className={containerCls}>
             <FadeInView>
               <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
@@ -178,7 +189,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             브랜드 띠는 primary-container 다. primary 나 on-surface 반전 띠는 다크 테마에서 밝은 띠로
             뒤집혀 페이지 끝에서 다시 밝기 전환을 만든다. primary-container 는 라이트에서 옅은 파랑,
             다크에서 짙은 파랑이라 두 테마 모두 같은 톤 안에서 띠로 읽힌다. */}
-        <section id="contact" className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-primary-container)] scroll-mt-[var(--landing-header-height)]">
+        <section id="contact" data-rail-node className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-primary-container)] scroll-mt-[var(--landing-header-height)]">
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
@@ -204,6 +215,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
+        <LandingScrollRail />
       </main>
 
       <Footer />
