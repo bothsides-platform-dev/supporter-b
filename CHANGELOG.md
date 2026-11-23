@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.1.3] - 2026-11-23
+
+### Changed
+
+- 링크를 공유할 때 보이는 미리보기 이미지(og:image) 오른쪽에 서포트비 문서의 캐릭터 모아를 넣었다. 이미지 속 소개 문구와 대체 텍스트도 사이트 제목과 같은 '맞춤 PG 견적 플랫폼'으로 바꿨다.
+
 ## [0.49.1.2] - 2026-11-23
 
 ### Fixed
