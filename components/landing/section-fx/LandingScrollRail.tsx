@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
 // 섹션을 감싸지 않고 main 안의 절대 레이어로만 그린다 — 섹션 id·앵커·현재 위치 감지에 손대지 않는다.
 // 노드는 섹션 위 여백(--s-11, 120px) 바로 아래, 제목 높이에 맞춘다. 고정(sticky) 제목은 스크롤에
 // 따라 위치가 바뀌므로 제목을 재지 않고 섹션 위끝 기준으로 놓는다.
-// 콘텐츠 열(1080px) 왼쪽 여백에 들어갈 자리가 있는 1280px 이상에서만 보인다.
+// 콘텐츠 열(1080px) 왼쪽 여백에 들어갈 자리가 있는 1280px 이상에서만 보인다(1280px 에서 x=36).
 
 const NODE_OFFSET_PX = 132;
 /** 채움 기준선 — 화면 높이의 이 비율 지점까지 읽었다고 본다. */
@@ -69,7 +69,10 @@ export function LandingScrollRail() {
       raf = 0;
       if (disposed || length === 0) return;
       const hostTop = host.getBoundingClientRect().top;
-      const readY = window.innerHeight * READ_LINE - hostTop;
+      // 마지막 섹션이 짧으면 기준선이 끝에 닿지 못한다 — 페이지 끝에서는 끝까지 읽은 것으로 본다.
+      const doc = document.documentElement;
+      const atEnd = window.scrollY + doc.clientHeight >= doc.scrollHeight - 1;
+      const readY = atEnd ? Infinity : window.innerHeight * READ_LINE - hostTop;
       const filled = Math.min(length, Math.max(0, readY - start));
       fill.style.transform = `scaleY(${length ? filled / length : 0})`;
       tip.style.transform = `translateY(${start + filled}px)`;
@@ -120,7 +123,8 @@ export function LandingScrollRail() {
       data-landing-scroll-rail
       className={[
         'pointer-events-none absolute inset-y-0 z-[2] hidden w-px min-[1280px]:block',
-        'left-[calc(max(32px,(100%_-_1080px)/2)_-_48px)]',
+        // 실제 화면 데모 창은 콘텐츠 열보다 54px 왼쪽으로 나온다 — 그보다 10px 더 바깥에 둔다.
+        'left-[calc(max(32px,(100%_-_1080px)/2)_-_64px)]',
         // 휴지 선 농도 — 다크 띠(surface-container-high) 위에서도 보이도록 다크는 한 단계 진하게.
         '[--rail-line:color-mix(in_srgb,var(--md-sys-color-on-surface)_16%,transparent)]',
         'dark:[--rail-line:color-mix(in_srgb,var(--md-sys-color-on-surface)_26%,transparent)]',

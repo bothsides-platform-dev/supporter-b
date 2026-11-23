@@ -79,9 +79,43 @@ test.describe('landing section line field and scroll rail', () => {
     const mid = await active();
     await scrollInto(page, '#faq', 200);
     await expect.poll(active).toBeGreaterThan(mid);
+    // A short last section never reaches the read line; the page end still completes the rail.
+    await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+    await expect.poll(active).toBe(await dots.count());
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     await expect.poll(active).toBe(0);
   });
+
+  for (const width of [1280, 1440]) {
+    test(`rail stays left of every section's visible content at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      const railX = await page.locator('[data-landing-scroll-rail]').evaluate((el) => el.getBoundingClientRect().right);
+      const sections = await page.locator('main [data-rail-node]').count();
+      for (let i = 0; i < sections; i++) {
+        const section = page.locator('main [data-rail-node]').nth(i);
+        await section.evaluate((el) => window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top, behavior: 'instant' }));
+        await page.waitForTimeout(300);
+        const minLeft = await section.evaluate((el) => {
+          let min = Infinity;
+          for (const node of el.querySelectorAll('*')) {
+            if (node.closest('[data-section-line-field]')) continue;
+            const r = node.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0 || r.bottom < 0 || r.top > innerHeight) continue;
+            const cs = getComputedStyle(node);
+            // Layout-only wrappers paint nothing; only boxes that draw something count.
+            const paints = (node.childNodes.length > 0 && [...node.childNodes].some((c) => c.nodeType === 3 && c.textContent!.trim()))
+              || cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.borderLeftWidth !== '0px'
+              || ['IMG', 'SVG', 'svg', 'CANVAS', 'INPUT', 'BUTTON'].includes(node.tagName);
+            if (!paints || cs.visibility === 'hidden' || cs.opacity === '0') continue;
+            min = Math.min(min, r.left);
+          }
+          return min;
+        });
+        expect(minLeft, `section ${i}`).toBeGreaterThan(railX);
+      }
+    });
+  }
 
   test('rail is hidden on narrow screens while fields still render', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
