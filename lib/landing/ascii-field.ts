@@ -1,4 +1,4 @@
-// 히어로 다크 씬 ASCII 필드의 순수 코어 — DOM 없이 셀 격자·에너지·문자 램프만 다룬다.
+// 히어로 씬 ASCII 필드의 순수 코어 — DOM 없이 셀 격자·에너지·문자 램프만 다룬다.
 // 캔버스 렌더링은 components/landing/hero/HeroAsciiField.tsx 가 소유한다.
 //
 // 결정성: 모든 무작위성은 (col, row, salt) 정수 해시에서 나온다(Math.random 금지).

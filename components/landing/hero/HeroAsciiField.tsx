@@ -141,7 +141,7 @@ export function HeroAsciiField() {
     // 예외 ③). 터치 기기는 제외하지 않는다 — pointermove 는 드래그 중 pointerType=touch 로도
     // 발생하므로 기존 onPointerMove/stampTrail 경로가 손가락 궤적에도 그대로 먹힌다.
 
-    // 필드가 화면 밖이면 rAF 를 멈춘다. 씬은 리빌 뒤에도 같은 바탕으로 남아 있으므로 스크롤
+    // 필드가 화면 밖이면 rAF 를 멈춘다. 씬은 제품 창이 정착한 뒤에도 같은 바탕으로 남아 있으므로 스크롤
     // 진행이 아니라 실제 노출 여부로 판단한다. IntersectionObserver 가 없으면(jsdom 등) 보이는
     // 것으로 본다. 앵커 딥링크(#pricing 등)로 진입하면 첫 관찰 콜백이 곧바로 멈춘다.
     let offscreen = false;
