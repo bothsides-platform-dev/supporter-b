@@ -223,14 +223,15 @@ test.describe('buyer landing partner strip', () => {
           await expect.poll(async () => Math.abs((await product.boundingBox())!.y - expectedTop)).toBeLessThan(1);
           const box = (await product.boundingBox())!;
           const strip = (await partners.boundingBox())!;
-          const expectedColor = await partners.evaluate((el, overDark) => {
+          // 로고 전경색은 진행도와 관계없이 on-surface 하나다(2026-11-23 A안, 톤 전환 없음).
+          const expectedColor = await partners.evaluate((el) => {
             const probe = document.createElement('span');
-            probe.style.color = `var(--md-sys-color-${overDark ? 'inverse-on-surface' : 'on-surface'})`;
+            probe.style.color = 'var(--md-sys-color-on-surface)';
             el.append(probe);
             const color = getComputedStyle(probe).color;
             probe.remove();
             return color;
-          }, progress < 0.7);
+          });
           await expect(partners).toHaveCSS('color', expectedColor);
           expect(box.y - strip.y - strip.height).toBeCloseTo(gap, 0);
           // The window tilts and scales up while rising, then settles at full width.

@@ -1,7 +1,7 @@
 import { OfferComparisonTable } from '@/components/landing/OfferComparisonTable';
 import { Chip } from '@/components/primitives/Chip';
 
-// 히어로 '제품 창' — 다크 오프닝 씬에서 스크롤과 함께 떠오르는 라이트 앱 창 목업.
+// 히어로 '제품 창' — 스크롤과 함께 화면 아래에서 떠오르는 앱 창 목업.
 // 실데모(DemoAppShell) 임베드 금지: 데모 fixtures가 모듈 스코프 Date.now()를 쓰는
 // hydration mismatch 지뢰(기지 버그)가 있다. 이 창의 내용물은 전부 결정적 리터럴이어야 한다.
 // 예외: 비교표의 PG사 배정은 클라이언트에서만 섞인다 — 서버 HTML 은 useSyncExternalStore 의

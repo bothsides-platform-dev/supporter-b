@@ -2,7 +2,7 @@
 import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { motion, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
+import { motion, useScroll, useTransform } from 'motion/react';
 import { ConsultButton } from '@/components/landing/ConsultButton';
 import { ChevronDownIcon } from '@/components/icons';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
@@ -10,13 +10,13 @@ import { EASE_OUT } from '@/lib/landing/ease';
 import { HeroAsciiField } from './HeroAsciiField';
 import { HeroKineticHeadline } from './HeroKineticHeadline';
 import { HeroProductWindow } from './HeroProductWindow';
-import { useHeroToneStore } from './hero-tone-store';
 import { useMagneticHover } from './useMagneticHover';
 import styles from './HeroPinnedScene.module.css';
 
-// 히어로 핀 트랙 길이. 240vh = 다크 오프닝 → 제품 창 부상 → 라이트 리빌까지 약 1.4 뷰포트 분량의
-// 스크롤 스토리. ScrollPinnedSection과 같은 sticky 방식(스크롤 하이재킹 없음)이지만, 풀블리드
-// 다크 씬(top-0·섹션 컨테이너 없음)이 필요해 트랙을 히어로 전용으로 둔다.
+// 히어로 핀 트랙 길이. 240vh = 첫 화면 → 제품 창 부상 → 정착까지 약 1.4 뷰포트 분량의
+// 스크롤 스토리. ScrollPinnedSection과 같은 sticky 방식(스크롤 하이재킹 없음)이지만, 헤더 아래까지
+// 깔리는 풀블리드 씬(top-0·섹션 컨테이너 없음)이 필요해 트랙을 히어로 전용으로 둔다.
+// 씬 바탕은 페이지와 같은 surface 다 — 스크롤 중 라이트·다크 전환은 없다(2026-11-23 사용자 결정).
 const TRACK_VH = 240;
 const PRODUCT_WINDOW_SETTLE_PROGRESS = 0.68;
 
@@ -26,16 +26,16 @@ const PRODUCT_WINDOW_SETTLE_PROGRESS = 0.68;
 //  0.06–0.68  제품 창 부상(y·rotateX·scale)
 //  0.00–0.68  구매사 로고·제품 창 공통 수직 이동
 //  0.06–0.68  구매사 제품 창 기울기·스케일 정착(rotateX·scale — y는 공통 이동이 소유)
-//  0.55–0.85  다크 레이어 페이드 → 라이트 리빌
+//  0.66–0.86  PG 제품 창 위 리드 카피 등장
 
-// 히어로 콘텐츠 슬롯 — 구매사 기본값을 두고 PG 히어로가 같은 씬(다크 오프닝·제품 창 부상·라이트
-// 리빌·톤 스위치)을 자기 카피/목업으로 재사용한다. 값 미지정 시 기존 구매사 히어로와 동일하다.
+// 히어로 콘텐츠 슬롯 — 구매사 기본값을 두고 PG 히어로가 같은 씬(ASCII 배경·제품 창 부상)을
+// 자기 카피/목업으로 재사용한다. 값 미지정 시 기존 구매사 히어로와 동일하다.
 export type HeroContent = {
   headline?: ReactNode;
   subCopy?: ReactNode;
   cta?: ReactNode;
   productWindow?: ReactNode;
-  /** 제품 창 바로 위 리드 카피(선택). 라이트 리빌 때 창과 함께 페이드+라이즈로 자리잡는다.
+  /** 제품 창 바로 위 리드 카피(선택). 창이 정착할 때 함께 페이드+라이즈로 자리잡는다.
    *  PG 히어로만 주입 — 구매사 히어로는 미지정(렌더 안 함). */
   productLead?: ReactNode;
   /** 구매사 히어로 하단의 제휴 PG사 로고 띠. 미지정 시 기존 Scroll 큐. */
@@ -144,27 +144,17 @@ export function HeroPinnedScene({
     `calc((var(--hero-header-bottom) + var(--hero-partners-gap) + var(--hero-peek) - 100dvh) * ${Math.min(Math.max(value / PRODUCT_WINDOW_SETTLE_PROGRESS, 0), 1)})`,
   );
 
-  // 제품 창 위 리드 카피 — 창이 정착(0.68)한 직후 라이트 리빌 구간에 페이드+라이즈로 등장해
-  // 창과 함께 자리잡는다(다크 씬에서는 opacity 0 이라 헤드라인과 겹치지 않는다).
+  // 제품 창 위 리드 카피 — 창이 정착(0.68)한 직후 페이드+라이즈로 등장해 창과 함께 자리잡는다
+  // (헤드라인이 남아 있는 동안에는 opacity 0 이라 겹치지 않는다).
   const leadOpacity = useTransform(scrollYProgress, [0.66, 0.86, 1], [0, 1, 1]);
   const leadY = useTransform(scrollYProgress, [0.66, 0.86, 1], [24, 0, 0]);
 
-  const darkOpacity = useTransform(scrollYProgress, [0.55, 0.85, 1], [1, 0, 0]);
   const cueOpacity = useTransform(scrollYProgress, [0, 0.06, 1], [1, 0, 0]);
 
   const [magnetRef, magnetX, magnetY] = useMagneticHover<HTMLSpanElement>(6);
 
-  // 헤더 톤 스위치 — 다크 레이어 페이드(0.55–0.85) 중간점을 지나면 헤더가 라이트 톤으로 복귀.
-  // 마운트 직후 동기화가 있어 앵커 딥링크(#pricing 등)로 진입해도 헤더가 올바른 톤에서 시작한다.
-  const TONE_SWITCH = 0.7;
-  const setOverDark = useHeroToneStore((s) => s.setOverDark);
-  useMotionValueEvent(scrollYProgress, 'change', (v) => setOverDark(v < TONE_SWITCH));
-  useEffect(() => {
-    setOverDark(scrollYProgress.get() < TONE_SWITCH);
-  }, [scrollYProgress, setOverDark]);
-
   return (
-    // main의 pt-[--landing-header-height]를 상쇄해 다크 씬이 투명 헤더 아래까지 풀블리드로 깔린다.
+    // main의 pt-[--landing-header-height]를 상쇄해 씬이 헤더 아래까지 풀블리드로 깔린다.
     <section
       ref={trackRef}
       aria-label="서비스 소개"
@@ -175,16 +165,13 @@ export function HeroPinnedScene({
           않고, 모든 모션은 씬 내부 자식에만 건다. 높이는 dvh: svh 고정이면 모바일 주소창이
           접힐 때 (lvh−svh)만큼 씬 아래로 라이트 배경 띠가 노출된다. */}
       <div ref={sceneRef} style={{ top: -overflow }} className={`sticky top-0 h-dvh overflow-hidden bg-[var(--md-sys-color-surface)] ${partners ? styles.withPartners : ''}`}>
-        {/* 다크 오프닝 레이어 — 후반부 opacity 페이드로 라이트 리빌(배경색 보간 대신 레이어
-            페이드: 토큰 네이티브 + GPU-cheap). 배경은 ASCII 문자 필드: 커서 궤적을 따라
-            문자가 깨어나고, 은은한 블룸은 §9(블러 금지)의 사용자 승인 예외(랜딩 히어로 한정). */}
-        <motion.div
-          aria-hidden
-          style={{ opacity: darkOpacity }}
-          className="absolute inset-0 z-0 bg-[var(--md-sys-color-inverse-surface)]"
-        >
-          <HeroAsciiField scrollYProgress={scrollYProgress} />
-        </motion.div>
+        {/* 배경 레이어 — 씬과 같은 surface 위의 ASCII 문자 필드. 커서 궤적을 따라 문자가 깨어나고,
+            은은한 블룸은 §9(블러 금지)의 사용자 승인 예외(랜딩 히어로 한정). 아래쪽은 마스크로
+            서서히 지워, 씬이 위로 빠질 때 커서 궤적·앰비언트 워시가 다음 섹션 앞에서 직선으로
+            끊기지 않게 한다. */}
+        <div aria-hidden className="absolute inset-0 z-0 [mask-image:linear-gradient(to_bottom,#000_55%,transparent)]">
+          <HeroAsciiField />
+        </div>
 
         {/* 텍스트 블록 — 스크롤 transform(외부)과 진입 모션(내부)을 분리해 충돌을 피한다 */}
         <div className={`relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--landing-header-height)+9svh)] ${partners ? styles.content : ''}`}>
@@ -197,7 +184,7 @@ export function HeroPinnedScene({
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.34, ease: EASE_OUT }}
-              className={`max-w-[920px] text-pretty ${LANDING_TYPE.lead} text-[var(--md-sys-color-inverse-on-surface)]/72`}
+              className={`max-w-[920px] text-pretty ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`}
             >
               {subCopy}
             </motion.p>
@@ -244,7 +231,7 @@ export function HeroPinnedScene({
         ) : <motion.div
           aria-hidden
           style={{ opacity: cueOpacity }}
-          className="pointer-events-none absolute inset-x-0 bottom-[9svh] z-30 flex flex-col items-center gap-1 text-[var(--md-sys-color-inverse-on-surface)]/60"
+          className="pointer-events-none absolute inset-x-0 bottom-[9svh] z-30 flex flex-col items-center gap-1 text-[var(--md-sys-color-on-surface-variant)]"
         >
           <span className="font-mono text-xs tracking-[0.18em] uppercase">Scroll</span>
           <motion.span
@@ -255,8 +242,8 @@ export function HeroPinnedScene({
           </motion.span>
         </motion.div>}
 
-        {/* 제품 창 — 어둠 속에서 떠올라 자리잡는 라이트 앱 창. 창 위 리드 카피(선택)는 같은
-            레이어에 세로로 쌓아 창 바로 위에 두되, 자체 페이드+라이즈로 라이트 리빌 때 등장한다. */}
+        {/* 제품 창 — 화면 아래에서 떠올라 자리잡는 앱 창. 창 위 리드 카피(선택)는 같은
+            레이어에 세로로 쌓아 창 바로 위에 두되, 창이 정착할 때 자체 페이드+라이즈로 등장한다. */}
         {!partners && <div className="pointer-events-none absolute inset-x-4 bottom-[-4svh] z-10 flex flex-col items-center md:inset-x-8">
           {productLead && (
             <motion.div

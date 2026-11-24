@@ -9,14 +9,6 @@
   color: var(--header-fg);
   background: var(--header-bg);
   border-bottom: 1px solid var(--md-sys-color-outline-variant);
-  transition: background-color 200ms, color 200ms;
-}
-
-.header[data-over-dark] {
-  --header-bg: var(--md-sys-color-inverse-surface);
-  --header-fg: var(--md-sys-color-inverse-on-surface);
-  --header-muted: color-mix(in srgb, var(--header-fg) 75%, var(--header-bg));
-  border-color: color-mix(in srgb, var(--header-fg) 10%, transparent);
 }
 
 .inner {
@@ -88,7 +80,7 @@
 }
 .header .cta:hover { opacity: 0.85; }
 .header :is(a, button):focus-visible {
-  outline: 2px solid var(--md-sys-color-inverse-primary);
+  outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 4px;
 }
 .service { position: static; }
