@@ -297,7 +297,9 @@ export function SectionDotLamp({ salt = 0 }: { salt?: number }) {
         '[--lamp-peak:0.75] dark:[--lamp-peak:0.95]',
       ].join(' ')}
     >
-      <canvas ref={canvasRef} className="sticky top-0 block h-[100lvh] w-full" />
+      {/* 화면 높이 캔버스가 짧은 섹션(도입문의 등) 아래로 삐져나오면 clip-path 는 그림만 자르고
+          문서 높이는 늘린다 — 마지막 섹션이면 페이지 끝에 빈 스크롤이 생긴다. 섹션 높이를 넘지 않게 막는다. */}
+      <canvas ref={canvasRef} className="sticky top-0 block h-[100lvh] max-h-full w-full" />
     </div>
   );
 }
