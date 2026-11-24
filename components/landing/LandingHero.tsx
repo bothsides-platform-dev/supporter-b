@@ -15,7 +15,6 @@ import { LandingPartnerMarquee } from '@/components/landing/LandingPartnerMarque
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
 import { SectionDotLamp } from '@/components/landing/section-fx/SectionDotLamp';
-import { LandingScrollRail } from '@/components/landing/section-fx/LandingScrollRail';
 import { SOLUTION_SCENES } from './solution-scenes';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
 
@@ -45,11 +44,12 @@ const PROBLEM_ITEMS = [
 // 섹션은 1px 구분선 대신 surface 와 띠(--landing-band)를 번갈아 써서 나눈다(2026-11-24 A안 §5).
 // 새 색은 만들지 않고 기존 토큰만 쓴다 — 띠는 라이트 surface-container, 다크 surface-container-high.
 // 다크의 surface-container(-low)는 surface 와 거의 구분되지 않아 한 단계 밝은 토큰을 쓴다.
+// 히어로 아래 모든 섹션은 배경에 점 격자 손전등(마우스 호버에만 잠깐 보임)을 깐다.
+// 손전등은 섹션 기준 absolute 층이라 섹션은 relative 이고, 내용은 그 위 relative 층(aboveLampCls)에 둔다.
 const sectionCls =
-  'py-[var(--s-11)] px-8 scroll-mt-[var(--landing-header-height)]';
-// 띠 섹션과 서비스 소개는 배경에 점 격자 손전등(마우스 호버에만 잠깐 보임)을 깔고, 내용은 그 위 relative 층에 둔다.
-const bandCls = 'relative bg-[var(--landing-band)]';
-const bandContentCls = 'relative';
+  'relative py-[var(--s-11)] px-8 scroll-mt-[var(--landing-header-height)]';
+const bandCls = 'bg-[var(--landing-band)]';
+const aboveLampCls = 'relative';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
@@ -59,16 +59,15 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
       {/* ── Nav — 히어로와 본문이 같은 surface 라 헤더도 한 톤(surface+border) ── */}
       <LandingHeader>{nav}</LandingHeader>
 
-      {/* main 은 스크롤 레일(절대 레이어)의 기준이다. 레일은 data-rail-node 섹션을 재서 노드를 놓는다. */}
-      <main className="relative flex-1 pt-[var(--landing-header-height)]">
+      <main className="flex-1 pt-[var(--landing-header-height)]">
 
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
         {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
-        <section data-rail-node className={`${sectionCls} ${bandCls}`}>
+        <section className={`${sectionCls} ${bandCls}`}>
           <SectionDotLamp salt={1} />
-          <div className={bandContentCls}>
+          <div className={aboveLampCls}>
             <ScrollDrivenProblem
               heading={
                 <SectionHeading>
@@ -82,18 +81,18 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
-        <section id="service" data-rail-node aria-label="서비스 주요 기능" className="relative px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
+        <section id="service" aria-label="서비스 주요 기능" className="relative px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
           {/* 고정(pin) 구간이라 섹션이 화면 여러 장 높이다 — 배경 캔버스는 sticky 라 화면 높이만 쓴다. */}
           <SectionDotLamp salt={5} />
-          <div className={bandContentCls}>
+          <div className={aboveLampCls}>
             <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
           </div>
         </section>
 
         {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}
-        <section id="process" data-rail-node className={`${sectionCls} ${bandCls}`}>
+        <section id="process" className={`${sectionCls} ${bandCls}`}>
           <SectionDotLamp salt={2} />
-          <div className={`${containerCls} ${bandContentCls}`}>
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <div className="flex flex-col gap-[var(--s-4)]">
               <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
               <p className="text-base leading-[1.6] text-[var(--md-sys-color-on-surface-variant)]">
@@ -105,8 +104,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Metrics: surface 위 카드 3장 ── */}
-        <section data-rail-node className={sectionCls}>
-          <div className={containerCls}>
+        <section className={sectionCls}>
+          <SectionDotLamp salt={6} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>
               서포트비를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
             </SectionHeading>
@@ -134,9 +134,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* 제휴 PG사는 히어로 하단에 표시한다. 고객 레퍼런스는 자료 확보 전까지 미노출. */}
 
         {/* ── Pricing ── */}
-        <section id="pricing" data-rail-node className={`${sectionCls} ${bandCls}`}>
+        <section id="pricing" className={`${sectionCls} ${bandCls}`}>
           <SectionDotLamp salt={3} />
-          <div className={`${containerCls} ${bandContentCls} gap-[var(--s-6)]`}>
+          <div className={`${containerCls} ${aboveLampCls} gap-[var(--s-6)]`}>
             <SectionHeading>이용 요금</SectionHeading>
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-4)]">
@@ -152,8 +152,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Calculator ── */}
-        <section id="calculator" data-rail-node className={sectionCls}>
-          <div className={containerCls}>
+        <section id="calculator" className={sectionCls}>
+          <SectionDotLamp salt={7} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>PG 수수료, 얼마나 아낄 수 있을까요?</SectionHeading>
             <SavingsCalculator />
           </div>
@@ -162,9 +163,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── FAQ ── */}
         {/* 다른 섹션과 동일한 1080 컬럼에 좌측 정렬해 세로 레이아웃을 맞춘다.
             (heading 은 좌측 끝, FAQ 목록은 가독성 위해 760으로 제한하되 좌측 정렬) */}
-        <section id="faq" data-rail-node className={`${sectionCls} ${bandCls}`}>
+        <section id="faq" className={`${sectionCls} ${bandCls}`}>
           <SectionDotLamp salt={4} />
-          <div className={`${containerCls} ${bandContentCls}`}>
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>자주 묻는 질문</SectionHeading>
             <div className="w-full max-w-[760px]">
               <FaqList />
@@ -173,8 +174,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Chat consultation ── */}
-        <section id="consultation" data-rail-node aria-labelledby="consultation-heading" className={sectionCls}>
-          <div className={containerCls}>
+        <section id="consultation" aria-labelledby="consultation-heading" className={sectionCls}>
+          <SectionDotLamp salt={8} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <FadeInView>
               <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
                 <h2 id="consultation-heading" className="text-[clamp(28px,3.5vw,44px)] font-medium leading-[1.3] tracking-[-0.025em] text-[var(--md-sys-color-on-surface)] break-keep">
@@ -193,8 +195,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             브랜드 띠는 primary-container 다. primary 나 on-surface 반전 띠는 다크 테마에서 밝은 띠로
             뒤집혀 페이지 끝에서 다시 밝기 전환을 만든다. primary-container 는 라이트에서 옅은 파랑,
             다크에서 짙은 파랑이라 두 테마 모두 같은 톤 안에서 띠로 읽힌다. */}
-        <section id="contact" data-rail-node className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-primary-container)] scroll-mt-[var(--landing-header-height)]">
-          <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
+        <section id="contact" className="relative py-[var(--s-11)] px-8 bg-[var(--md-sys-color-primary-container)] scroll-mt-[var(--landing-header-height)]">
+          <SectionDotLamp salt={9} />
+          <div className="relative mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
                 {/* primary-container 위의 글자는 짝 토큰 on-primary-container 만 쓴다.
@@ -219,7 +222,6 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        <LandingScrollRail />
       </main>
 
       <Footer />

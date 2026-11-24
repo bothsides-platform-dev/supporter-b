@@ -121,7 +121,7 @@ export function SectionDotLamp({ salt = 0 }: { salt?: number }) {
       return true;
     };
 
-    // 화면 밖이면 캔버스 메모리를 돌려준다(섹션 다섯 곳 × 화면 크기 × DPR² 를 계속 들고 있지 않게).
+    // 화면 밖이면 캔버스 메모리를 돌려준다(섹션마다 화면 크기 × DPR² 를 계속 들고 있지 않게).
     const release = () => {
       canvas.width = 1;
       canvas.height = 1;
