@@ -12,6 +12,7 @@ import { PgDemoAppShell } from '@/components/landing/demo-app/PgDemoAppShell';
 import { FaqList } from '@/components/landing/FaqList';
 import { ConsultButton } from '@/components/landing/ConsultButton';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
+import { SectionDotLamp } from '@/components/landing/section-fx/SectionDotLamp';
 
 import {
   PROBLEM_ITEMS,
@@ -24,8 +25,11 @@ import {
 } from '@/components/landing/pg-landing-data';
 import { serializeJsonLd } from '@/lib/seo/jsonld';
 
+// 히어로 아래 모든 섹션은 구매사 랜딩과 같은 점 격자 손전등(마우스 호버에만 잠깐 보임)을 깐다.
+// 손전등은 섹션 기준 absolute 층이라 섹션은 relative 이고, 내용은 그 위 relative 층(aboveLampCls)에 둔다.
 const sectionCls =
-  'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]';
+  'relative py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]';
+const aboveLampCls = 'relative';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 const subCls = `max-w-[760px] ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`;
 
@@ -41,7 +45,7 @@ export function PgLanding() {
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqPageJsonLd) }}
       />
 
-      {/* ── Nav — 히어로 다크 씬 위에서는 솔리드 다크+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      {/* ── Nav — 히어로와 본문이 같은 surface 라 헤더도 한 톤(surface+border) ── */}
       <LandingHeader>
         <PgLandingHeaderNav />
       </LandingHeader>
@@ -52,55 +56,62 @@ export function PgLanding() {
 
         {/* ── 화면2: PG 영업 문제 제기 (pin: 누적 등장) ── */}
         <section id="problem" className={sectionCls}>
-          <ScrollDrivenProblem
-            heading={
-              <SectionHeading>
-                PG 영업에서 가장 어려운 건<br />
-                리드 수가 아니라, 확실한 니즈입니다
-              </SectionHeading>
-            }
-            intro={
-              <FadeInView>
-                <p className={subCls}>
-                  고객사를 아무리 많이 만나도, 실제로 PG를 바꾸거나 새로 도입하려는 곳은 많지
-                  않습니다. 의사가 불분명한 리드에 제안서와 미팅이 쌓일수록, 정작 수주로 이어지는
-                  기회는 줄어듭니다.
-                </p>
-              </FadeInView>
-            }
-            items={PROBLEM_ITEMS}
-            stagger={0.06}
-          />
+          <SectionDotLamp salt={11} />
+          <div className={aboveLampCls}>
+            <ScrollDrivenProblem
+              heading={
+                <SectionHeading>
+                  PG 영업에서 가장 어려운 건<br />
+                  리드 수가 아니라, 확실한 니즈입니다
+                </SectionHeading>
+              }
+              intro={
+                <FadeInView>
+                  <p className={subCls}>
+                    고객사를 아무리 많이 만나도, 실제로 PG를 바꾸거나 새로 도입하려는 곳은 많지
+                    않습니다. 의사가 불분명한 리드에 제안서와 미팅이 쌓일수록, 정작 수주로 이어지는
+                    기회는 줄어듭니다.
+                  </p>
+                </FadeInView>
+              }
+              items={PROBLEM_ITEMS}
+              stagger={0.06}
+            />
+          </div>
         </section>
 
         {/* ── 화면3: 신규 성장 고객사 인바운드 (정적 2x2 그리드) ── */}
         <section id="inbound" className={sectionCls}>
-          <CustomerTypesGrid
-            heading={<SectionHeading>새로운 성장 고객사가 PG사를 찾아오게 만듭니다</SectionHeading>}
-            intro={
+          <SectionDotLamp salt={12} />
+          <div className={aboveLampCls}>
+            <CustomerTypesGrid
+              heading={<SectionHeading>새로운 성장 고객사가 PG사를 찾아오게 만듭니다</SectionHeading>}
+              intro={
+                <FadeInView>
+                  <p className={subCls}>
+                    수수료율, 정산주기, 보증금, 운영 조건을 비교하려는 고객사가 서포트비에 견적을
+                    올립니다. 파트너 PG사는 먼저 연락하지 않아도, 조건에 맞는 요청을 인바운드로 받아
+                    새로운 영업 기회를 확보합니다.
+                  </p>
+                </FadeInView>
+              }
+              items={CUSTOMER_TYPES}
+            />
+            <div className={`${containerCls} mt-[var(--s-9)]`}>
               <FadeInView>
-                <p className={subCls}>
-                  수수료율, 정산주기, 보증금, 운영 조건을 비교하려는 고객사가 서포트비에 견적을
-                  올립니다. 파트너 PG사는 먼저 연락하지 않아도, 조건에 맞는 요청을 인바운드로 받아
-                  새로운 영업 기회를 확보합니다.
+                <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface)]`}>
+                  서포트비는 “PG 조건을 비교하고 싶다”는 분명한 신호가 있는 고객사만 골라
+                  연결합니다.
                 </p>
               </FadeInView>
-            }
-            items={CUSTOMER_TYPES}
-          />
-          <div className={`${containerCls} mt-[var(--s-9)]`}>
-            <FadeInView>
-              <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface)]`}>
-                서포트비는 “PG 조건을 비교하고 싶다”는 분명한 신호가 있는 고객사만 골라
-                연결합니다.
-              </p>
-            </FadeInView>
+            </div>
           </div>
         </section>
 
         {/* ── 화면4: 검증된 리드 / 동일한 기회 ── */}
         <section id="advantage" className={sectionCls}>
-          <div className={containerCls}>
+          <SectionDotLamp salt={13} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <div className="flex flex-col gap-[var(--s-5)]">
               <SectionHeading>검증된 고객사의 영업기회를 동일한 기준으로 제공합니다</SectionHeading>
               <FadeInView>
@@ -132,7 +143,8 @@ export function PgLanding() {
 
         {/* ── 화면5: 참여 프로세스 ── */}
         <section id="process" className={sectionCls}>
-          <div className={`${containerCls} gap-[var(--s-8)]`}>
+          <SectionDotLamp salt={14} />
+          <div className={`${containerCls} ${aboveLampCls} gap-[var(--s-8)]`}>
             <SectionHeading>파트너 참여 방식은 간단합니다</SectionHeading>
             <PgDemoAppShell steps={PROCESS_STEPS} />
             <FadeInView>
@@ -145,7 +157,8 @@ export function PgLanding() {
 
         {/* ── 화면6: 파트너사 영업 성과 사례 ── */}
         <section id="cases" className={sectionCls}>
-          <div className={containerCls}>
+          <SectionDotLamp salt={15} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>영업팀은 더 좋은 기회에 집중할 수 있습니다</SectionHeading>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-[var(--s-4)]">
               {CASES.map((c, i) => (
@@ -166,7 +179,8 @@ export function PgLanding() {
         {/* 다른 섹션과 동일한 1080 컬럼에 좌측 정렬해 세로 레이아웃을 맞춘다.
             (heading 은 좌측 끝, FAQ 목록은 가독성 위해 760으로 제한하되 좌측 정렬) */}
         <section id="faq" className={sectionCls}>
-          <div className={containerCls}>
+          <SectionDotLamp salt={16} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>자주 묻는 질문</SectionHeading>
             <div className="w-full max-w-[760px]">
               <FaqList items={PG_FAQ_ITEMS} />
@@ -175,8 +189,10 @@ export function PgLanding() {
         </section>
 
         {/* ── 화면8: 최종 CTA ── */}
-        <section className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--landing-header-height)]">
-          <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
+        {/* 반전 면(on-surface 바탕)이라 손전등 점은 반전 짝 토큰(inverse-on-surface → inverse-primary)으로 그린다. */}
+        <section className="relative py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--landing-header-height)] [--lamp-ink:var(--md-sys-color-inverse-on-surface)] [--lamp-accent:var(--md-sys-color-inverse-primary)]">
+          <SectionDotLamp salt={17} />
+          <div className="relative mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
                 <span className="font-mono text-xs tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">

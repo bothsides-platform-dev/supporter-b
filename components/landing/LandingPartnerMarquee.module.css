@@ -8,8 +8,6 @@
   justify-content: center;
 }
 
-.partners[data-over-dark="true"] { color: var(--md-sys-color-inverse-on-surface); }
-
 .mask {
   width: 100%;
   overflow: hidden;

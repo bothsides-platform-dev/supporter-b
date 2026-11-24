@@ -14,6 +14,7 @@ import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { LandingPartnerMarquee } from '@/components/landing/LandingPartnerMarquee';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
+import { SectionDotLamp } from '@/components/landing/section-fx/SectionDotLamp';
 import { SOLUTION_SCENES } from './solution-scenes';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
 
@@ -40,15 +41,22 @@ const PROBLEM_ITEMS = [
   },
 ];
 
+// 섹션은 1px 구분선 대신 surface 와 띠(--landing-band)를 번갈아 써서 나눈다(2026-11-24 A안 §5).
+// 새 색은 만들지 않고 기존 토큰만 쓴다 — 띠는 라이트 surface-container, 다크 surface-container-high.
+// 다크의 surface-container(-low)는 surface 와 거의 구분되지 않아 한 단계 밝은 토큰을 쓴다.
+// 히어로 아래 모든 섹션은 배경에 점 격자 손전등(마우스 호버에만 잠깐 보임)을 깐다.
+// 손전등은 섹션 기준 absolute 층이라 섹션은 relative 이고, 내용은 그 위 relative 층(aboveLampCls)에 둔다.
 const sectionCls =
-  'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]';
+  'relative py-[var(--s-11)] px-8 scroll-mt-[var(--landing-header-height)]';
+const bandCls = 'bg-[var(--landing-band)]';
+const aboveLampCls = 'relative';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col [--landing-header-height:68px] [--landing-header-top:0px]">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col [--landing-header-height:68px] [--landing-header-top:0px] [--landing-band:var(--md-sys-color-surface-container)] dark:[--landing-band:var(--md-sys-color-surface-container-high)]">
 
-      {/* ── Nav — 히어로 다크 씬 위에서는 솔리드 다크+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      {/* ── Nav — 히어로와 본문이 같은 surface 라 헤더도 한 톤(surface+border) ── */}
       <LandingHeader>{nav}</LandingHeader>
 
       <main className="flex-1 pt-[var(--landing-header-height)]">
@@ -57,29 +65,37 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
         {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
-        <section className={sectionCls}>
-          <ScrollDrivenProblem
-            heading={
-              <SectionHeading>
-                PG 계약,<br />이런 고민 있었나요?
-              </SectionHeading>
-            }
-            items={PROBLEM_ITEMS}
-            presentation="focus"
-          />
+        <section className={`${sectionCls} ${bandCls}`}>
+          <SectionDotLamp salt={1} />
+          <div className={aboveLampCls}>
+            <ScrollDrivenProblem
+              heading={
+                <SectionHeading>
+                  PG 계약,<br />이런 고민 있었나요?
+                </SectionHeading>
+              }
+              items={PROBLEM_ITEMS}
+              presentation="focus"
+            />
+          </div>
         </section>
 
         {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
-        <section id="service" aria-label="서비스 주요 기능" className="px-5 lg:px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]">
-          <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
+        <section id="service" aria-label="서비스 주요 기능" className="relative px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
+          {/* 고정(pin) 구간이라 섹션이 화면 여러 장 높이다 — 배경 캔버스는 sticky 라 화면 높이만 쓴다. */}
+          <SectionDotLamp salt={5} />
+          <div className={aboveLampCls}>
+            <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
+          </div>
         </section>
 
         {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}
-        <section id="process" className={sectionCls}>
-          <div className={containerCls}>
+        <section id="process" className={`${sectionCls} ${bandCls}`}>
+          <SectionDotLamp salt={2} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <div className="flex flex-col gap-[var(--s-4)]">
               <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
-              <p className="text-sm leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+              <p className="text-base leading-[1.6] text-[var(--md-sys-color-on-surface-variant)]">
                 회원가입 없이 서포트비 실제 화면을 그대로 체험할 수 있어요. 아래 단계를 눌러 직접 둘러보세요.
               </p>
             </div>
@@ -87,14 +103,15 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        {/* ── Metrics ── */}
+        {/* ── Metrics: surface 위 카드 3장 ── */}
         <section className={sectionCls}>
-          <div className={containerCls}>
+          <SectionDotLamp salt={6} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>
               서포트비를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
             </SectionHeading>
             <div className="flex flex-col gap-[var(--s-4)]">
-              <div className="grid grid-cols-1 md:grid-cols-3 border-y border-[var(--md-sys-color-outline-variant)] divide-y md:divide-y-0 md:divide-x divide-[var(--md-sys-color-outline-variant)]">
+              <div className="grid grid-cols-1 gap-[var(--s-4)] md:grid-cols-3">
                 {HERO_METRICS.map((m) => (
                   <MetricCard
                     key={m.caption}
@@ -107,7 +124,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                   />
                 ))}
               </div>
-              <p className="text-[13px] leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
+              <p className="text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
                 업종과 거래 규모에 따라 결과는 달라질 수 있어요.
               </p>
             </div>
@@ -117,15 +134,16 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* 제휴 PG사는 히어로 하단에 표시한다. 고객 레퍼런스는 자료 확보 전까지 미노출. */}
 
         {/* ── Pricing ── */}
-        <section id="pricing" className={sectionCls}>
-          <div className={`${containerCls} gap-[var(--s-6)]`}>
+        <section id="pricing" className={`${sectionCls} ${bandCls}`}>
+          <SectionDotLamp salt={3} />
+          <div className={`${containerCls} ${aboveLampCls} gap-[var(--s-6)]`}>
             <SectionHeading>이용 요금</SectionHeading>
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-4)]">
                 <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
                   서포트비는 현재(2026년) 무료로 이용 가능합니다.
                 </p>
-                <p className="text-sm leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+                <p className="text-base leading-[1.6] text-[var(--md-sys-color-on-surface-variant)]">
                   현재 유료화 계획이 없으며, 유료화 전환시 한분기 전에 공유드릴 예정입니다.
                 </p>
               </div>
@@ -135,7 +153,8 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
 
         {/* ── Calculator ── */}
         <section id="calculator" className={sectionCls}>
-          <div className={containerCls}>
+          <SectionDotLamp salt={7} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>PG 수수료, 얼마나 아낄 수 있을까요?</SectionHeading>
             <SavingsCalculator />
           </div>
@@ -144,8 +163,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── FAQ ── */}
         {/* 다른 섹션과 동일한 1080 컬럼에 좌측 정렬해 세로 레이아웃을 맞춘다.
             (heading 은 좌측 끝, FAQ 목록은 가독성 위해 760으로 제한하되 좌측 정렬) */}
-        <section id="faq" className={sectionCls}>
-          <div className={containerCls}>
+        <section id="faq" className={`${sectionCls} ${bandCls}`}>
+          <SectionDotLamp salt={4} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <SectionHeading>자주 묻는 질문</SectionHeading>
             <div className="w-full max-w-[760px]">
               <FaqList />
@@ -155,7 +175,8 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
 
         {/* ── Chat consultation ── */}
         <section id="consultation" aria-labelledby="consultation-heading" className={sectionCls}>
-          <div className={containerCls}>
+          <SectionDotLamp salt={8} />
+          <div className={`${containerCls} ${aboveLampCls}`}>
             <FadeInView>
               <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
                 <h2 id="consultation-heading" className="text-[clamp(28px,3.5vw,44px)] font-medium leading-[1.3] tracking-[-0.025em] text-[var(--md-sys-color-on-surface)] break-keep">
@@ -170,20 +191,21 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        {/* ── Final CTA / 도입문의 ── */}
-        <section id="contact" className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--landing-header-height)]">
-          <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
+        {/* ── Final CTA / 도입문의 ──
+            브랜드 띠는 primary-container 다. primary 나 on-surface 반전 띠는 다크 테마에서 밝은 띠로
+            뒤집혀 페이지 끝에서 다시 밝기 전환을 만든다. primary-container 는 라이트에서 옅은 파랑,
+            다크에서 짙은 파랑이라 두 테마 모두 같은 톤 안에서 띠로 읽힌다. */}
+        <section id="contact" className="relative py-[var(--s-11)] px-8 bg-[var(--md-sys-color-primary-container)] scroll-mt-[var(--landing-header-height)]">
+          <SectionDotLamp salt={9} />
+          <div className="relative mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
-                {/* 이 섹션은 배경이 `on-surface`(어두움)라 반전면이다 — 아래 h2 가
-                    `surface` 를 쓰는 것과 같은 이유로 여기도 반전 토큰을 쓴다.
-                    `on-surface-variant` 는 이 배경 위에서 2.74:1 로 AA 미달이다.
-                    (색 클로버가 살아 있던 동안에는 이 글자가 배경색으로 상속돼
-                    아예 보이지 않았고, 그래서 대비 문제가 드러나지 않았다.) */}
-                <span className="font-mono text-sm leading-[inherit] tracking-[0.18em] uppercase text-[var(--md-sys-color-inverse-on-surface)]">
+                {/* primary-container 위의 글자는 짝 토큰 on-primary-container 만 쓴다.
+                    on-surface-variant 같은 일반 보조색은 이 배경 위 대비를 보장하지 않는다. */}
+                <span className="font-mono text-sm leading-[inherit] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-primary-container)]">
                   — 도입문의
                 </span>
-                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)] text-balance break-keep">
+                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-on-primary-container)] text-balance break-keep">
                   지금 바로 불필요한 비용은 줄이고,<br />사업의 본질에 집중하세요.
                 </h2>
               </div>
@@ -191,7 +213,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             <FadeInView delay={0.2}>
               <div className="flex flex-col items-start gap-[var(--s-5)]">
                 <QuoteStartLink>
-                  <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
+                  <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
                     PG견적 무료로 받기 →
                   </button>
                 </QuoteStartLink>

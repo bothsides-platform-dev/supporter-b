@@ -18,7 +18,6 @@ const PARTNERS = [
 ] as const;
 
 export function LandingPartnerMarquee() {
-  const overDark = useHeroToneStore((s) => s.overDark);
   const setPartnerAccent = useHeroToneStore((s) => s.setPartnerAccent);
   const viewportRef = useRef<HTMLElement>(null);
   const unitRef = useRef<HTMLDivElement>(null);
@@ -69,7 +68,7 @@ export function LandingPartnerMarquee() {
   }, [setPartnerAccent]);
 
   return (
-    <section ref={viewportRef} aria-label="제휴 PG사" data-over-dark={overDark} className={styles.partners}>
+    <section ref={viewportRef} aria-label="제휴 PG사" className={styles.partners}>
       <div className={styles.mask}>
         <div data-partner-track className={styles.track} style={{ animationDuration: `${geometry.duration}s` }}>
           {[0, 1].map((group) => (

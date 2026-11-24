@@ -17,17 +17,17 @@ const NAV_LINKS: { label: string; href: string }[] = [
 
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
 const linkCls = styles.link;
-const overDarkLinkCls = styles.barLink;
+const barLinkCls = styles.barLink;
 
 export function PgLandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
 
   const authLink = authed ? (
-    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} ${styles.auth}`}>
+    <Link href="/home" className={`${linkCls} ${barLinkCls} ${styles.auth}`}>
       서포트비로 이동해요 →
     </Link>
   ) : (
-    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} ${styles.auth}`}>
+    <Link href="/login" className={`${linkCls} ${barLinkCls} ${styles.auth}`}>
       로그인 →
     </Link>
   );
@@ -37,7 +37,7 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
       {/* Desktop links */}
       <div className={styles.links}>
         {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`}>
+          <a key={l.href} href={l.href} className={`${linkCls} ${barLinkCls}`}>
             {l.label}
           </a>
         ))}
@@ -46,8 +46,7 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
       {authLink}
 
       {/* 시작하기 CTA — 파트너 가입(/signup/pg)으로 이동. 모바일에선 숨기고(햄버거로 대체)
-          데스크톱에만 노출해 헤더 과밀·줄바꿈을 막는다. 다크 씬 위에서는 primary 토큰을
-          inverse로 뒤집어 대비를 맞춘다. */}
+          데스크톱에만 노출해 헤더 과밀·줄바꿈을 막는다. */}
       <ConsultButton
         href="/signup/pg"
         variant="primary"

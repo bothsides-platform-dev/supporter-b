@@ -132,19 +132,19 @@ async function expectTokenColors(
 
 test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`헤더 로그인 버튼이 히어로 전후에 전경·배경을 반전한다 (${colorScheme})`, async ({ page }) => {
+    // 2026-11-23 A안: 히어로와 본문이 같은 surface 라 헤더는 스크롤 위치와 관계없이 한 톤이다.
+    // 히어로 위(맨 위)와 페이지 끝에서 같은 토큰 색을 확인해 톤 전환이 되살아나는 회귀를 잡는다.
+    test(`헤더 로그인 버튼이 히어로 전후에 같은 전경·배경을 유지한다 (${colorScheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await page.goto('/');
 
-      const header = page.locator('header.group\\/lheader').first();
+      const header = page.locator('header').first();
       const cta = header.locator('a[href="/login"]').first();
       await expect(cta).toBeVisible();
 
-      await expect(header).toHaveAttribute('data-over-dark', 'true');
-      await expectTokenColors(cta, '--md-sys-color-inverse-surface', '--md-sys-color-inverse-on-surface');
+      await expectTokenColors(cta, '--md-sys-color-surface', '--md-sys-color-on-surface');
 
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await expect(header).not.toHaveAttribute('data-over-dark', 'true');
       await expectTokenColors(cta, '--md-sys-color-surface', '--md-sys-color-on-surface');
     });
 
@@ -153,18 +153,16 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
       await page.emulateMedia({ colorScheme });
       await page.goto('/pg-landing');
 
-      const header = page.locator('header.group\\/lheader').first();
+      const header = page.locator('header').first();
       const navLink = header.locator('a[href="/login"]').first();
       await expect(navLink).toBeVisible();
 
-      // 밝은 표면에서는 본문과 같은 색이 정상이다. 반전 상태도 함께 검사해야
-      // color 선언이 사라져 본문색을 상속하는 회귀를 놓치지 않는다.
-      await expect(header).toHaveAttribute('data-over-dark', 'true');
-      await expectTokenColors(navLink, '--md-sys-color-inverse-on-surface');
+      // color 선언이 사라지면 본문색을 상속해도 색이 같아 보이므로, 히어로 위와 페이지 끝 모두
+      // 토큰 색과 컨트롤 타이포를 함께 검사한다.
+      await expectTokenColors(navLink, '--md-sys-color-on-surface');
       expectLandingControlType(await measureType(navLink));
 
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await expect(header).not.toHaveAttribute('data-over-dark', 'true');
       await expectTokenColors(navLink, '--md-sys-color-on-surface');
       expectLandingControlType(await measureType(navLink));
     });

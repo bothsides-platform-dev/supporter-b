@@ -3,9 +3,8 @@ import { LandingHeroSection } from './LandingHeroSection';
 import { BrandWordB, HeroKineticHeadline } from './hero/HeroKineticHeadline';
 import { PgHeroProductWindow } from './hero/PgHeroProductWindow';
 
-// PG 파트너 히어로 — 구매사 히어로와 동일한 핀 씬(다크 오프닝 ASCII → 제품 창 부상 → 라이트
-// 리빌 → 헤더 톤 스위치)을 PG 카피·CTA·목업으로 재사용한다. 씬 튜닝은 HeroPinnedScene 이
-// 단일 소유. 여기선 콘텐츠 슬롯만 주입한다.
+// PG 파트너 히어로 — 구매사 히어로와 동일한 핀 씬(ASCII 배경 → 제품 창 부상)을 PG 카피·CTA·
+// 목업으로 재사용한다. 씬 튜닝은 HeroPinnedScene 이 단일 소유. 여기선 콘텐츠 슬롯만 주입한다.
 // 랜딩/마케팅 면이라 '경쟁 입찰' 프레이밍 허용(CLAUDE.md). '만나세요' = 인바운드 수신 강조.
 const PG_LINE1_WORDS = [<BrandWordB key="support-b" particle="로" />];
 const PG_PHRASES = [
@@ -24,7 +23,7 @@ const PG_SUBCOPY = (
   </>
 );
 
-// 제품 창 바로 위 리드 카피 — 라이트 리빌 때 목업과 함께 자리잡는 인바운드 가치 한 줄.
+// 제품 창 바로 위 리드 카피 — 목업이 정착할 때 함께 자리잡는 인바운드 가치 한 줄.
 const PG_PRODUCT_LEAD = (
   <p className="text-center text-[clamp(20px,3vw,32px)] font-medium leading-[1.32] tracking-[-0.018em] text-[var(--md-sys-color-on-surface)] text-balance break-keep">
     콜드콜보다 빠르게.
@@ -45,7 +44,7 @@ export function PgHeroSection() {
       }
       subCopy={PG_SUBCOPY}
       cta={
-        <ConsultButton href="/signup/pg" variant="on-dark">
+        <ConsultButton href="/signup/pg" variant="primary">
           파트너로 시작하기 →
         </ConsultButton>
       }
