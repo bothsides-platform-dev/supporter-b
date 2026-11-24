@@ -14,7 +14,7 @@ import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { LandingPartnerMarquee } from '@/components/landing/LandingPartnerMarquee';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
-import { SectionLineField } from '@/components/landing/section-fx/SectionLineField';
+import { SectionDotLamp } from '@/components/landing/section-fx/SectionDotLamp';
 import { LandingScrollRail } from '@/components/landing/section-fx/LandingScrollRail';
 import { SOLUTION_SCENES } from './solution-scenes';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
@@ -47,7 +47,7 @@ const PROBLEM_ITEMS = [
 // 다크의 surface-container(-low)는 surface 와 거의 구분되지 않아 한 단계 밝은 토큰을 쓴다.
 const sectionCls =
   'py-[var(--s-11)] px-8 scroll-mt-[var(--landing-header-height)]';
-// 띠 섹션은 배경에 세로 라인 필드(커서·스크롤 반응)를 깔고, 내용은 그 위 relative 층에 둔다.
+// 띠 섹션과 서비스 소개는 배경에 점 격자 손전등(마우스 호버에만 잠깐 보임)을 깔고, 내용은 그 위 relative 층에 둔다.
 const bandCls = 'relative bg-[var(--landing-band)]';
 const bandContentCls = 'relative';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
@@ -67,7 +67,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
 
         {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
         <section data-rail-node className={`${sectionCls} ${bandCls}`}>
-          <SectionLineField salt={1} />
+          <SectionDotLamp salt={1} />
           <div className={bandContentCls}>
             <ScrollDrivenProblem
               heading={
@@ -82,13 +82,17 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
-        <section id="service" data-rail-node aria-label="서비스 주요 기능" className="px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
-          <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
+        <section id="service" data-rail-node aria-label="서비스 주요 기능" className="relative px-5 lg:px-8 scroll-mt-[var(--landing-header-height)]">
+          {/* 고정(pin) 구간이라 섹션이 화면 여러 장 높이다 — 배경 캔버스는 sticky 라 화면 높이만 쓴다. */}
+          <SectionDotLamp salt={5} />
+          <div className={bandContentCls}>
+            <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
+          </div>
         </section>
 
         {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}
         <section id="process" data-rail-node className={`${sectionCls} ${bandCls}`}>
-          <SectionLineField salt={2} />
+          <SectionDotLamp salt={2} />
           <div className={`${containerCls} ${bandContentCls}`}>
             <div className="flex flex-col gap-[var(--s-4)]">
               <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
@@ -131,7 +135,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
 
         {/* ── Pricing ── */}
         <section id="pricing" data-rail-node className={`${sectionCls} ${bandCls}`}>
-          <SectionLineField salt={3} />
+          <SectionDotLamp salt={3} />
           <div className={`${containerCls} ${bandContentCls} gap-[var(--s-6)]`}>
             <SectionHeading>이용 요금</SectionHeading>
             <FadeInView>
@@ -159,7 +163,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* 다른 섹션과 동일한 1080 컬럼에 좌측 정렬해 세로 레이아웃을 맞춘다.
             (heading 은 좌측 끝, FAQ 목록은 가독성 위해 760으로 제한하되 좌측 정렬) */}
         <section id="faq" data-rail-node className={`${sectionCls} ${bandCls}`}>
-          <SectionLineField salt={4} />
+          <SectionDotLamp salt={4} />
           <div className={`${containerCls} ${bandContentCls}`}>
             <SectionHeading>자주 묻는 질문</SectionHeading>
             <div className="w-full max-w-[760px]">
