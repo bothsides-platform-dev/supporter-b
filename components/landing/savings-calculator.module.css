@@ -1,14 +1,22 @@
+/* 결과·행동 패널 색. 라이트는 primary 채움. 다크의 primary 는 밝은 하늘색이라 어두운 페이지 안에서
+   밝은 면으로 튀므로, 다크에서는 같은 계열의 짙은 primary-container 로 바꿔 밝기 전환을 만들지 않는다. */
 .calculator {
+  --calc-panel: var(--md-sys-color-primary);
+  --calc-on-panel: var(--md-sys-color-on-primary);
   display: grid;
   grid-template-areas: "result" "inputs" "action";
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 12px;
   overflow: hidden;
 }
+:global(.dark) .calculator {
+  --calc-panel: var(--md-sys-color-primary-container);
+  --calc-on-panel: var(--md-sys-color-on-primary-container);
+}
 .result,
 .action {
-  background: var(--md-sys-color-primary);
-  color: var(--md-sys-color-on-primary);
+  background: var(--calc-panel);
+  color: var(--calc-on-panel);
   padding: 28px 24px;
   min-width: 0;
 }
@@ -99,15 +107,15 @@
   min-height: 52px;
   padding: 14px 16px;
   border-radius: 6px;
-  background: var(--md-sys-color-on-primary);
-  color: var(--md-sys-color-primary);
+  background: var(--calc-on-panel);
+  color: var(--calc-panel);
   font-weight: 600;
 }
 .cta:hover {
-  background: color-mix(in srgb, var(--md-sys-color-on-primary) 92%, var(--md-sys-color-primary));
+  background: color-mix(in srgb, var(--calc-on-panel) 92%, var(--calc-panel));
 }
 .cta:focus-visible {
-  outline-color: var(--md-sys-color-on-primary);
+  outline-color: var(--calc-on-panel);
 }
 .action p {
   margin-top: 16px;

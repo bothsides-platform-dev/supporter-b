@@ -23,7 +23,7 @@ for (const [width, height, theme] of [
     );
     await page.evaluate(() => document.fonts.ready);
     const section = page.locator("#service");
-    const track = section.locator(":scope > div");
+    const track = section.locator("[data-pinned]"); // the scroll track; the hover dot lamp is a sibling layer
     const buttons = section.getByRole("button");
     const table = section.getByRole("table");
     await expect(buttons).toHaveCount(4);
@@ -184,7 +184,7 @@ test("solution remeasures content, viewport and reduced motion", async ({
   );
   await page.goto("/");
   const section = page.locator("#service");
-  const track = section.locator(":scope > div");
+  const track = section.locator("[data-pinned]"); // the scroll track; the hover dot lamp is a sibling layer
   await expect(track).toHaveAttribute("data-pinned", "true");
   for (const element of [
     section.locator("h2"),
@@ -244,7 +244,7 @@ test("solution switches layout at 1024px and fits narrow screens", async ({
   await page.goto("/");
   await page.evaluate(() => document.fonts.ready);
   const section = page.locator("#service");
-  const track = section.locator(":scope > div");
+  const track = section.locator("[data-pinned]"); // the scroll track; the hover dot lamp is a sibling layer
   for (const width of [320, 768, 1024]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(track).toHaveAttribute("data-pinned", String(width >= 1024));

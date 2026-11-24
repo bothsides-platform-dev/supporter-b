@@ -59,8 +59,9 @@ export function MetricCard({ label, to, decimals, unit, caption, qualifier }: Me
   const { value: current, done } = useCountUp(to, inView);
 
   return (
-    // 밴드의 한 칸: 모바일·태블릿은 위아래, md 이상은 좌우 구분선 사이에 놓인다(구분선은 부모 divide-*).
-    <div ref={ref} className="flex flex-col py-[var(--s-7)] md:px-[var(--s-7)] md:first:pl-0 md:last:pr-0">
+    // 지표 카드 한 장 — surface 섹션 위 surface-container-low 카드(DESIGN.md 표면 계층의 '카드' 단계).
+    // 라이트의 surface-container-low 는 surface 와 명도 차이가 작아 outline-variant 테두리로 윤곽을 준다.
+    <div ref={ref} className="flex flex-col rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-[var(--s-7)]">
       <span className="text-sm font-medium leading-[1.5] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
@@ -84,7 +85,7 @@ export function MetricCard({ label, to, decimals, unit, caption, qualifier }: Me
           </span>
         )}
       </span>
-      <span className="mt-[var(--s-4)] max-w-[24ch] text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)] break-keep">
+      <span className="mt-[var(--s-4)] max-w-[24ch] text-base leading-[1.5] text-[var(--md-sys-color-on-surface-variant)] break-keep">
         {caption}
       </span>
     </div>
