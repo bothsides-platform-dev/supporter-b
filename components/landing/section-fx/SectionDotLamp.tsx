@@ -92,8 +92,10 @@ export function SectionDotLamp({ salt = 0 }: { salt?: number }) {
 
     const resolvePalette = () => {
       const cs = getComputedStyle(root);
-      const ink = parseColor(cs.getPropertyValue('--md-sys-color-on-surface'), INK_FALLBACK);
-      const accent = parseColor(cs.getPropertyValue('--md-sys-color-primary'), ACCENT_FALLBACK);
+      // 반전 면(예: PG 랜딩 마지막 CTA 의 on-surface 바탕)은 섹션에 --lamp-ink·--lamp-accent 를 두어 점 색을 바꾼다.
+      const pick = (override: string, token: string) => cs.getPropertyValue(override).trim() || cs.getPropertyValue(token);
+      const ink = parseColor(pick('--lamp-ink', '--md-sys-color-on-surface'), INK_FALLBACK);
+      const accent = parseColor(pick('--lamp-accent', '--md-sys-color-primary'), ACCENT_FALLBACK);
       const raw = Number.parseFloat(cs.getPropertyValue('--lamp-peak'));
       const peak = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.75;
       tierStyles = Array.from({ length: COLOR_TIERS }, (_, t) => {
