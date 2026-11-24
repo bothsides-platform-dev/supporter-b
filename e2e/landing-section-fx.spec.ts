@@ -1,24 +1,38 @@
 import { test, expect, type Page } from 'playwright/test';
 
-// 히어로 아래 라인 필드·스크롤 레일(2026-11-24). 실제 레이아웃·옵저버로 확인한다.
+// 히어로 아래 점 격자 손전등·스크롤 레일(2026-11-24). 실제 레이아웃·옵저버로 확인한다.
 // 픽셀 모양은 스크린샷 검수로 보고, 여기서는 회귀하기 쉬운 계약만 잡는다:
-//  ① 띠 네 곳에만 필드가 깔린다 ② 반응이 끝나면 루프가 멈춘다(유휴 중 다시 그리지 않음)
-//  ③ 포인터·스크롤에 반응한다 ④ 레일 노드가 읽은 만큼 켜진다 ⑤ 좁은 화면에서는 레일이 숨는다.
+//  ① 띠 네 곳과 서비스 소개에만 깔린다 ② 쉬는 동안 캔버스가 비어 있다(호버에만 보임)
+//  ③ 호버하면 드러났다가 다시 빈다 ④ 반응이 끝나면 루프가 멈춘다(유휴 중 다시 그리지 않음)
+//  ⑤ 스크롤만으로는 드러나지 않는다 ⑥ 레일 노드가 읽은 만큼 켜진다 ⑦ 좁은 화면에서는 레일이 숨는다.
 
-async function countLineDraws(page: Page) {
+async function countLampDraws(page: Page) {
   await page.addInitScript(() => {
-    (window as unknown as { __lineDraws: number }).__lineDraws = 0;
+    (window as unknown as { __lampDraws: number }).__lampDraws = 0;
     const orig = CanvasRenderingContext2D.prototype.clearRect;
     CanvasRenderingContext2D.prototype.clearRect = function (this: CanvasRenderingContext2D, ...args: [number, number, number, number]) {
-      if (this.canvas?.closest?.('[data-section-line-field]')) {
-        (window as unknown as { __lineDraws: number }).__lineDraws++;
+      if (this.canvas?.closest?.('[data-section-fx]')) {
+        (window as unknown as { __lampDraws: number }).__lampDraws++;
       }
       return orig.apply(this, args);
     };
   });
 }
 
-const draws = (page: Page) => page.evaluate(() => (window as unknown as { __lineDraws: number }).__lineDraws);
+const draws = (page: Page) => page.evaluate(() => (window as unknown as { __lampDraws: number }).__lampDraws);
+
+/** 화면에 걸친 손전등 캔버스들의 알파 합 — 0 이면 아무것도 안 그려진 상태다. */
+const inkOnScreen = (page: Page) => page.evaluate(() => {
+  let sum = 0;
+  for (const c of document.querySelectorAll<HTMLCanvasElement>('main [data-section-fx] canvas')) {
+    if (c.width <= 1) continue;
+    const r = c.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) continue;
+    const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+    for (let i = 3; i < d.length; i += 4) sum += d[i];
+  }
+  return sum;
+});
 
 async function scrollInto(page: Page, selector: string, offset = 120) {
   await page.locator(selector).evaluate((el, dy) => {
@@ -26,7 +40,7 @@ async function scrollInto(page: Page, selector: string, offset = 120) {
   }, offset);
 }
 
-test.describe('landing section line field and scroll rail', () => {
+test.describe('landing section dot lamp and scroll rail', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
   test.setTimeout(90_000);
   test.beforeEach(async ({ page }) => {
@@ -34,37 +48,53 @@ test.describe('landing section line field and scroll rail', () => {
   });
 
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`reacts to pointer and scroll, then goes idle (${colorScheme})`, async ({ page }) => {
+    test(`hidden at rest, shows only while hovering, then goes idle (${colorScheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
-      await countLineDraws(page);
+      await countLampDraws(page);
       await page.goto('/');
 
-      // Only the four neutral bands carry a field.
-      await expect(page.locator('main [data-section-line-field]')).toHaveCount(4);
-      await expect(page.locator('#process [data-section-line-field], #pricing [data-section-line-field], #faq [data-section-line-field]')).toHaveCount(3);
+      // The four neutral bands plus the service story carry a lamp.
+      await expect(page.locator('main [data-section-fx]')).toHaveCount(5);
+      await expect(page.locator('#service [data-section-fx], #process [data-section-fx], #pricing [data-section-fx], #faq [data-section-fx]')).toHaveCount(4);
 
-      await scrollInto(page, '#faq');
-      await page.mouse.move(5, 895);
-      // Settle, then the loop must stay asleep.
+      await scrollInto(page, '#faq', -40);
+      // Park the pointer on the fixed header, outside every section.
+      await page.mouse.move(720, 8);
       await page.waitForTimeout(1500);
+      expect(await inkOnScreen(page)).toBe(0);
       const idle0 = await draws(page);
       await page.waitForTimeout(1500);
       expect(await draws(page)).toBe(idle0);
 
-      // Pointer wakes it, and it falls asleep again once the trail has cooled.
-      await page.mouse.move(400, 400);
-      await page.mouse.move(1100, 520, { steps: 20 });
-      await expect.poll(() => draws(page)).toBeGreaterThan(idle0);
-      await page.waitForTimeout(2500);
-      const afterPointer = await draws(page);
+      // Hovering reveals dots, then they cool down to an empty canvas and the loop sleeps.
+      await page.mouse.move(300, 300);
+      await page.mouse.move(1100, 560, { steps: 20 });
+      await expect.poll(() => inkOnScreen(page)).toBeGreaterThan(0);
+      await page.mouse.move(720, 8);
+      await expect.poll(() => inkOnScreen(page), { timeout: 5000 }).toBe(0);
+      const afterHover = await draws(page);
       await page.waitForTimeout(1000);
-      expect(await draws(page)).toBe(afterPointer);
+      expect(await draws(page)).toBe(afterHover);
 
-      // Scrolling wakes it too (packets follow the scroll).
-      await page.mouse.wheel(0, 120);
-      await expect.poll(() => draws(page)).toBeGreaterThan(afterPointer);
+      // Scrolling under a resting pointer reveals nothing.
+      await page.mouse.move(700, 450);
+      await expect.poll(() => inkOnScreen(page), { timeout: 5000 }).toBe(0);
+      await page.mouse.wheel(0, 200);
+      await page.waitForTimeout(300);
+      expect(await inkOnScreen(page)).toBe(0);
     });
   }
+
+  test('the pinned service story reveals on hover too', async ({ page }) => {
+    await page.goto('/');
+    await scrollInto(page, '#service', 300);
+    // The pinned section fills the whole viewport, so no pointer move here: the mouse has not moved yet.
+    await page.waitForTimeout(800);
+    expect(await inkOnScreen(page)).toBe(0);
+    await page.mouse.move(250, 500);
+    await page.mouse.move(1200, 700, { steps: 20 });
+    await expect.poll(() => inkOnScreen(page)).toBeGreaterThan(0);
+  });
 
   test('rail nodes light up as the reader moves down', async ({ page }) => {
     await page.goto('/');
@@ -99,7 +129,7 @@ test.describe('landing section line field and scroll rail', () => {
         const minLeft = await section.evaluate((el) => {
           let min = Infinity;
           for (const node of el.querySelectorAll('*')) {
-            if (node.closest('[data-section-line-field]')) continue;
+            if (node.closest('[data-section-fx]')) continue;
             const r = node.getBoundingClientRect();
             if (r.width === 0 || r.height === 0 || r.bottom < 0 || r.top > innerHeight) continue;
             const cs = getComputedStyle(node);
@@ -121,6 +151,6 @@ test.describe('landing section line field and scroll rail', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await expect(page.locator('[data-landing-scroll-rail]')).toBeHidden();
-    await expect(page.locator('main [data-section-line-field]')).toHaveCount(4);
+    await expect(page.locator('main [data-section-fx]')).toHaveCount(5);
   });
 });
