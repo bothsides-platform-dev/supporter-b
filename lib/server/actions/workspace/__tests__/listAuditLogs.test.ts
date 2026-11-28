@@ -48,6 +48,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   teardownWorkspaceActionEnv();
 });
 
@@ -129,7 +130,7 @@ describe('listAuditLogsAction', () => {
       expect(result.logs).toHaveLength(1);
       expect(result.logs[0]).toMatchObject({
         action: 'workspace.member_invite',
-        actorUserId: master.id,
+        actorName: master.name,
         viaMaster: true,
       });
     } finally {
@@ -202,5 +203,37 @@ describe('listAuditLogsAction', () => {
     expect(second.logs).toHaveLength(1);
     const ids = [...first.logs, ...second.logs].map((l) => l.id);
     expect(new Set(ids).size).toBe(3);
+  });
+
+  it('같은 계정의 이름은 다른 워크스페이스와 커서 다음 페이지에서도 가리고 원본을 보존한다', async () => {
+    const { admin, member, ws } = await seedEnv();
+    const otherWs = await seedBuyerWorkspace(db);
+    await seedMembership(db, otherWs.id, admin.id, 'admin');
+    const repo = await getAuditLogRepo();
+    vi.stubEnv('AUDIT_LOG_MASKED_ACTOR_IDS', ` ${admin.id.toUpperCase()}, ${member.id} `);
+
+    for (const workspaceId of [ws.id, otherWs.id]) {
+      for (const actor of [admin, member]) {
+        await repo.insert({
+          actorUserId: actor.id, actorWorkspaceId: workspaceId, action: 'bid.submit',
+          metadata: { round: 2, note: actor.name, actorWasMaster: actor.id === admin.id },
+        });
+      }
+      sessionRef.value = { user: { id: admin.id, workspaceId, role: 'admin' } };
+      const first = await listAuditLogsAction({ limit: 1 });
+      if (!first.ok || !first.nextCursor) throw new Error('첫 페이지 커서 누락');
+      const second = await listAuditLogsAction({ limit: 1, before: first.nextCursor });
+      if (!second.ok) throw new Error(second.error);
+      const rows = [...first.logs, ...second.logs];
+      expect(new Set(rows.map(row => row.id)).size).toBe(2);
+      expect(rows.map(row => row.viaMaster).sort()).toEqual([false, true]);
+      for (const row of rows) {
+        expect(row.actorName).toBe('이름 비공개');
+        expect(row.metadata).toEqual({ round: 2 });
+        expect(row).not.toHaveProperty('actorUserId');
+      }
+      const originals = await repo.listForWorkspace(workspaceId, { limit: 10 });
+      expect(originals.map(row => row.actorName).sort()).toEqual([admin.name, member.name].sort());
+    }
   });
 });

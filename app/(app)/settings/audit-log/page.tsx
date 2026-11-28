@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
-import { getAuditLogRepo } from '@/lib/server/repositories/factory';
+import { listWorkspaceActivity } from '@/lib/server/workspaces/activity';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { AuditLogPanel } from '@/components/settings/AuditLogPanel';
 import { SettingsPage } from '@/components/settings/SettingsPage';
@@ -36,10 +36,7 @@ export default async function AuditLogPage() {
     );
   }
 
-  const logs = await (await getAuditLogRepo()).listForWorkspace(wsId, { limit: PAGE_SIZE });
-  const last = logs[logs.length - 1];
-  const nextCursor =
-    logs.length === PAGE_SIZE && last ? { createdAt: last.createdAt, id: last.id } : null;
+  const { logs, nextCursor } = await listWorkspaceActivity(wsId, { limit: PAGE_SIZE });
 
   return (
     <PageEnter className="flex h-full min-h-0 flex-col">

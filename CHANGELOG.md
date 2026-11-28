@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.2.1] - 2026-11-28
+
+### Changed
+
+- 워크스페이스 활동 기록에서 지정한 계정의 이름을 `이름 비공개`로 표시한다. 운영자 배지, 견적 링크, 활동 시각과 원본 감사 기록은 보존한다.
+
 ## [0.49.2.0] - 2026-11-24
 
 ### Added

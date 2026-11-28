@@ -18,7 +18,9 @@ vi.mock('@/components/primitives/PageEnter', () => ({
   PageEnter: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock('@/components/settings/AuditLogPanel', () => ({
-  AuditLogPanel: () => <div data-testid="audit-log-panel" />,
+  AuditLogPanel: ({ initialLogs }: { initialLogs: unknown[] }) => (
+    <div data-testid="audit-log-panel">{JSON.stringify(initialLogs)}</div>
+  ),
 }));
 
 import AuditLogPage from '../page';
@@ -44,6 +46,7 @@ describe('AuditLogPage', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalMasterEmails === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
     else process.env.MASTER_ACCOUNT_EMAILS = originalMasterEmails;
   });
@@ -53,6 +56,24 @@ describe('AuditLogPage', () => {
 
     expect(screen.getByTestId('audit-log-panel')).toBeInTheDocument();
     expect(mockListForWorkspace).toHaveBeenCalledWith('workspace-1', { limit: 50 });
+  });
+
+  it('첫 페이지의 클라이언트 props에서 지정 계정의 이름과 원시 메타데이터를 가린다', async () => {
+    vi.stubEnv('AUDIT_LOG_MASKED_ACTOR_IDS', 'actor-private');
+    mockListForWorkspace.mockResolvedValue([{
+      id: 'log-1', actorUserId: 'actor-private', actorName: '테스트 담당자', viaMaster: true,
+      action: 'bid.submit', entityType: 'rfp', entityId: 'P-2610-0001',
+      createdAt: '2026-10-01T00:00:00Z', metadata: { round: 2, note: '테스트 담당자' },
+    }]);
+
+    render(await AuditLogPage());
+
+    const props = JSON.parse(screen.getByTestId('audit-log-panel').textContent!);
+    expect(props).toEqual([{
+      id: 'log-1', actorName: '이름 비공개', viaMaster: true,
+      action: 'bid.submit', entityType: 'rfp', entityId: 'P-2610-0001',
+      createdAt: '2026-10-01T00:00:00Z', metadata: { round: 2 },
+    }]);
   });
 
   it('승인된 admin은 기존처럼 활동 기록 화면을 본다', async () => {

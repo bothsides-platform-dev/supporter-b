@@ -175,7 +175,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 규범 테스트: `lib/auth/__tests__/jwt-callback.test.ts`, `master-login.test.ts`, `workspace-status.test.ts`(실 DB 상태 변경, 구매사·PG·공용 액션, 파일·계약·로고·알림·토큰 API 차단).
 
-**운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 상세 규범과 가드는 `docs/agents/routing.md`의 같은 제목 절, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
+**운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 활동 기록의 첫 페이지와 추가 조회는 서버에서 지정 계정의 이름을 가리고 행위자 ID와 원시 메타데이터를 응답에서 제외한다(AR-13). 상세 규범과 가드는 `docs/agents/routing.md`의 같은 제목 절, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
 
 **운영자 콘솔 관리자 계정·2차 인증 (2026-11-15)**: 별도 레포 admin-supporter-b의 로그인은 Google OAuth와 `admin_users` 허용 목록, TOTP 2차 인증을 모두 통과해야 한다. 본 서비스는 이 테이블을 쓰지 않는다. TOTP 시크릿은 admin 서버만 가진 키로 AES-256-GCM 암호화하고 행 id에 묶어 저장한다. 2차 인증 통과 표시는 Auth.js 세션 갱신 입력이 아니라 admin의 서명 쿠키이며, 로그인 세션 id와 등록 시각에 묶인다. 남은 위험은 AR-9를 따른다.
 
@@ -397,3 +397,7 @@ admin-supporter-b의 관리자 허용 목록을 서버 환경변수에서 공유
 공개 조회는 브라우저 초안 증명 또는 소유 세션을 확인한다. 확정과 재신청은 소유권·계정 상태·현재 사업자번호의 국세청 계속사업 조회와 PG별 제공 동의를 필요로 한다. 수신처, 조건, 견적 유효기간과 입력을 서버 서명에 묶고 확정 트랜잭션에서 다시 비교한다. 발급한 조건, 동의 시각과 원문, 양쪽 발송 예약이 함께 커밋된다.
 
 가입 링크에는 견적번호만 덧붙인다. 지정 메일 보유자는 해당 회차와 동작에 한해 PG를 대신해 회신할 수 있다. PG가 외부 접수에서 견적번호와 사업자번호를 대조해야 결과를 등록할 수 있다. 토큰은 프래그먼트로 전달하고 독립 페이지의 POST에서 검증한다. 메일이 전달된 경우 제3자가 사용할 수 있는 잔여 위험이 있다. 수신처 변경, 회차 종료 또는 만료로 권한을 회수한다. 관리자 워커는 이 이벤트를 건너뛰며 서비스 워커가 매번 발송 대상을 확인한다. 담당자 연락처·증명은 공개 목록과 구매사 메일에 포함하지 않는다.
+
+### AR-13 — 워크스페이스 활동 기록의 이름 표시
+
+서버는 `AUDIT_LOG_MASKED_ACTOR_IDS`에 지정한 계정의 활동을 `이름 비공개`로 표시한다. 마스킹 대상은 계정 UUID로 지정하며 사용자 이름 변경이나 워크스페이스 전환에 영향을 받지 않는다. 원본 감사 기록에는 행위자 ID가 남는다. 활동의 시각과 견적 코드는 표시하므로 다른 업무 화면의 정보와 대조하면 행위자를 추정할 수 있다.
