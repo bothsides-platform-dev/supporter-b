@@ -7,14 +7,15 @@ import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { listAuditLogsAction } from '@/lib/server/actions/workspace/listAuditLogsAction';
-import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
+import type { AuditLogCursor } from '@/lib/server/repositories/types';
+import type { WorkspaceActivityItem } from '@/lib/server/workspaces/activity';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { SettingsPage } from './SettingsPage';
 
 type Props = {
   workspaceId: string;
   workspaceType: WorkspaceType;
-  initialLogs: AuditLogRecord[];
+  initialLogs: WorkspaceActivityItem[];
   initialNextCursor: AuditLogCursor | null;
 };
 
@@ -56,7 +57,7 @@ function entityHref(workspaceType: WorkspaceType, entityType: string | null, ent
   return workspaceType === 'buyer' ? `/rfp/${entityId}` : `/inbox/${entityId}`;
 }
 
-function actionSummary(row: AuditLogRecord): React.ReactNode {
+function actionSummary(row: WorkspaceActivityItem): React.ReactNode {
   const role = row.metadata?.role;
   if (row.action === 'workspace.member_role_change' && (role === 'admin' || role === 'member')) {
     return `멤버 역할을 ${role === 'admin' ? '관리자로' : '멤버로'} 바꿨어요`;

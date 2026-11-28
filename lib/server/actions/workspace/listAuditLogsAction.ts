@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { requireSession } from '@/lib/auth/session';
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
-import { getAuditLogRepo } from '@/lib/server/repositories/factory';
-import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
+import type { AuditLogCursor } from '@/lib/server/repositories/types';
+import { listWorkspaceActivity, type WorkspaceActivityItem } from '@/lib/server/workspaces/activity';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
@@ -23,7 +23,7 @@ const Input = z
 
 export type ListAuditLogsInput = z.input<typeof Input>;
 export type ListAuditLogsResult = ActionResult<{
-  logs: AuditLogRecord[];
+  logs: WorkspaceActivityItem[];
   nextCursor: AuditLogCursor | null;
 }>;
 
@@ -59,11 +59,6 @@ export async function listAuditLogsAction(
   }
 
   const limit = parsed.data.limit ?? DEFAULT_LIMIT;
-  const repo = await getAuditLogRepo();
-  const logs = await repo.listForWorkspace(wsId, { limit, before: parsed.data.before });
-  const last = logs[logs.length - 1];
-  const nextCursor =
-    logs.length === limit && last ? { createdAt: last.createdAt, id: last.id } : null;
-
-  return { ok: true, logs, nextCursor };
+  const page = await listWorkspaceActivity(wsId, { limit, before: parsed.data.before });
+  return { ok: true, ...page };
 }
